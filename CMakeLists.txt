@@ -6,5 +6,5 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(TCL)
 include_directories(${TCL_INCLUDE_PATH})
-add_executable(appc app_containers.cpp)
+add_executable(appc app_containers.cpp appc_tcl.cpp fs.cpp)
 target_link_libraries(appc ${TCL_LIBRARY})
