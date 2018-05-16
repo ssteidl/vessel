@@ -20,6 +20,8 @@ namespace appc
          * with errno
          */
         virtual std::string error_message() = 0;
+
+        virtual ~mountpoint();
     };
 
     std::unique_ptr<mountpoint> create_nullfs_mount(fs_path from,

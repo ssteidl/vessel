@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sys/stat.h>
 #include <sstream>
+#include <tcl.h>
 #include <unistd.h>
 
 using namespace appc;
@@ -61,8 +62,13 @@ fs_path::fs_path(Tcl_Obj* path)
     }
     Tcl_IncrRefCount(path);
 }
+
 fs_path::fs_path(const std::string& path)
     : fs_path(Tcl_NewStringObj(path.data(), path.size()))
+{}
+
+fs_path::fs_path()
+    : fs_path(std::string())
 {}
 
 fs_path::fs_path(const fs_path& other)
@@ -73,6 +79,7 @@ fs_path::fs_path(const fs_path& other)
 
 bool fs_path::exists() const
 {
+    std::cerr << "access path: " << Tcl_GetString(m_path) << std::endl;
     int access = Tcl_FSAccess(m_path, F_OK);
 
     return (access == 0);
@@ -164,6 +171,11 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
         std::ostringstream msg;
         msg << "Multiple images found for name: " << dir_name;
         throw std::runtime_error(msg.str());
+    }
+
+    if(length == 0)
+    {
+        return fs_path("");
     }
 
     Tcl_Obj* image_path = nullptr;

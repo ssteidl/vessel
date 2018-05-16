@@ -1,6 +1,8 @@
 acfile.cpp
 acfile.h
 src/app/app_containers.cpp
+src/app/environment.cpp
+src/app/environment.h
 src/lib/appc_tcl.cpp
 src/lib/appc_tcl.h
 src/lib/fs.cpp

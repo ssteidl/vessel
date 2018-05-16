@@ -99,6 +99,9 @@ namespace
     };
 }
 
+mountpoint::~mountpoint()
+{}
+
 std::unique_ptr<mountpoint> appc::create_nullfs_mount(fs_path from,
                                                       fs_path target,
                                                       int flags)

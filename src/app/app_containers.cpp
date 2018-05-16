@@ -2,6 +2,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include "environment.h"
 #include "fs.h"
 #include <getopt.h>
 #include <iostream>
@@ -70,22 +71,6 @@ public:
     }
 };
 
-std::string get_env_required(const std::string& name)
-{
-    assert(!name.empty());
-
-    char* value = getenv(name.c_str());
-
-    if(value == nullptr)
-    {
-        std::ostringstream msg;
-        msg << "'" << name << "' is a required environment variable";
-        throw std::runtime_error(msg.str());
-    }
-
-    return std::string(value);
-}
-
 //class tcl_obj_list
 //{
 //    std::vector<Tcl_Obj*>
@@ -135,22 +120,6 @@ class image_stack
      */
 };
 
-class appc_environment
-{
-    fs_path m_image_dir;
-
-public:
-
-    appc_environment(const fs_path& image_dir)
-        : m_image_dir(image_dir)
-    {}
-
-    fs_path find_image(const std::string& image_name)
-    {
-        return m_image_dir.find_dir(image_name);
-    }
-};
-
 int run_main(int argc, char** argv)
 {
     /*Process commandline arguments
@@ -166,28 +135,25 @@ int run_main(int argc, char** argv)
     std::cerr << "Name: " << cmdline->name << ", Image: " << cmdline->container << std::endl;
 
     /*APPC_REGISTRY is the url to the registry.  It could potentially
-     * support multiple different protocols*/
-    std::string registry_path_str = get_env_required("APPC_REGISTRY");
-    fs_path registry_path(registry_path_str);
-    validate_directory(registry_path);
+     * support multiple different protocols
+     * TODO: enable when we support the registry
+     */
+//    std::string registry_path_str = get_env_required("APPC_REGISTRY");
+//    fs_path registry_path(registry_path_str);
+//    validate_directory(registry_path);
 
     /*APPC_IMAGE_DIR is the directory where images are extracted to after
      * being downloaded from a registry*/
-    std::string image_dir_path_str = get_env_required("APPC_IMAGE_DIR");
-    fs_path image_dir(image_dir_path_str);
-    validate_directory(image_dir);
+
 
     /*APPC_CONTAINER_DIR is where container directories are created.  Inside
      * container directories lives the mounted image(s).  The mount may be
      * a null mount from the image contained in APPC_IMAGE_DIR or it could be
      * vnode back mem disk, or zfs clone or any number of mount options.
      */
-    std::string appc_container_dir_str = get_env_required("APPC_CONTAINER_DIR");
-    fs_path appc_container_dir(appc_container_dir_str);
-    validate_directory(appc_container_dir);
 
-    appc_environment environment(image_dir);
-    fs_path image = environment.find_image(cmdline->name);
+    environment env;
+    fs_path image = env.find_image(cmdline->name);
     if(!image)
     {
         std::cerr << "Image not found: '" << cmdline->name << "'" << std::endl;

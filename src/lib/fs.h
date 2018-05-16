@@ -39,6 +39,8 @@ private:
 
 public:
 
+    fs_path();
+
     fs_path(Tcl_Obj* path);
 
     fs_path(const std::string& path);

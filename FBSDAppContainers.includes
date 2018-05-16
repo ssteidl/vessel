@@ -1,3 +1,5 @@
 .
 src/lib
 src/util
+src/app
+/usr/local/include/tcl8.6
