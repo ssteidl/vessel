@@ -52,6 +52,16 @@ namespace
               m_last_mount_err()
         {}
 
+        fs_path from() override
+        {
+            return m_from;
+        }
+
+        fs_path target() override
+        {
+            return m_target;
+        }
+
         int mount() override
         {
             char errmsg[255];

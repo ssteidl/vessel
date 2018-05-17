@@ -1,7 +1,11 @@
 #include "app_functions.h"
 #include "cmdline.h"
+#include "container.h"
 #include "environment.h"
 #include <iostream>
+
+#include <sys/types.h>
+#include <sys/wait.h>
 
 using namespace appc;
 
@@ -68,7 +72,22 @@ int run_main(int argc, char** argv)
      * 3. Start the jail
      */
 
-    appc::funcs::mount_container_image(*cmdline, env);
+    appc::funcs::auto_unmount_ptr mountpoint = appc::funcs::mount_container_image(*cmdline, env);
+
+    appc::jail the_jail(mountpoint->target(), cmdline->container);
+    std::tuple<pid_t, int> child_ids = the_jail.fork_exec_jail(cmdline->container_cmd_args);
+
+    pid_t child_pid = std::get<0>(child_ids);
+    if(child_pid > 0)
+    {
+        int status = 0;
+        pid_t wait_child_id = waitpid(child_pid, &status, 0);
+        if(wait_child_id == -1)
+        {
+            std::cerr << "Error when waiting for child: " << strerror(errno) << std::endl;
+            return 1;
+        }
+    }
 
     return 0;
 }

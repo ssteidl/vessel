@@ -6,11 +6,6 @@
 #include "mountpoint.h"
 #include <unistd.h>
 
-extern "C"
-{
-#include <sys/jail.h>
-}
-
 using namespace appc;
 using namespace appc::funcs;
 

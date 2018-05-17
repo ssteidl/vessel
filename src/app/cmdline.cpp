@@ -39,6 +39,8 @@ std::unique_ptr<commandline> commandline::parse(int argc, char** argv)
                 _this->container_cmd_args.push_back(argv[j]);
             }
 
+            //Args needs to be null terminated to use with exec.
+            _this->container_cmd_args.push_back(nullptr);
             argc = i;
             break;
         }

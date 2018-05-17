@@ -9,6 +9,8 @@ src/app/environment.cpp
 src/app/environment.h
 src/lib/appc_tcl.cpp
 src/lib/appc_tcl.h
+src/lib/container.cpp
+src/lib/container.h
 src/lib/fs.cpp
 src/lib/fs.h
 src/lib/mountpoint.cpp

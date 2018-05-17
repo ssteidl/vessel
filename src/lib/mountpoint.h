@@ -17,6 +17,9 @@ namespace appc
     {
     public:
 
+        virtual fs_path from() = 0;
+        virtual fs_path target() = 0;
+
         virtual int mount() = 0;
         virtual int unmount(int flags) = 0;
 
