@@ -39,3 +39,8 @@ fs_path environment::find_image(const std::string& image_name)
 {
     return m_image_dir.find_dir(image_name);
 }
+
+fs_path environment::find_container(const std::string& container_name)
+{
+    return m_container_dir.find_dir(container_name);
+}

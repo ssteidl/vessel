@@ -79,7 +79,6 @@ fs_path::fs_path(const fs_path& other)
 
 bool fs_path::exists() const
 {
-    std::cerr << "access path: " << Tcl_GetString(m_path) << std::endl;
     int access = Tcl_FSAccess(m_path, F_OK);
 
     return (access == 0);

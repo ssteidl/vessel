@@ -17,6 +17,7 @@ namespace appc
         environment();
 
         fs_path find_image(const std::string& image_name);
+        fs_path find_container(const std::string& container_name);
 
     };
 

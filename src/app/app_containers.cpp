@@ -2,6 +2,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include "cmdline.h"
 #include "environment.h"
 #include "fs.h"
 #include <getopt.h>
@@ -16,85 +17,6 @@
 using namespace appc;
 
 namespace {
-struct commandline
-{
-    static constexpr struct option long_options[] = {
-        {"name", required_argument, nullptr, 'n'},
-        {"image", required_argument, nullptr, 'i'},
-        {nullptr, 0, nullptr, 0}
-    };
-
-public:
-    std::string name;
-    std::string container;
-    
-    static void usage()
-    {
-        std::cerr << "USAGE: appc --name=<app-name> --image=<image-name>"
-                  << std::endl;
-    }
-
-    static std::unique_ptr<commandline> parse(int argc, char** argv)
-    {
-        std::unique_ptr<commandline> _this = std::make_unique<commandline>();
-        int ch = 0;
-        while((ch = getopt_long(argc, argv, "n:i:", long_options, nullptr)) != -1)
-        {
-            switch(ch)
-            {
-            case 'n':
-                _this->name = optarg;
-                break;
-            case 'i':
-                _this->container = optarg;
-                break;
-            default:
-                usage();
-            }
-        }
-
-        if(_this->name.empty())
-        {
-            std::cerr << "ERROR: 'name' is required" << std::endl;
-            usage();
-            return nullptr;
-        }
-
-        if(_this->container.empty())
-        {
-            std::cerr << "ERROR: 'image' is required" << std::endl;
-            usage();
-            return nullptr;
-        }
-
-        return _this;
-    }
-};
-
-//class tcl_obj_list
-//{
-//    std::vector<Tcl_Obj*>
-//public:
-//}
-
-/*NOTE: Ideally we support .iso, vnode backed images and tarballs (or any
- *file compression*/
-class directory_image
-{
-    fs_path m_path;
-    std::string m_name;
-public:
-
-    /*API:
-     * -unpack(): Unzip to image directory
-     */
-
-    void unpack(const fs_path& destination)
-    {
-        //For now, a directory image is just copied to the appc_image_dir.
-
-    }
-};
 
 /**
  * @brief The registry class is responsible for fetching the
@@ -132,8 +54,6 @@ int run_main(int argc, char** argv)
         exit(1);
     }
 
-    std::cerr << "Name: " << cmdline->name << ", Image: " << cmdline->container << std::endl;
-
     /*APPC_REGISTRY is the url to the registry.  It could potentially
      * support multiple different protocols
      * TODO: enable when we support the registry
@@ -151,15 +71,6 @@ int run_main(int argc, char** argv)
      * a null mount from the image contained in APPC_IMAGE_DIR or it could be
      * vnode back mem disk, or zfs clone or any number of mount options.
      */
-
-    environment env;
-    fs_path image = env.find_image(cmdline->name);
-    if(!image)
-    {
-        std::cerr << "Image not found: '" << cmdline->name << "'" << std::endl;
-        return 1;
-    }
-
 
 
     /*Next steps:

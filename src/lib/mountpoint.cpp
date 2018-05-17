@@ -5,9 +5,6 @@
 #include <map>
 #include <string>
 
-#include <sys/param.h>
-#include <sys/mount.h>
-
 #include <sys/uio.h>
 #include <vector>
 
@@ -41,11 +38,14 @@ namespace
             return m_opts["fspath"];
         }
 
+        /** NOTE: I don't yet handle ufs which may require "from"
+          * instead of "target"
+          */
         base_mountpoint(const fs_path& from, const fs_path& target,
                         const std::string fs_type, int flags)
             : m_from(from),
               m_target(target),
-              m_opts({{"from", m_from.str()},
+              m_opts({{"target", m_from.str()},
                       {"fspath", m_target.str()},
                       {"fstype", fs_type}}),
               m_flags(flags),
@@ -55,6 +55,7 @@ namespace
         int mount() override
         {
             char errmsg[255];
+            memset(errmsg, 0, sizeof(errmsg));
             std::vector<struct iovec> iovs;
 
             struct iovec iov;
@@ -80,7 +81,7 @@ namespace
             iovs.push_back(iov);
 
             int err = ::nmount(iovs.data(), iovs.size(), m_flags);
-            if(err == -1) {
+            if(err == -1 && errmsg[0]) {
                 m_last_mount_err = errmsg;
             }
 

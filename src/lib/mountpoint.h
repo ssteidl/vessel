@@ -5,6 +5,12 @@
 #include <memory>
 #include <string>
 
+/*Include these so that the MNT_* values
+ * are automatically available to clients.
+ */
+#include <sys/param.h>
+#include <sys/mount.h>
+
 namespace appc
 {
     class mountpoint
