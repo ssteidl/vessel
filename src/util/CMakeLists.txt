@@ -6,4 +6,4 @@ add_executable(appc_mount
   ${APP_DIR}/cmdline.cpp
   ${APP_DIR}/environment.cpp
 )
-target_link_libraries(appc_mount appc-priv)
+target_link_libraries(appc_mount appc-priv jail)

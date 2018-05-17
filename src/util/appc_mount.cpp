@@ -3,6 +3,10 @@
 #include <iostream>
 #include "mountpoint.h"
 
+extern "C"
+{
+#include <sys/jail.h>
+}
 using namespace appc;
 
 int run_main(int argc, char** argv)
@@ -50,6 +54,26 @@ int run_main(int argc, char** argv)
         exit(1);
     }
 
+    /*This belongs in a jail object that is destroyed when it goes out
+     * of scope
+     */
+    struct jail j;
+    memset(&j, 0, sizeof(j));
+    j.hostname = (char*)"ShaneJail";
+    j.jailname = (char*)cmdline->container.c_str();
+    j.version = JAIL_API_VERSION;
+    j.path = (char*)container_dir.str().c_str();
+
+    int jail_id = ::jail(&j);
+
+    if(jail_id != -1)
+    {
+        std::cerr << "I'm in a jail!! " << jail_id << std::endl;
+    }
+    else
+    {
+        std::cerr << "Jail error: " << strerror(errno) << std::endl;
+    }
     return 0;
 }
 
