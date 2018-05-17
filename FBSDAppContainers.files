@@ -1,6 +1,8 @@
 acfile.cpp
 acfile.h
 src/app/app_containers.cpp
+src/app/app_functions.cpp
+src/app/app_functions.h
 src/app/cmdline.cpp
 src/app/cmdline.h
 src/app/environment.cpp

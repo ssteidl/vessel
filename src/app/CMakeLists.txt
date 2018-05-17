@@ -1,5 +1,6 @@
 add_executable(appc
   app_containers.cpp
+  app_functions.cpp
   cmdline.cpp
   environment.cpp
 )
