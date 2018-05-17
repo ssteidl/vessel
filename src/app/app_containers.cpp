@@ -1,18 +1,7 @@
-#include <cassert>
-#include <cerrno>
-#include <cstdlib>
-#include <cstring>
+#include "app_functions.h"
 #include "cmdline.h"
 #include "environment.h"
-#include "fs.h"
-#include <getopt.h>
 #include <iostream>
-#include <memory>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <sys/stat.h>
-#include <unistd.h>
 
 using namespace appc;
 
@@ -44,6 +33,8 @@ class image_stack
 
 int run_main(int argc, char** argv)
 {
+    Tcl_FindExecutable(argv[0]);
+
     /*Process commandline arguments
      * - name: name of the container
      * - image: Name of the filesystem image in the registry
@@ -58,9 +49,6 @@ int run_main(int argc, char** argv)
      * support multiple different protocols
      * TODO: enable when we support the registry
      */
-//    std::string registry_path_str = get_env_required("APPC_REGISTRY");
-//    fs_path registry_path(registry_path_str);
-//    validate_directory(registry_path);
 
     /*APPC_IMAGE_DIR is the directory where images are extracted to after
      * being downloaded from a registry*/
@@ -71,7 +59,7 @@ int run_main(int argc, char** argv)
      * a null mount from the image contained in APPC_IMAGE_DIR or it could be
      * vnode back mem disk, or zfs clone or any number of mount options.
      */
-
+    environment env;
 
     /*Next steps:
      * 1. bind the image to wherever it needs to go in the container
@@ -79,7 +67,9 @@ int run_main(int argc, char** argv)
      * 2. Run tcl script to setup the jail (get script from command line.  can be empty)
      * 3. Start the jail
      */
-    
+
+    appc::funcs::mount_container_image(*cmdline, env);
+
     return 0;
 }
 }

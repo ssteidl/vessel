@@ -2,6 +2,7 @@
 #define CMDLINE_H
 
 #include <string>
+#include <vector>
 
 namespace appc
 {
@@ -11,6 +12,7 @@ struct commandline
 public:
     std::string image;
     std::string container;
+    std::vector<char*> container_cmd_args;
 
     static void usage();
 

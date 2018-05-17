@@ -22,7 +22,28 @@ void commandline::usage()
 
 std::unique_ptr<commandline> commandline::parse(int argc, char** argv)
 {
+
     std::unique_ptr<commandline> _this = std::make_unique<commandline>();
+
+    /*Capture all arguments after '--' to use as a container
+     * command.  Update argc so those arguments are not passed
+     * to getopt.
+     */
+    for(int i = 0; i < argc; i++)
+    {
+        std::string arg = argv[i];
+        if(arg == "--")
+        {
+            for(int j = i + 1; j < argc; j++)
+            {
+                _this->container_cmd_args.push_back(argv[j]);
+            }
+
+            argc = i;
+            break;
+        }
+    }
+
     int ch = 0;
     while((ch = getopt_long(argc, argv, "n:i:", long_options, nullptr)) != -1)
     {
