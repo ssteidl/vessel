@@ -1,7 +1,9 @@
 #include "cmdline.h"
 #include "environment.h"
 #include <iostream>
+#include <limits.h>
 #include "mountpoint.h"
+#include <unistd.h>
 
 extern "C"
 {
@@ -68,7 +70,9 @@ int run_main(int argc, char** argv)
 
     if(jail_id != -1)
     {
-        std::cerr << "I'm in a jail!! " << jail_id << std::endl;
+        char hostname[_POSIX_HOST_NAME_MAX];
+        gethostname(hostname, sizeof(hostname));
+        std::cerr << "I'm in a jail!! " << jail_id << " Hostname: " << hostname << std::endl;
     }
     else
     {
