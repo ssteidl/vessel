@@ -35,6 +35,11 @@ class image_stack
      */
 };
 
+void validate_save_cmdline(commandline& cmdline)
+{
+
+}
+
 int run_main(int argc, char** argv)
 {
     Tcl_FindExecutable(argv[0]);

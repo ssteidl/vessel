@@ -84,6 +84,30 @@ bool fs_path::exists() const
     return (access == 0);
 }
 
+bool fs_path::is_readable() const
+{
+    int access = Tcl_FSAccess(m_path, R_OK);
+
+    return (access == 0);
+}
+
+bool fs_path::is_writable() const
+{
+    int access = Tcl_FSAccess(m_path, W_OK);
+    return (access == 0);
+}
+
+bool fs_path::is_executable() const
+{
+    int access = Tcl_FSAccess(m_path, X_OK);
+    return (access == 0);
+}
+
+std::unique_ptr<path_stat> fs_path::stat() const
+{
+    return std::unique_ptr<path_stat>(new path_stat(m_path));
+}
+
 bool fs_path::is_dir() const
 {
     return path_stat(m_path).is_dir();

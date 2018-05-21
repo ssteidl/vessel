@@ -9,6 +9,8 @@ namespace
     constexpr struct option long_options[] = {
         {"name", required_argument, nullptr, 'n'},
         {"image", required_argument, nullptr, 'i'},
+        {"save", no_argument, nullptr, 's'},
+        {"type", required_argument, nullptr, 't'},
         {nullptr, 0, nullptr, 0}
     };
 }
@@ -16,7 +18,13 @@ namespace
 
 void commandline::usage()
 {
-    std::cerr << "USAGE: appc --name=<container-name> --image=<image-name>"
+    /*TODO: implement commands instead of just flags
+     * for example: appc run OR appc save
+     */
+    std::cerr << "USAGE: " << std::endl
+              << "appc --name=<container-name> --image=<image-name>" << std::endl
+              << "OR" << std::endl
+              << "appc --save --type=<ufs|tgz>" << std::endl
               << std::endl;
 }
 
@@ -47,7 +55,7 @@ std::unique_ptr<commandline> commandline::parse(int argc, char** argv)
     }
 
     int ch = 0;
-    while((ch = getopt_long(argc, argv, "n:i:", long_options, nullptr)) != -1)
+    while((ch = getopt_long(argc, argv, "n:i:st:", long_options, nullptr)) != -1)
     {
         switch(ch)
         {
@@ -57,23 +65,16 @@ std::unique_ptr<commandline> commandline::parse(int argc, char** argv)
         case 'i':
             _this->image = optarg;
             break;
+        case 's':
+            _this->do_save = true;
+            _this->operation_count++;
+            break;
+        case 't':
+            _this->image_type = optarg;
+            break;
         default:
             usage();
         }
-    }
-
-    if(_this->container.empty())
-    {
-        std::cerr << "ERROR: 'name' is required" << std::endl;
-        usage();
-        return nullptr;
-    }
-
-    if(_this->image.empty())
-    {
-        std::cerr << "ERROR: 'image' is required" << std::endl;
-        usage();
-        return nullptr;
     }
 
     return _this;

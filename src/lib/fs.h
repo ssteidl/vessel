@@ -20,6 +20,11 @@ class path_stat
 
     path_stat(Tcl_Obj* path);
 
+    path_stat(const path_stat& other) = delete;
+    path_stat(path_stat&& other) = delete;
+    path_stat& operator=(const path_stat& other) = delete;
+    path_stat& operator=(path_stat&& other) = delete;
+
 public:
 
     bool is_dir() const;
@@ -50,6 +55,14 @@ public:
     bool exists() const;
 
     bool is_dir() const;
+
+    bool is_readable() const;
+
+    bool is_writable() const;
+
+    bool is_executable() const;
+
+    std::unique_ptr<path_stat> stat() const;
 
     bool operator==(const fs_path& rhs) const;
 

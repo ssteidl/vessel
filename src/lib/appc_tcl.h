@@ -2,9 +2,14 @@
 #define APPC_TCL_H
 
 #include <tcl.h>
+#include <memory>
 
 namespace appc
 {
+
+void delete_interp(Tcl_Interp* interp);
+using interp_ptr = std::unique_ptr<Tcl_Interp, decltype(&delete_interp)>;
+interp_ptr create_tcl_interp();
 
 struct tcl_obj_raii
 {

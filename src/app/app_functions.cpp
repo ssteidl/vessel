@@ -21,6 +21,20 @@ void appc::funcs::auto_unmount(appc::mountpoint* mnt)
 auto_unmount_ptr
 appc::funcs::mount_container_image(commandline &cmdline, environment& env)
 {
+    if(cmdline.container.empty())
+    {
+        std::cerr << "ERROR: 'name' is required" << std::endl;
+        usage();
+        return nullptr;
+    }
+
+    if(cmdline.image.empty())
+    {
+        std::cerr << "ERROR: 'image' is required" << std::endl;
+        usage();
+        return nullptr;
+    }
+
     fs_path image_path = env.find_image(cmdline.image);
     if(image_path)
     {
