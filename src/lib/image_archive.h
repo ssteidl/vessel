@@ -13,7 +13,7 @@ class fs_path;
  * tarball, iso9660 image, ufs image, zfs snapshot etc.
  */
 
-void create_image_archive(const fs_path& source, const fs_path& dest);
+int create_image_archive(const fs_path& source, const fs_path& dest);
 
 }
 #endif // IMAGE_ARCHIVE_H
