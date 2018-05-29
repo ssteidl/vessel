@@ -28,5 +28,5 @@ void appc::delete_interp(Tcl_Interp* interp)
 
 interp_ptr create_tcl_interp()
 {
-    return std::unique_ptr<Tcl_Interp>(Tcl_CreateInterp(), appc::delete_interp);
+    return appc::interp_ptr(Tcl_CreateInterp(), appc::delete_interp);
 }

@@ -41,16 +41,26 @@ namespace
         case 0:
         {
             //child
-
-            std::vector<char*> args;
+            std::vector<char const*> args;
+            std::string src_str = source.str();
+            std::string dest_str = dest.str();
             args.push_back("makefs");
             args.push_back("-t");
             args.push_back("ffs");
-            args.push_back(dest.str().c_str());
-            args.push_back(source.str().c_str());
+            args.push_back(dest_str.c_str());
+            args.push_back(src_str.c_str());
             args.push_back(nullptr);
 
-            int error = execvp("makefs", args.data());
+            for(auto arg : args)
+            {
+                if(arg == nullptr)
+                {
+                    break;
+                }
+                std::cerr << arg << " ";
+            }
+            std::cerr << std::endl;
+            int error = execvp("makefs", (char* const*)args.data());
             if(error)
             {
                 std::ostringstream msg;
@@ -61,12 +71,14 @@ namespace
             break;
         default:
         {
+
             int status = 0;
             __wrusage resources;
             siginfo_t siginfo;
             pid_t pid = wait6(P_PID, child_pid, &status, WEXITED,
                               &resources, &siginfo);
 
+            std::cerr << "Wait6 return: " << pid << std::endl;
             //TODO: Do something with the resources and siginfo.  We should
             //return an object with easy access to all the info returned from
             //the wait6 call.  It should have a stream operator function so
@@ -116,5 +128,6 @@ int appc::create_image_archive(const fs_path &source, const fs_path &dest)
         throw std::runtime_error(msg.str());
     }
 
+    std::cerr << "dest: " << dest.str() << std::endl;
     return run_makefs(source, dest);
 }

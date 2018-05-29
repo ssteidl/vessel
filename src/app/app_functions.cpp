@@ -1,6 +1,7 @@
 #include "app_functions.h"
 #include "fs.h"
 #include <iostream>
+#include <image_archive.h>
 
 using namespace appc::funcs;
 
@@ -24,15 +25,15 @@ appc::funcs::mount_container_image(commandline &cmdline, environment& env)
     if(cmdline.container.empty())
     {
         std::cerr << "ERROR: 'name' is required" << std::endl;
-        usage();
-        return nullptr;
+        commandline::usage();
+        exit(1);
     }
 
     if(cmdline.image.empty())
     {
         std::cerr << "ERROR: 'image' is required" << std::endl;
-        usage();
-        return nullptr;
+        commandline::usage();
+        exit(1);
     }
 
     fs_path image_path = env.find_image(cmdline.image);
@@ -69,4 +70,30 @@ appc::funcs::mount_container_image(commandline &cmdline, environment& env)
     }
 
     return mntpoint;
+}
+
+void appc::funcs::save_container_image(commandline& cmdline, environment& env)
+{
+    if(!cmdline.do_save)
+    {
+        throw std::logic_error("do_save has not been requested");
+    }
+
+    if(cmdline.container.empty())
+    {
+        std::cerr << "--name required." << std::endl;
+        commandline::usage();
+        exit(1);
+    }
+
+    fs_path container_dir = env.find_container(cmdline.container);
+    if(!container_dir)
+    {
+        std::cerr << "container not found: " << cmdline.container << std::endl;
+        exit(1);
+    }
+
+    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img.tgz"));
+
+    exit(ret);
 }
