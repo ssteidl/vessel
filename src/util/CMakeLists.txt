@@ -16,3 +16,8 @@ add_executable(appc_save
   ${APP_DIR}/environment.cpp
 )
 target_link_libraries(appc_save appc-priv jail)
+
+add_executable(appc_compress
+  appc_compress.cpp
+)
+target_link_libraries(appc_compress archive)
