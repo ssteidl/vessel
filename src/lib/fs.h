@@ -1,25 +1,20 @@
 #ifndef APPC_FS_H
 #define APPC_FS_H
 
-#include "appc_tcl.h"
 #include <list>
 #include <string>
+#include <sys/stat.h>
 
 namespace appc
 {
 
 class path_stat
 {
-    Tcl_StatBuf* m_stat_buf;
+    struct stat m_stat_buf;
 
     friend class fs_path;
 
-    void free_stat_buf(Tcl_StatBuf* stat_buf);
-
-    Tcl_StatBuf* create_stat_buf(Tcl_Obj* path);
-
-    path_stat(Tcl_Obj* path);
-
+    path_stat(const std::string& path);
     path_stat(const path_stat& other) = delete;
     path_stat(path_stat&& other) = delete;
     path_stat& operator=(const path_stat& other) = delete;
@@ -28,8 +23,6 @@ class path_stat
 public:
 
     bool is_dir() const;
-
-    ~path_stat();
 };
 
 class resource_fd
@@ -54,7 +47,7 @@ public:
 class fs_path
 {
 private:
-    tcl_obj_raii m_path;
+    std::string m_path;
 
     //NOTE: These can be implemented if needed
     fs_path(fs_path&& other) = delete;
@@ -64,8 +57,6 @@ private:
 public:
 
     fs_path();
-
-    fs_path(Tcl_Obj* path);
 
     fs_path(const std::string& path);
 

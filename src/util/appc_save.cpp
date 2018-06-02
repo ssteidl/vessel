@@ -1,4 +1,5 @@
 #include "app_functions.h"
+#include "appc_tcl.h"
 #include "cmdline.h"
 #include "environment.h"
 #include "image_archive.h"
@@ -19,7 +20,6 @@ int run_main(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-
     try
     {
         return run_main(argc, argv);

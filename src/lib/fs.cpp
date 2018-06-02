@@ -1,9 +1,10 @@
+#include <appc_tcl.h>
 #include <cassert>
+#include <cstdlib>
 #include "fs.h"
 #include <iostream>
 #include <sys/stat.h>
 #include <sstream>
-#include <tcl.h>
 #include <unistd.h>
 #include <vector>
 
@@ -11,46 +12,22 @@ using namespace appc;
 
 /**************path_stat****************************/
 
-void path_stat::free_stat_buf(Tcl_StatBuf* stat_buf)
+
+path_stat::path_stat(const std::string& path)
+    : m_stat_buf()
 {
-    if(stat_buf)
+    int error = ::stat(path.c_str(), &m_stat_buf);
+    if(error)
     {
-        ckfree(stat_buf);
-    }
-}
-
-Tcl_StatBuf*
-path_stat::create_stat_buf(Tcl_Obj* path)
-{
-    assert(path);
-    Tcl_StatBuf* stat_buf = Tcl_AllocStatBuf();
-    int tcl_ret = Tcl_FSStat(path, stat_buf);
-
-    if(tcl_ret)
-    {
-        free_stat_buf(stat_buf);
-
         std::ostringstream msg;
-        msg << "stat(" << Tcl_GetStringFromObj(path, nullptr)<< "): " << strerror(errno);
+        msg << "Error stat'ing path '" << path << "': " << strerror(errno);
         throw std::runtime_error(msg.str());
     }
-
-    return stat_buf;
 }
-
-path_stat::path_stat(Tcl_Obj* path)
-    : m_stat_buf(create_stat_buf(path))
-{}
 
 bool path_stat::is_dir() const
 {
-    unsigned mode = Tcl_GetModeFromStat(m_stat_buf);
-    return S_ISDIR(mode);
-}
-
-path_stat::~path_stat()
-{
-    free_stat_buf(m_stat_buf);
+    return S_ISDIR(m_stat_buf.st_mode);
 }
 
 /**************resource-fd***************************/
@@ -113,12 +90,27 @@ resource_fd::~resource_fd()
 }
 
 /**************fs_path******************************/
-fs_path::fs_path(Tcl_Obj* path)
-    : m_path(path)
-{}
+namespace
+{
+    void safe_free(char* ptr)
+    {
+        if(ptr)
+        {
+            ::free(ptr);
+        }
+    }
+
+    std::string make_realpath(const std::string& _path)
+    {
+        std::unique_ptr<char, decltype(&safe_free)> path(
+                    ::realpath(_path.c_str(), nullptr), safe_free);
+
+        return path.get();
+    }
+}
 
 fs_path::fs_path(const std::string& path)
-    : fs_path(Tcl_NewStringObj(path.data(), path.size()))
+    : m_path(make_realpath(path))
 {}
 
 fs_path::fs_path()
@@ -131,28 +123,26 @@ fs_path::fs_path(const fs_path& other)
 
 bool fs_path::exists() const
 {
-    int access = Tcl_FSAccess(m_path, F_OK);
-
-    return (access == 0);
+    int result = ::access(m_path.c_str(), F_OK);
+    return (result == 0);
 }
 
 bool fs_path::is_readable() const
 {
-    int access = Tcl_FSAccess(m_path, R_OK);
-
-    return (access == 0);
+    int result = ::access(m_path.c_str(), R_OK);
+    return (result == 0);
 }
 
 bool fs_path::is_writable() const
 {
-    int access = Tcl_FSAccess(m_path, W_OK);
-    return (access == 0);
+    int result = ::access(m_path.c_str(), W_OK);
+    return (result == 0);
 }
 
 bool fs_path::is_executable() const
 {
-    int access = Tcl_FSAccess(m_path, X_OK);
-    return (access == 0);
+    int result = ::access(m_path.c_str(), X_OK);
+    return (result == 0);
 }
 
 std::unique_ptr<path_stat> fs_path::stat() const
@@ -167,26 +157,20 @@ bool fs_path::is_dir() const
 
 bool fs_path::operator==(const fs_path& rhs) const
 {
-    return Tcl_FSEqualPaths(m_path, rhs.m_path);
+    //TODO: Write tests.  Maybe remove trailing slashes and duplicate slashes
+    return m_path == rhs.m_path;
 }
 
 fs_path& fs_path::operator+=(const std::string& path_component)
 {
-    tcl_obj_raii new_component = Tcl_NewStringObj(path_component.c_str(),
-                                                  path_component.length());
-    std::vector<Tcl_Obj*> obj_vec = {m_path.obj, new_component.obj};
-
-    tcl_obj_raii list_obj = Tcl_NewListObj(2, obj_vec.data());
-    m_path = Tcl_FSJoinPath(list_obj, -1);
+    std::string new_path_str = m_path + "/" + path_component;
+    this->m_path = fs_path(new_path_str).m_path;
     return *this;
 }
 
 fs_path::operator bool() const
 {
-    int length = 0;
-    (void)Tcl_GetStringFromObj(m_path, &length);
-
-    return (length > 0);
+    return (!m_path.empty());
 }
 
 /*TODO: We need a common result struct that has code and message.*/
@@ -197,10 +181,12 @@ bool fs_path::copy_to(const fs_path& dest) const
         if(!dest.is_dir())
         {
             Tcl_Obj* error = nullptr;
-            int tcl_ret = Tcl_FSCopyDirectory(m_path, dest.m_path, &error);
+            tcl_obj_raii source_obj = Tcl_NewStringObj(m_path.c_str(), m_path.size());
+            tcl_obj_raii dest_obj = Tcl_NewStringObj(dest.m_path.c_str(), dest.m_path.size());
+            int tcl_ret = Tcl_FSCopyDirectory(source_obj, dest_obj, &error);
             if(tcl_ret == -1)
             {
-                std::cerr << "Error copying directory: " << str() << "->" << dest.str() << std::endl;
+                std::cerr << "Error copying directory: " << str() << "->" << dest.m_path << std::endl;
                 return false;
             }
         }
@@ -215,7 +201,7 @@ bool fs_path::copy_to(const fs_path& dest) const
 
 std::string fs_path::str() const
 {
-    return Tcl_GetStringFromObj(m_path, nullptr);
+    return m_path;
 }
 
 fs_path fs_path::find_dir(const std::string& dir_name) const
@@ -239,7 +225,8 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
     globtype.type = TCL_GLOB_TYPE_DIR;
 
     //Search for a folder with the image name in the appc_image_dir
-    int tcl_error = Tcl_FSMatchInDirectory(interp.get(), result_list.obj, m_path,
+    tcl_obj_raii path_obj = Tcl_NewStringObj(m_path.c_str(), m_path.size());
+    int tcl_error = Tcl_FSMatchInDirectory(interp.get(), result_list, path_obj,
                                             dir_name.c_str(), &globtype);
 
     if(tcl_error)
@@ -247,11 +234,11 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
         //log debug
         const char* result_str = Tcl_GetStringResult(interp.get());
         std::cerr << "Failed to find image '" << dir_name << "': " << result_str << std::endl;
-        return nullptr;
+        return fs_path();
     }
 
     int length = 0;
-    tcl_error = Tcl_ListObjLength(interp.get(), result_list.obj, &length);
+    tcl_error = Tcl_ListObjLength(interp.get(), result_list, &length);
     if(!tcl_error && length > 1)
     {
         std::ostringstream msg;
@@ -261,28 +248,26 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
 
     if(length == 0)
     {
-        return fs_path("");
+        return fs_path();
     }
 
     Tcl_Obj* image_path = nullptr;
-    tcl_error = Tcl_ListObjIndex(interp.get(), result_list.obj, 0, &image_path);
+    tcl_error = Tcl_ListObjIndex(interp.get(), result_list, 0, &image_path);
     assert(!tcl_error);
     assert(image_path);
 
     if(image_path)
     {
-        return fs_path(image_path);
+        return fs_path(Tcl_GetStringFromObj(image_path, nullptr));
     }
     else
     {
-        return fs_path("");
+        return fs_path();
     }
 }
 
 fs_path::~fs_path()
-{
-    Tcl_DecrRefCount(m_path);
-}
+{}
 
 /*****************functions************************************/
 void appc::validate_directory(const fs_path& path)

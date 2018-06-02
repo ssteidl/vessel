@@ -1,4 +1,5 @@
 #include "app_functions.h"
+#include "appc_tcl.h"
 #include "cmdline.h"
 #include "container.h"
 #include "environment.h"
