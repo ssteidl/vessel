@@ -5,6 +5,7 @@
 #include <sstream>
 #include <tcl.h>
 #include <unistd.h>
+#include <vector>
 
 using namespace appc;
 
@@ -55,13 +56,7 @@ path_stat::~path_stat()
 /**************fs_path******************************/
 fs_path::fs_path(Tcl_Obj* path)
     : m_path(path)
-{
-    if(path == nullptr)
-    {
-        throw std::logic_error("null path");
-    }
-    Tcl_IncrRefCount(path);
-}
+{}
 
 fs_path::fs_path(const std::string& path)
     : fs_path(Tcl_NewStringObj(path.data(), path.size()))
@@ -72,10 +67,8 @@ fs_path::fs_path()
 {}
 
 fs_path::fs_path(const fs_path& other)
-{
-    m_path = other.m_path;
-    Tcl_IncrRefCount(m_path);
-}
+    : m_path(other.m_path)
+{}
 
 bool fs_path::exists() const
 {
@@ -116,6 +109,17 @@ bool fs_path::is_dir() const
 bool fs_path::operator==(const fs_path& rhs) const
 {
     return Tcl_FSEqualPaths(m_path, rhs.m_path);
+}
+
+fs_path& fs_path::operator+=(const std::string& path_component)
+{
+    tcl_obj_raii new_component = Tcl_NewStringObj(path_component.c_str(),
+                                                  path_component.length());
+    std::vector<Tcl_Obj*> obj_vec = {m_path.obj, new_component.obj};
+
+    tcl_obj_raii list_obj = Tcl_NewListObj(2, obj_vec.data());
+    m_path = Tcl_FSJoinPath(list_obj, -1);
+    return *this;
 }
 
 fs_path::operator bool() const

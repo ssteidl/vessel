@@ -35,7 +35,7 @@ public:
 class fs_path
 {
 private:
-    Tcl_Obj* m_path;
+    tcl_obj_raii m_path;
 
     //NOTE: These can be implemented if needed
     fs_path(fs_path&& other) = delete;
@@ -65,6 +65,8 @@ public:
     std::unique_ptr<path_stat> stat() const;
 
     bool operator==(const fs_path& rhs) const;
+
+    fs_path& operator+=(const std::string& path_component);
 
     explicit operator bool() const;
 
