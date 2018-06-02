@@ -53,6 +53,65 @@ path_stat::~path_stat()
     free_stat_buf(m_stat_buf);
 }
 
+/**************resource-fd***************************/
+void resource_fd::do_close()
+{
+    if(m_fd != -1)
+    {
+        (void)::close(m_fd);
+    }
+}
+
+int resource_fd::validate_fd(int fd)
+{
+    if(fd < -1)
+    {
+        throw std::invalid_argument("Illegal fd provided to resource_fd");
+    }
+
+    return fd;
+}
+
+resource_fd::resource_fd(int fd)
+    : m_fd(validate_fd(fd))
+{}
+
+resource_fd::resource_fd(resource_fd&& other)
+{
+    do_close();
+
+    m_fd = validate_fd(other.m_fd);
+    other.m_fd = -1;
+}
+
+resource_fd& resource_fd::operator=(int fd)
+{
+    do_close();
+
+    m_fd = validate_fd(fd);
+
+    return *this;
+}
+
+resource_fd& resource_fd::operator=(resource_fd&& other)
+{
+    do_close();
+
+    m_fd = validate_fd(other.m_fd);
+
+    return *this;
+}
+
+resource_fd::operator int()
+{
+    return m_fd;
+}
+
+resource_fd::~resource_fd()
+{
+    do_close();
+}
+
 /**************fs_path******************************/
 fs_path::fs_path(Tcl_Obj* path)
     : m_path(path)

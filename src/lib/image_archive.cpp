@@ -38,7 +38,7 @@ namespace
         }
 
         //RAII
-        int fd = open(image.str().c_str(), O_RDONLY);
+        resource_fd fd = open(image.str().c_str(), O_RDONLY);
         if(fd == -1)
         {
             perror("open");

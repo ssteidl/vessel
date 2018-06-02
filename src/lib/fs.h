@@ -32,6 +32,25 @@ public:
     ~path_stat();
 };
 
+class resource_fd
+{
+    int m_fd;
+
+    void do_close();
+    static int validate_fd(int fd);
+
+    resource_fd(const resource_fd& other) = delete;
+    resource_fd& operator=(const resource_fd& other) = delete;
+public:
+
+    resource_fd(int fd);
+    resource_fd(resource_fd&& other);
+    resource_fd& operator=(int fd);
+    resource_fd& operator=(resource_fd&& other);
+    operator int();
+    ~resource_fd();
+};
+
 class fs_path
 {
 private:
@@ -67,6 +86,8 @@ public:
     bool operator==(const fs_path& rhs) const;
 
     fs_path& operator+=(const std::string& path_component);
+
+    void append_suffix(const std::string& suffix);
 
     explicit operator bool() const;
 
