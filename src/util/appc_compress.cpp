@@ -44,6 +44,7 @@ int main(int argc, char** argv)
 
     archive_entry_copy_stat(entry, &sb);
     archive_entry_set_pathname(entry, "compresstest");
+    //TODO: set fflags
     int header_error = archive_write_header(image_archive, entry);
     assert(header_error == ARCHIVE_OK);
     while(true)
