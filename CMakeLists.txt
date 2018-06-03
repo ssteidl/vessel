@@ -8,3 +8,4 @@ find_package(TCL)
 include_directories(${TCL_INCLUDE_PATH})
 
 add_subdirectory(src)
+add_subdirectory(test)
