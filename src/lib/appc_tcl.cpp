@@ -13,28 +13,22 @@ tcl_obj_raii::tcl_obj_raii(Tcl_Obj* obj)
 }
 
 tcl_obj_raii::tcl_obj_raii(const tcl_obj_raii& other)
-    : tcl_obj_raii(other.obj)
+    : tcl_obj_raii(Tcl_DuplicateObj(other.obj))
 {
 
 }
 
+tcl_obj_raii::tcl_obj_raii(tcl_obj_raii&& other)
+    : obj(other.obj)
+{
+    other.obj = nullptr;
+}
+
 tcl_obj_raii& tcl_obj_raii::operator=(const tcl_obj_raii& other)
 {
-    if(this == &other)
+    if(this != &other)
     {
-        return *this;
-    }
-
-    if(obj)
-    {
-        Tcl_DecrRefCount(obj);
-    }
-
-    obj = other.obj;
-
-    if(obj)
-    {
-        Tcl_IncrRefCount(other.obj);
+        obj = Tcl_DuplicateObj(other.obj);
     }
 
     return *this;
@@ -42,13 +36,11 @@ tcl_obj_raii& tcl_obj_raii::operator=(const tcl_obj_raii& other)
 
 tcl_obj_raii& tcl_obj_raii::operator=(tcl_obj_raii&& other)
 {
-    if((this != &other) &&
-       (obj != other.obj))
+    if(this != &other)
     {
         obj = other.obj;
         other.obj = nullptr;
     }
-
     return *this;
 }
 

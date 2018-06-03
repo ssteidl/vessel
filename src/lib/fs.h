@@ -1,6 +1,7 @@
 #ifndef APPC_FS_H
 #define APPC_FS_H
 
+#include "appc_tcl.h"
 #include <list>
 #include <string>
 #include <sys/stat.h>
@@ -47,20 +48,17 @@ public:
 class fs_path
 {
 private:
-    std::string m_path;
-
-    //NOTE: These can be implemented if needed
-    fs_path(fs_path&& other) = delete;
-    fs_path& operator=(const fs_path& rhs) = delete;
-    fs_path& operator=(fs_path&& rhs) = delete;
+    tcl_obj_raii m_path;
 
 public:
 
     fs_path();
-
     fs_path(const std::string& path);
-
     fs_path(const fs_path& other);
+    fs_path(fs_path&& other);
+    fs_path& operator=(const fs_path& rhs);
+    fs_path& operator=(fs_path&& rhs);
+
 
     bool exists() const;
 

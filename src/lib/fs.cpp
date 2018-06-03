@@ -90,87 +90,102 @@ resource_fd::~resource_fd()
 }
 
 /**************fs_path******************************/
-namespace
-{
-    void safe_free(char* ptr)
-    {
-        if(ptr)
-        {
-            ::free(ptr);
-        }
-    }
-
-    std::string make_realpath(const std::string& _path)
-    {
-        std::unique_ptr<char, decltype(&safe_free)> path(
-                    ::realpath(_path.c_str(), nullptr), safe_free);
-
-        return path.get();
-    }
-}
 
 fs_path::fs_path(const std::string& path)
-    : m_path(make_realpath(path))
+    : m_path(Tcl_NewStringObj(path.c_str(), path.size()))
 {}
 
 fs_path::fs_path()
     : fs_path(std::string())
 {}
 
+/*Copies the path.*/
 fs_path::fs_path(const fs_path& other)
-    : m_path(other.m_path)
+    : fs_path(Tcl_GetStringFromObj(other.m_path, nullptr))
 {}
+
+fs_path::fs_path(fs_path&& other)
+    : m_path(std::move(other.m_path))
+{}
+
+fs_path& fs_path::operator=(const fs_path& other)
+{
+    if(this != &other)
+    {
+        m_path = other.m_path;
+    }
+
+    return *this;
+}
+
+fs_path& fs_path::operator=(fs_path&& other)
+{
+    if(this != &other)
+    {
+        m_path = std::move(other.m_path);
+    }
+
+    return *this;
+}
 
 bool fs_path::exists() const
 {
-    int result = ::access(m_path.c_str(), F_OK);
+    int result = ::access(str().c_str(), F_OK);
     return (result == 0);
 }
 
 bool fs_path::is_readable() const
 {
-    int result = ::access(m_path.c_str(), R_OK);
+    int result = ::access(str().c_str(), R_OK);
     return (result == 0);
 }
 
 bool fs_path::is_writable() const
 {
-    int result = ::access(m_path.c_str(), W_OK);
+    int result = ::access(str().c_str(), W_OK);
     return (result == 0);
 }
 
 bool fs_path::is_executable() const
 {
-    int result = ::access(m_path.c_str(), X_OK);
+    int result = ::access(str().c_str(), X_OK);
     return (result == 0);
 }
 
 std::unique_ptr<path_stat> fs_path::stat() const
 {
-    return std::unique_ptr<path_stat>(new path_stat(m_path));
+    return std::unique_ptr<path_stat>(new path_stat(str()));
 }
 
 bool fs_path::is_dir() const
 {
-    return path_stat(m_path).is_dir();
+    return path_stat(str()).is_dir();
 }
 
 bool fs_path::operator==(const fs_path& rhs) const
 {
-    //TODO: Write tests.  Maybe remove trailing slashes and duplicate slashes
-    return m_path == rhs.m_path;
+    if(this == &rhs)
+    {
+        return true;
+    }
+
+    return Tcl_FSEqualPaths(m_path, rhs.m_path);
 }
 
 fs_path& fs_path::operator+=(const std::string& path_component)
 {
-    std::string new_path_str = m_path + "/" + path_component;
-    this->m_path = fs_path(new_path_str).m_path;
+    tcl_obj_raii component_obj = Tcl_NewStringObj(path_component.c_str(),
+                                                  path_component.size());
+
+    m_path = Tcl_FSJoinToPath(m_path, 1, &component_obj.obj);
     return *this;
 }
 
 fs_path::operator bool() const
 {
-    return (!m_path.empty());
+    int length = 0;
+    (void)Tcl_GetStringFromObj(m_path, &length);
+    return (length > 0);
 }
 
 /*TODO: We need a common result struct that has code and message.*/
@@ -181,9 +196,7 @@ bool fs_path::copy_to(const fs_path& dest) const
         if(!dest.is_dir())
         {
             Tcl_Obj* error = nullptr;
-            tcl_obj_raii source_obj = Tcl_NewStringObj(m_path.c_str(), m_path.size());
-            tcl_obj_raii dest_obj = Tcl_NewStringObj(dest.m_path.c_str(), dest.m_path.size());
-            int tcl_ret = Tcl_FSCopyDirectory(source_obj, dest_obj, &error);
+            int tcl_ret = Tcl_FSCopyDirectory(m_path, dest.m_path, &error);
             if(tcl_ret == -1)
             {
                 std::cerr << "Error copying directory: " << str() << "->" << dest.m_path << std::endl;
@@ -201,7 +214,7 @@ bool fs_path::copy_to(const fs_path& dest) const
 
 std::string fs_path::str() const
 {
-    return m_path;
+    return Tcl_GetStringFromObj(m_path, nullptr);
 }
 
 fs_path fs_path::find_dir(const std::string& dir_name) const
@@ -225,8 +238,7 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
     globtype.type = TCL_GLOB_TYPE_DIR;
 
     //Search for a folder with the image name in the appc_image_dir
-    tcl_obj_raii path_obj = Tcl_NewStringObj(m_path.c_str(), m_path.size());
-    int tcl_error = Tcl_FSMatchInDirectory(interp.get(), result_list, path_obj,
+    int tcl_error = Tcl_FSMatchInDirectory(interp.get(), result_list, m_path,
                                             dir_name.c_str(), &globtype);
 
     if(tcl_error)
