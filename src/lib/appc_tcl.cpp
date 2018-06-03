@@ -68,7 +68,7 @@ void appc::delete_interp(Tcl_Interp* interp)
     Tcl_DeleteInterp(interp);
 }
 
-interp_ptr create_tcl_interp()
+interp_ptr appc::create_tcl_interp()
 {
     return appc::interp_ptr(Tcl_CreateInterp(), appc::delete_interp);
 }

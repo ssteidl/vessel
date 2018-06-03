@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "fs.h"
 #include <iostream>
+#include <libgen.h>
 #include <sys/stat.h>
 #include <sstream>
 #include <unistd.h>
@@ -91,8 +92,26 @@ resource_fd::~resource_fd()
 
 /**************fs_path******************************/
 
+namespace
+{
+    tcl_obj_raii create_path_obj(const std::string& path)
+    {
+        tcl_obj_raii obj = Tcl_NewStringObj(path.c_str(), path.size());
+        interp_ptr interp = create_tcl_interp();
+        int tcl_error = Tcl_FSConvertToPathType(interp.get(), obj);
+        if(tcl_error)
+        {
+            std::ostringstream msg;
+            msg << "Internal error creating path '" << path << "': " << Tcl_GetStringResult(interp.get());
+            throw std::invalid_argument(msg.str());
+        }
+
+        return obj;
+    }
+}
+
 fs_path::fs_path(const std::string& path)
-    : m_path(Tcl_NewStringObj(path.c_str(), path.size()))
+    : m_path(create_path_obj(path))
 {
     std::cerr << "fsp string constructor" << std::endl;
 }
@@ -165,6 +184,34 @@ bool fs_path::is_executable() const
 std::unique_ptr<path_stat> fs_path::stat() const
 {
     return std::unique_ptr<path_stat>(new path_stat(str()));
+}
+
+void fs_path::append_extension(const std::string& extension)
+{
+    int num_components = 0;
+    tcl_obj_raii split_list = Tcl_FSSplitPath(m_path, &num_components);
+    assert(num_components);
+
+    std::string base = ::basename(str().c_str());
+
+    tcl_obj_raii base_with_extension =
+            Tcl_ObjPrintf("%s.%s", base.c_str(), extension.c_str());
+
+    interp_ptr interp = create_tcl_interp();
+    int tcl_error = Tcl_ListObjReplace(interp.get(), split_list, num_components - 1, 1, 1,
+                                       &base_with_extension.obj);
+
+    if(tcl_error)
+    {
+        std::ostringstream msg;
+        msg << "Error adding extenstion '" << extension
+            << "' to path '" << str() << ": "
+            << Tcl_GetStringResult(interp.get());
+
+        throw std::runtime_error(msg.str());
+    }
+
+    m_path = Tcl_FSJoinPath(split_list, -1);
 }
 
 bool fs_path::is_dir() const
