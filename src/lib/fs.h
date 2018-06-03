@@ -9,10 +9,12 @@
 namespace appc
 {
 
-class path_stat
+struct path_stat
 {
-    struct stat m_stat_buf;
+    struct stat stat_buf;
+    bool is_dir() const;
 
+private:
     friend class fs_path;
 
     path_stat(const std::string& path);
@@ -21,9 +23,6 @@ class path_stat
     path_stat& operator=(const path_stat& other) = delete;
     path_stat& operator=(path_stat&& other) = delete;
 
-public:
-
-    bool is_dir() const;
 };
 
 class resource_fd

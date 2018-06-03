@@ -15,9 +15,9 @@ using namespace appc;
 
 
 path_stat::path_stat(const std::string& path)
-    : m_stat_buf()
+    : stat_buf()
 {
-    int error = ::stat(path.c_str(), &m_stat_buf);
+    int error = ::stat(path.c_str(), &stat_buf);
     if(error)
     {
         std::ostringstream msg;
@@ -28,7 +28,7 @@ path_stat::path_stat(const std::string& path)
 
 bool path_stat::is_dir() const
 {
-    return S_ISDIR(m_stat_buf.st_mode);
+    return S_ISDIR(stat_buf.st_mode);
 }
 
 /**************resource-fd***************************/

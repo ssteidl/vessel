@@ -93,7 +93,7 @@ void appc::funcs::save_container_image(commandline& cmdline, environment& env)
         exit(1);
     }
 
-    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img.tgz"));
+    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img"));
 
     exit(ret);
 }
