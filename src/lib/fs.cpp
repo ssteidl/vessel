@@ -188,30 +188,6 @@ fs_path::operator bool() const
     return (length > 0);
 }
 
-/*TODO: We need a common result struct that has code and message.*/
-bool fs_path::copy_to(const fs_path& dest) const
-{
-    if(is_dir())
-    {
-        if(!dest.is_dir())
-        {
-            Tcl_Obj* error = nullptr;
-            int tcl_ret = Tcl_FSCopyDirectory(m_path, dest.m_path, &error);
-            if(tcl_ret == -1)
-            {
-                std::cerr << "Error copying directory: " << str() << "->" << dest.m_path << std::endl;
-                return false;
-            }
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Copy file not yet implemented");
-    }
-
-    return true;
-}
-
 std::string fs_path::str() const
 {
     return Tcl_GetStringFromObj(m_path, nullptr);

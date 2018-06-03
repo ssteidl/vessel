@@ -80,9 +80,6 @@ public:
 
     explicit operator bool() const;
 
-    /*TODO: We need a common result struct that has code and message.*/
-    bool copy_to(const fs_path& dest) const;
-
     std::string str() const;
 
     fs_path find_dir(const std::string& dir_name) const;
