@@ -1,5 +1,6 @@
 #include <cassert>
 #include "appc_tcl.h"
+#include <iostream>
 
 using namespace appc;
 
@@ -51,10 +52,14 @@ tcl_obj_raii::operator Tcl_Obj*() const
 
 tcl_obj_raii::~tcl_obj_raii()
 {
+    std::cerr << "tcl obj raii destructor ";
     if(obj)
     {
+        std::cerr << "ref count: " << obj->refCount << std::endl;
         Tcl_DecrRefCount(obj);
     }
+
+    std::cerr << std::endl;
 }
 
 void appc::delete_interp(Tcl_Interp* interp)

@@ -93,23 +93,32 @@ resource_fd::~resource_fd()
 
 fs_path::fs_path(const std::string& path)
     : m_path(Tcl_NewStringObj(path.c_str(), path.size()))
-{}
+{
+    std::cerr << "fsp string constructor" << std::endl;
+}
 
 fs_path::fs_path()
     : fs_path(std::string())
-{}
+{
+    std::cerr << "fsp default constructor" << std::endl;
+}
 
 /*Copies the path.*/
 fs_path::fs_path(const fs_path& other)
     : fs_path(Tcl_GetStringFromObj(other.m_path, nullptr))
-{}
+{
+    std::cerr << "fsp copy constructor" << std::endl;
+}
 
 fs_path::fs_path(fs_path&& other)
     : m_path(std::move(other.m_path))
-{}
+{
+    std::cerr << "fsp move constructor" << std::endl;
+}
 
 fs_path& fs_path::operator=(const fs_path& other)
 {
+    std::cerr << "fsp copy assignment" << std::endl;
     if(this != &other)
     {
         m_path = other.m_path;
@@ -120,6 +129,7 @@ fs_path& fs_path::operator=(const fs_path& other)
 
 fs_path& fs_path::operator=(fs_path&& other)
 {
+    std::cerr << "fsp move assignment" << std::endl;
     if(this != &other)
     {
         m_path = std::move(other.m_path);
@@ -255,7 +265,9 @@ fs_path fs_path::find_dir(const std::string& dir_name) const
 }
 
 fs_path::~fs_path()
-{}
+{
+    std::cerr << "fsp destructor" << std::endl;
+}
 
 /*****************functions************************************/
 void appc::validate_directory(const fs_path& path)
