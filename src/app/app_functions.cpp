@@ -93,7 +93,21 @@ void appc::funcs::save_container_image(commandline& cmdline, environment& env)
         exit(1);
     }
 
-    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img"));
+    int count = 0;
+    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img"),
+                                   [&count](const compression_progress& progress) {
+        if((count % 1000) == 0) {
+        std::cerr << "File size: " << progress.file_size << std::endl
+                  << "Total read: " << progress.total_read << std::endl
+                  << "Total written: " << progress.total_compressed_written << std::endl
+                  << "Read: " << progress.bytes_read << std::endl
+                  << "Written: " << progress.bytes_written << std::endl
+                  << "% complete: " << ((float)progress.total_read / (float)progress.file_size) * 100 << std::endl
+                  << "Count: " << count << std::endl;
+
+        }
+        ++count;
+    });
 
     exit(ret);
 }

@@ -1,6 +1,9 @@
 #ifndef IMAGE_ARCHIVE_H
 #define IMAGE_ARCHIVE_H
 
+#include <functional>
+#include <sys/types.h>
+
 namespace appc
 {
 
@@ -10,10 +13,24 @@ class fs_path;
  * be stored or retrieved from a registry.  image_archives are
  * somehow packaged so that they can be transported and stored
  * in an archive.  That package could theoretically be a
- * tarball, iso9660 image, ufs image, zfs snapshot etc.
+ * tarball, iso9660 image, compressed ufs image,
+ * compressed zfs snapshot etc.
  */
 
-int create_image_archive(const fs_path& source, const fs_path& dest);
+struct compression_progress
+{
+    off_t file_size;
+    ssize_t bytes_read;
+    ssize_t bytes_written;
+    size_t total_read;
+    size_t total_compressed_written;
+};
+
+using compression_progress_callback =
+    std::function<void(const compression_progress&)>;
+
+int create_image_archive(const fs_path& source, const fs_path& dest,
+                         const compression_progress_callback& callback);
 
 }
 #endif // IMAGE_ARCHIVE_H

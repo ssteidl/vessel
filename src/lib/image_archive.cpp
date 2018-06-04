@@ -47,7 +47,8 @@ namespace
         return archive_entry_ptr(archive_entry_new2(a), _free_archive_entry);
     }
 
-    void compress_image(fs_path image)
+    void compress_image(fs_path image,
+                        const compression_progress_callback& progress_cb)
     {
         write_archive_ptr image_archive = create_write_archive();
 
@@ -125,6 +126,13 @@ namespace
              * (total_size, bytes_read, compressed_bytes_written,
              *  total_bytes_read, total_compressed_bytes_written)
              */
+            if(progress_cb)
+            {
+                compression_progress progress;
+                progress = {sb->stat_buf.st_size, bytes_read, bytes_written,
+                            total_bytes_read, total_bytes_written};
+                progress_cb(progress);
+            }
         }
     }
 
@@ -218,7 +226,8 @@ namespace
     }
 }
 
-int appc::create_image_archive(const fs_path &source, const fs_path &dest)
+int appc::create_image_archive(const fs_path &source, const fs_path &dest,
+                               const compression_progress_callback& callback)
 {
     if(!source.exists())
     {
@@ -243,6 +252,6 @@ int appc::create_image_archive(const fs_path &source, const fs_path &dest)
 
     std::cerr << "dest: " << dest.str() << std::endl;
     int exit_code = run_makefs(source, dest);
-    compress_image(dest);
+    compress_image(dest, callback);
     return exit_code;
 }
