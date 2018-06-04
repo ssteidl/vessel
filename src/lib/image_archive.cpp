@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include "fs.h"
 #include <iostream>
+#include <memory>
 #include <paths.h>
 #include <signal.h>
 #include <sstream>
@@ -18,24 +19,51 @@ using namespace appc;
 
 namespace
 {
+    void _free_write_archive(archive* ptr)
+    {
+        if(ptr)
+        {
+            archive_write_free(ptr);
+        }
+    }
+
+    using write_archive_ptr = std::unique_ptr<archive, decltype(&_free_write_archive)>;
+    write_archive_ptr create_write_archive()
+    {
+        return write_archive_ptr(archive_write_new(), _free_write_archive);
+    }
+
+    void _free_archive_entry(archive_entry* entry)
+    {
+        if(entry)
+        {
+            archive_entry_free(entry);
+        }
+    }
+
+    using archive_entry_ptr = std::unique_ptr<archive_entry, decltype(&_free_archive_entry)>;
+    archive_entry_ptr create_archive_entry(archive* a)
+    {
+        return archive_entry_ptr(archive_entry_new2(a), _free_archive_entry);
+    }
+
     void compress_image(fs_path image)
     {
-        //TODO: Fix this up
-        struct archive *image_archive = archive_write_new();
+        write_archive_ptr image_archive = create_write_archive();
 
-        (void)archive_write_set_format_pax(image_archive);
-        (void)archive_write_add_filter_xz(image_archive);
-        archive_write_set_bytes_per_block(image_archive, 10);
+        (void)archive_write_set_format_pax(image_archive.get());
+        (void)archive_write_add_filter_xz(image_archive.get());
+        archive_write_set_bytes_per_block(image_archive.get(), 10);
 
         fs_path output_file = image;
         output_file.append_extension("xz");
-        int archive_error = archive_write_open_filename(image_archive,
+        int archive_error = archive_write_open_filename(image_archive.get(),
                                                         output_file.str().c_str());
         if(archive_error)
         {
             std::ostringstream msg;
             msg << "Error opening file for write: "
-                << archive_error_string(image_archive)
+                << archive_error_string(image_archive.get())
                 << std::endl;
 
             throw std::runtime_error(msg.str());
@@ -44,46 +72,60 @@ namespace
         resource_fd fd = open(image.str().c_str(), O_RDONLY);
         if(fd == -1)
         {
-            perror("open");
-            exit(1);
+            std::ostringstream msg;
+            msg << "Error opening image file for compression: '" << image.str()
+                << "' " << strerror(errno);
+            throw std::runtime_error(msg.str());
         }
+
+        archive_entry_ptr entry = create_archive_entry(image_archive.get());
+        std::unique_ptr<path_stat> sb = image.stat();
+
+        archive_entry_copy_stat(entry.get(), &sb->stat_buf);
+        archive_entry_set_pathname(entry.get(), image.str().c_str());
+        //NOTE: Need to set fflags if create image with all files instead of using
+        //makefs
+
+        int header_error = archive_write_header(image_archive.get(), entry.get());
+        assert(header_error == ARCHIVE_OK);
 
         char buffer[BUFSIZ];
         memset(buffer, 0, sizeof(buffer));
 
-        ssize_t bytes_read = 0;
         size_t total_bytes_read = 0;
-        //TODO: RAII
-        archive_entry* entry = archive_entry_new2(image_archive);
-
-        std::unique_ptr<path_stat> sb = image.stat();
-
-
-        archive_entry_copy_stat(entry, &sb->stat_buf);
-        archive_entry_set_pathname(entry, image.str().c_str());
-        //TODO: set fflags
-        int header_error = archive_write_header(image_archive, entry);
-        assert(header_error == ARCHIVE_OK);
+        size_t total_bytes_written = 0;
         while(true)
         {
-            //TODO: Some sort of progress callback
-            bytes_read = read(fd, buffer, sizeof(buffer));
+            ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
             if(bytes_read == -1)
             {
-                perror("read");
-                exit(1);
+                std::ostringstream msg;
+                msg << "Error reading from image: '" << image.str()
+                    << "': " << strerror(errno);
+                throw std::runtime_error(msg.str());
             }
             else if(bytes_read == 0)
             {
+                //EOF
                 break;
             }
+            total_bytes_read += bytes_read;
 
-            ssize_t bytes_written = archive_write_data(image_archive, buffer, bytes_read);
+            ssize_t bytes_written = archive_write_data(image_archive.get(), buffer, bytes_read);
+            if(bytes_written == -1)
+            {
+                std::ostringstream msg;
+                msg << "Error compressing image '" << image.str()
+                    << "': " << archive_error_string(image_archive.get());
+                throw std::runtime_error(msg.str());
+            }
+            total_bytes_written += bytes_written;
+
+            /*TODO: Some sort of progress callback
+             * (total_size, bytes_read, compressed_bytes_written,
+             *  total_bytes_read, total_compressed_bytes_written)
+             */
         }
-
-        std::cerr << "bytes: " << total_bytes_read << std::endl;
-        archive_write_free(image_archive);
-        ::close(fd);
     }
 
     /**
