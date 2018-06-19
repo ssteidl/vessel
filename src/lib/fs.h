@@ -75,6 +75,8 @@ public:
 
     fs_path& operator+=(const std::string& path_component);
 
+    std::string basename() const;
+
     void append_extension(const std::string& extension);
 
     explicit operator bool() const;

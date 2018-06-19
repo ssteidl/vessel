@@ -10,7 +10,7 @@ namespace
     {
         assert(!name.empty());
 
-        char* value = getenv(name.c_str());
+        char* value = ::getenv(name.c_str());
 
         if(value == nullptr)
         {
@@ -31,16 +31,27 @@ namespace
 }
 
 environment::environment()
-    : m_image_dir(get_env_required_dir("APPC_IMAGE_DIR")),
+    : m_archive_dir(get_env_required_dir("APPC_ARCHIVE_DIR")),
+      m_image_dir(get_env_required_dir("APPC_IMAGE_DIR")),
       m_container_dir(get_env_required_dir("APPC_CONTAINER_DIR"))
 {}
 
-fs_path environment::find_image(const std::string& image_name)
+fs_path environment::find_image(const std::string& image_name) const
 {
     return m_image_dir.find_dir(image_name);
 }
 
-fs_path environment::find_container(const std::string& container_name)
+fs_path environment::find_container(const std::string& container_name) const
 {
     return m_container_dir.find_dir(container_name);
+}
+
+fs_path environment::archive_dir() const
+{
+    return m_archive_dir;
+}
+
+fs_path environment::image_dir() const
+{
+    return m_image_dir;
 }

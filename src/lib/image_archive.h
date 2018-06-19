@@ -29,8 +29,10 @@ struct compression_progress
 using compression_progress_callback =
     std::function<void(const compression_progress&)>;
 
-int create_image_archive(const fs_path& source, const fs_path& dest,
-                         const compression_progress_callback& callback);
+int create_image(const fs_path& source, const fs_path& dest);
+
+void archive_image(const fs_path& image, const fs_path& archive_dir,
+                   const compression_progress_callback& progress_cb);
 
 }
 #endif // IMAGE_ARCHIVE_H

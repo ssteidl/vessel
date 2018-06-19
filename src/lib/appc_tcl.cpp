@@ -52,10 +52,8 @@ tcl_obj_raii::operator Tcl_Obj*() const
 
 tcl_obj_raii::~tcl_obj_raii()
 {
-    std::cerr << "tcl obj raii destructor ";
     if(obj)
     {
-        std::cerr << "ref count: " << obj->refCount << std::endl;
         Tcl_DecrRefCount(obj);
     }
 

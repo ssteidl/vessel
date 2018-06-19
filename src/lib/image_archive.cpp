@@ -47,8 +47,9 @@ namespace
         return archive_entry_ptr(archive_entry_new2(a), _free_archive_entry);
     }
 
-    void compress_image(fs_path image,
-                        const compression_progress_callback& progress_cb)
+    void xz_compress_image(fs_path image,
+                           fs_path output_file,
+                           const compression_progress_callback& progress_cb)
     {
         write_archive_ptr image_archive = create_write_archive();
 
@@ -56,8 +57,6 @@ namespace
         (void)archive_write_add_filter_xz(image_archive.get());
         archive_write_set_bytes_per_block(image_archive.get(), 10);
 
-        fs_path output_file = image;
-        output_file.append_extension("xz");
         int archive_error = archive_write_open_filename(image_archive.get(),
                                                         output_file.str().c_str());
         if(archive_error)
@@ -226,8 +225,7 @@ namespace
     }
 }
 
-int appc::create_image_archive(const fs_path &source, const fs_path &dest,
-                               const compression_progress_callback& callback)
+int appc::create_image(const fs_path &source, const fs_path &dest)
 {
     if(!source.exists())
     {
@@ -252,6 +250,16 @@ int appc::create_image_archive(const fs_path &source, const fs_path &dest,
 
     std::cerr << "dest: " << dest.str() << std::endl;
     int exit_code = run_makefs(source, dest);
-    compress_image(dest, callback);
     return exit_code;
+}
+
+void appc::archive_image(const fs_path& image, const fs_path& archive_dir,
+                         const compression_progress_callback& progress_cb)
+{
+    fs_path output_file{archive_dir};
+    output_file += image.basename();
+    output_file.append_extension("xz");
+    xz_compress_image(image, output_file, progress_cb);
+
+    return;
 }

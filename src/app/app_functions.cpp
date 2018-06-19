@@ -93,9 +93,20 @@ void appc::funcs::save_container_image(commandline& cmdline, environment& env)
         exit(1);
     }
 
+    fs_path image_dest{env.image_dir()};
+    image_dest += container_dir.basename();
+    image_dest.append_extension("img");
+
+    int ret = create_image(container_dir, image_dest);
+    if(ret)
+    {
+        std::cerr << "Error creating image" << std::endl;
+        exit(1);
+    }
+
     int count = 0;
-    int ret = create_image_archive(container_dir, fs_path("/usr/home/shane/myimage.img"),
-                                   [&count](const compression_progress& progress) {
+    archive_image(image_dest, env.archive_dir(),
+                  [&count](const compression_progress& progress) {
         if((count % 1000) == 0) {
         std::cerr << "File size: " << progress.file_size << std::endl
                   << "Total read: " << progress.total_read << std::endl
