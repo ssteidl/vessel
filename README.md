@@ -12,6 +12,21 @@ Application containers for FreeBSD.
     * Security Level
 * Deeply integrate with FreeBSD system, preferring system libraries to fork/exec.  This project has 0 concern with being portable.
 
+## Vocabulary
+* **Image**: A directory or mounted filesystem that the container will use as a root directory.
+* **Image Archive**: A single file (usually a compressed image) that suitable for storing in a registry.
+* **Registry**: A store for image archives (REST, local filesystem, ftp, etc)
+* **Volume**: A filesystem that is mounted to a directory inside of the image.  Bind mount, memory back file mount, disk etc.
+* **Container**: The combination of image, network stack, volumes and jail.
+
+## Environment
+
+* **APPC_IMAGE_DIR**: Directory for unpacked images
+* **APPC_CONTAINER_DIR**: Directory for containers.  Images are mounted (nullfs mount for directories, mount for vnode fs's) here and
+  containers are run in those images.
+* **APPC_ARCHIVE_DIR**: Directory for archives to be saved (during creation or download).
+* **APPC_REGISTRY_URL**: URL to the appc registry
+
 ## Features
 
 * **Image registry**: Pull multiple formats of images that can be used as filesystems for jails.  There could be multiple registry types:
