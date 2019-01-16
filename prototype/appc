@@ -1,0 +1,141 @@
+#!/usr/bin/env tclsh8.6
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+
+namespace eval appc::_ {
+
+    #TODO: ensemble for public api
+    proc get_zfs_pools {} {
+
+        set pools [exec zpool list -H]
+        set lines [split $pools {\n}]
+
+        set pools_dict [dict create]
+        set headers [list name size alloc free ckpoint expandsz frag cap dedup health altroot]
+        foreach pool_line $lines {
+
+            set dict_list [list]
+            lmap pool $pool_line header $headers {lappend dict_list $header $pool}
+
+            set name [lindex $pool_line 0]
+            dict set pools_dict $name $dict_list
+        }
+
+        return $pools_dict
+    }
+
+    proc get_zfs_snapshots {} {
+
+        set snapshots [exec zfs list -H -t snap]
+        set lines [split $snapshots {\n}]
+
+        set snapshots_dict [dict create]
+        set headers [list name used avail refer mountpoint]
+        foreach snapshot_line $lines {
+
+            set dict_list [list]
+            lmap snapshot $snapshot_line header $headers {lappend dict_list $header $snapshot}
+
+            set name [lindex $snapshot_line 0]
+            dict set snapshots_dict $name $dict_list
+        }
+
+        return $snapshots_dict
+    }
+
+    proc zfs_clone_snapshot {snapshot new_dataset mountpoint} {
+
+        variable zfs_snapshots
+        
+        if {![dict exists $zfs_snapshots $snapshot]} {
+
+            puts stderr "Attempted to clone a non existent snapshot: $snapshot"
+
+            #TODO: Raise error instead of exit
+            exit 1
+        }
+
+        open {|zfs clone -p -omountpoint=$mountpoint $snapshot $new_dataset}
+    }
+    
+    proc validate_environment {} {
+
+        variable basejail
+	
+        if {$basejail eq {}} {
+
+            puts stderr "variable basejail must be set"
+            exit 1
+        }
+	
+    }
+
+    proc jail_start {mountpoint command} {
+
+        #TODO, execute in a sub interp so we can see when it exits.  Or do
+        #this async so we can catch when it exits and cleanup.
+        exec jail -c ip4=inherit allow.mount.devfs=1 mount.devfs=1 path=$mountpoint command=$command >&@ stdout
+        puts "Exited jail"
+    }
+
+    variable basejail_snapshot {zroot/jails/basejail@11.2-RELEASE}
+    variable zfs_pools [get_zfs_pools]
+    variable zfs_snapshots [get_zfs_snapshots]
+    variable appc_pool {zroot}
+    variable appc_dataset "$appc_pool/appc/jails"
+}
+
+proc FROM {image} {
+    puts stderr "FROM"
+}
+
+proc CWD {} {
+    puts stderr "CWD"
+}
+
+proc COPY {} {
+    puts stderr "COPY"
+}
+
+proc EXPOSE {} {
+
+    puts stderr "EXPOSE"
+}
+
+proc RUN {} {
+
+    puts stderr "RUN"
+}
+
+#appc --empty 1 --basejail zroot/jails/base
+#appc build [-f {tclscript}]
+#Check if base jail exists if not create from pool and
+# pull down tarball and extract
+
+#Notes on appc build
+# - We will pull down the "FROM" images into a special jail for building the image
+# - We commands will be executed in that jail
+# - The jail is created and deleted for each "build" invocation
+
+#initialize basejail to commandline
+set basejail $::appc::_::basejail_snapshot
+set appc_dataset $::appc::_::appc_dataset
+set mountpoint [pwd]/mnt
+set jailname {testjail}
+if {[dict exists $::appc::_::zfs_snapshots $basejail]} {
+
+    puts stderr "Exists.. cloning"
+
+    #TODO: Where to mount?  Maybe: ~/.appc/mounts/<jailname>
+    ::appc::_::zfs_clone_snapshot $basejail [join "$appc_dataset $jailname" /] $mountpoint
+}
+
+::appc::_::jail_start $mountpoint {/bin/sh}
+
+#TODO: I probably need an appc pool to manage
+#if basejail is a snapshot clone it
+#if basejail is not a snapshot but exists, snapshot it
+#if basejail is not a snapshot and does not exist create it from pool specified
+# in first part of dataset path by creating the dataset,
+# pulling down base.tar.gz and untar'ing it.
+
