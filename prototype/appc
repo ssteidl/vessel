@@ -1,6 +1,7 @@
 #!/usr/bin/env tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+load libappctcl.so
 
 namespace eval appc::_ {
 
@@ -86,51 +87,67 @@ namespace eval appc::_ {
 }
 
 proc FROM {image} {
-    puts stderr "FROM"
+    puts stderr "FROM: $image"
 }
 
-proc CWD {} {
-    puts stderr "CWD"
+proc CWD {path} {
+    puts stderr "CWD: $path"
 }
 
-proc COPY {} {
-    puts stderr "COPY"
+proc COPY {source dest} {
+    puts stderr "COPY: $source -> $dest"
 }
 
-proc EXPOSE {} {
+proc EXPOSE {port} {
 
-    puts stderr "EXPOSE"
+    puts stderr "EXPOSE $port"
 }
 
-proc RUN {} {
+proc RUN {command} {
 
-    puts stderr "RUN"
+    puts stderr "RUN: $command"
+}
+
+proc build_command {args_dict}  {
+
+    set appc_file [dict get $args_dict {file}]
+
+    source $appc_file
 }
 
 #appc --empty 1 --basejail zroot/jails/base
 #appc build [-f {tclscript}]
 #Check if base jail exists if not create from pool and
 # pull down tarball and extract
+set options [appc::parse_options $argv]
 
+set command [dict get $options command]
+
+switch -exact $command {
+
+    build {
+        build_command [dict get $options args]
+    }
+}
 #Notes on appc build
 # - We will pull down the "FROM" images into a special jail for building the image
 # - We commands will be executed in that jail
 # - The jail is created and deleted for each "build" invocation
 
 #initialize basejail to commandline
-set basejail $::appc::_::basejail_snapshot
-set appc_dataset $::appc::_::appc_dataset
-set mountpoint [pwd]/mnt
-set jailname {testjail}
-if {[dict exists $::appc::_::zfs_snapshots $basejail]} {
+# set basejail $::appc::_::basejail_snapshot
+# set appc_dataset $::appc::_::appc_dataset
+# set mountpoint [pwd]/mnt
+# set jailname {testjail}
+# if {[dict exists $::appc::_::zfs_snapshots $basejail]} {
 
-    puts stderr "Exists.. cloning"
+#     puts stderr "Exists.. cloning"
 
-    #TODO: Where to mount?  Maybe: ~/.appc/mounts/<jailname>
-    ::appc::_::zfs_clone_snapshot $basejail [join "$appc_dataset $jailname" /] $mountpoint
-}
+#     #TODO: Where to mount?  Maybe: ~/.appc/mounts/<jailname>
+#     ::appc::_::zfs_clone_snapshot $basejail [join "$appc_dataset $jailname" /] $mountpoint
+# }
 
-::appc::_::jail_start $mountpoint {/bin/sh}
+# ::appc::_::jail_start $mountpoint {/bin/sh}
 
 #TODO: I probably need an appc pool to manage
 #if basejail is a snapshot clone it

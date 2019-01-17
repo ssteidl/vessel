@@ -54,7 +54,7 @@ namespace
 
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
-        assert(argc > 1);
+        assert(argc > 0);
 
         static const struct option long_opts[] = {
             {"file", required_argument, nullptr, 'f'},
@@ -106,7 +106,7 @@ namespace
     int Appc_ParseOptions(void *clientData, Tcl_Interp *interp,
                           int objc, struct Tcl_Obj *const *objv)
     {
-        if(objc != 2)
+        if(objc < 2)
         {
             Tcl_WrongNumArgs(interp, objc, objv, "Only one arg expected. <argv>");
             return TCL_ERROR;
@@ -120,7 +120,7 @@ namespace
             return tcl_error;
         }
 
-        if(arg_count < 2)
+        if(arg_count == 0)
         {
             Tcl_SetResult(interp, (char*)"subcommand not provided", TCL_STATIC);
             Tcl_SetErrorCode(interp, "ARGS");
