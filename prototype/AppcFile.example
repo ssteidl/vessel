@@ -1,0 +1,17 @@
+#!/usr/bin/env tclsh8.6
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+FROM basejail:11.2-RELEASE
+
+CWD /
+
+COPY [pwd] {/mnt}
+
+EXPOSE 80
+
+#Run in a chroot when building
+RUN bash
+
+set jail_params {
+
+}
