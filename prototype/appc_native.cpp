@@ -13,6 +13,16 @@
 
 namespace
 {
+    void unref_tclobj(Tcl_Obj* obj)
+    {
+        if(obj)
+        {
+            Tcl_DecrRefCount(obj);
+        }
+    }
+
+    using tclobj_ptr = std::unique_ptr<Tcl_Obj, decltype(&unref_tclobj)>;
+
     template<typename... CODES>
     int syserror_result(Tcl_Interp* interp, CODES... error_codes)
     {
@@ -58,6 +68,7 @@ namespace
 
         static const struct option long_opts[] = {
             {"file", required_argument, nullptr, 'f'},
+            {"name", required_argument, nullptr, 'n'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -72,15 +83,21 @@ namespace
         int ch = -1;
 
         //This needs to be wrapped in RAII.
-        Tcl_Obj* args_dict = Tcl_NewDictObj();
+        tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
             case 'f':
-                tcl_error = Tcl_DictObjPut(interp, args_dict,
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                            Tcl_NewStringObj("file", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'n':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("name", -1),
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
@@ -96,7 +113,7 @@ namespace
             }
         }
 
-        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict);
+        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
         return tcl_error;
     }
 

@@ -2,62 +2,9 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 load libappctcl.so
+source build.tcl
 
 namespace eval appc::_ {
-
-    #TODO: ensemble for public api
-    proc get_zfs_pools {} {
-
-        set pools [exec zpool list -H]
-        set lines [split $pools {\n}]
-
-        set pools_dict [dict create]
-        set headers [list name size alloc free ckpoint expandsz frag cap dedup health altroot]
-        foreach pool_line $lines {
-
-            set dict_list [list]
-            lmap pool $pool_line header $headers {lappend dict_list $header $pool}
-
-            set name [lindex $pool_line 0]
-            dict set pools_dict $name $dict_list
-        }
-
-        return $pools_dict
-    }
-
-    proc get_zfs_snapshots {} {
-
-        set snapshots [exec zfs list -H -t snap]
-        set lines [split $snapshots {\n}]
-
-        set snapshots_dict [dict create]
-        set headers [list name used avail refer mountpoint]
-        foreach snapshot_line $lines {
-
-            set dict_list [list]
-            lmap snapshot $snapshot_line header $headers {lappend dict_list $header $snapshot}
-
-            set name [lindex $snapshot_line 0]
-            dict set snapshots_dict $name $dict_list
-        }
-
-        return $snapshots_dict
-    }
-
-    proc zfs_clone_snapshot {snapshot new_dataset mountpoint} {
-
-        variable zfs_snapshots
-        
-        if {![dict exists $zfs_snapshots $snapshot]} {
-
-            puts stderr "Attempted to clone a non existent snapshot: $snapshot"
-
-            #TODO: Raise error instead of exit
-            exit 1
-        }
-
-        open {|zfs clone -p -omountpoint=$mountpoint $snapshot $new_dataset}
-    }
     
     proc validate_environment {} {
 
@@ -79,41 +26,10 @@ namespace eval appc::_ {
         puts "Exited jail"
     }
 
-    variable basejail_snapshot {zroot/jails/basejail@11.2-RELEASE}
-    variable zfs_pools [get_zfs_pools]
-    variable zfs_snapshots [get_zfs_snapshots]
     variable appc_pool {zroot}
     variable appc_dataset "$appc_pool/appc/jails"
 }
 
-proc FROM {image} {
-    puts stderr "FROM: $image"
-}
-
-proc CWD {path} {
-    puts stderr "CWD: $path"
-}
-
-proc COPY {source dest} {
-    puts stderr "COPY: $source -> $dest"
-}
-
-proc EXPOSE {port} {
-
-    puts stderr "EXPOSE $port"
-}
-
-proc RUN {command} {
-
-    puts stderr "RUN: $command"
-}
-
-proc build_command {args_dict}  {
-
-    set appc_file [dict get $args_dict {file}]
-
-    source $appc_file
-}
 
 #appc --empty 1 --basejail zroot/jails/base
 #appc build [-f {tclscript}]
