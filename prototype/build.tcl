@@ -12,14 +12,58 @@ namespace eval appc::build {
         variable from_called false
         variable current_dataset {}
         variable cwd {/}
-        variable mountpoint
+        variable mountpoint {}
+        variable name {}
+        variable guid {}
+
+       proc build_jail_command {args} {
+
+           variable name joe
+           variable mountpoint
+           
+            #TODO: Allow run jail command parameters to be overridden
+           array set jail_parameters [list \
+                "ip4" "inherit" \
+                "host.hostname" $name]
+
+           #TODO: Allow user to set shell parameter via appc file
+           set shell {/bin/sh}
+
+           set jail_cmd [list jail -c path=$mountpoint]
+           foreach {param value} [array get jail_parameters] {
+
+               lappend jail_cmd "${param}=${value}"
+           }
+
+           set args [string map { \\\{ \{ \{ \" \\\} \} \} \"} $args]
+           set jailed_cmd [list $shell -c $args]
+           set command_parameter "command=$jailed_cmd"
+           set jail_cmd [lappend jail_cmd {*}$command_parameter]
+           return [list {*}$jail_cmd]
+       }
     }
     
+    proc build_command {args_dict}  {
+
+        variable _::cmdline_options
+        set cmdline_options $args_dict
+        
+        set appc_file [dict get $cmdline_options {file}]
+
+        source $appc_file
+
+        #Create container definition file
+        #zip up jail and definition file.
+    }
 }
 
 proc FROM {image} {
-    variable current_dataset
-    variable cmdline_options
+    variable appc::build::_::current_dataset
+    variable appc::build::_::cmdline_options
+    variable appc::build::_::mountpoint
+    variable appc::build::_::from_called
+    variable appc::build::_::name
+    variable appc::build::_::guid
     
     puts stderr "FROM: $image"
 
@@ -67,27 +111,51 @@ proc FROM {image} {
     # Set current_dataset using guid.
     set current_dataset $new_dataset
 
-    set jail_path [appc::zfs::get_mountpoint $new_dataset]
+    set mountpoint [appc::zfs::get_mountpoint $new_dataset]
     
     # copy resolve.conf
     set resolv_file {/etc/resolv.conf}
-    file copy $resolv_file [fileutil::jail $jail_path $resolv_file]
+    file copy $resolv_file [fileutil::jail $mountpoint $resolv_file]
 
+    set from_called true
     return
 }
 
 proc CWD {path} {
-    variable cwd
+    variable appc::build::_::cwd
+    variable appc::build::_::from_called
 
+    if {!$from_called} {
+
+        return -code error -errorcode {BUILD CWD} \
+            "CWD called before FROM.  FROM must be the first command called."
+    }
+    
     #Verify cwd exists in the dataset
     #set cwd variable
     puts stderr "CWD: $path"
+
+    set cwd $path
 }
 
 proc COPY {source dest} {
+    variable appc::build::_::cwd
+    variable appc::build::_::mountpoint
+    variable appc::build::_::from_called
+
+    if {!$from_called} {
+
+        return -code error -errorcode {BUILD COPY} \
+            "COPY called before FROM.  FROM must be the first command called."
+    }
+    
     #dest is relative to cwd in the jail
     #source is on the host system and is relative to current pwd
     puts stderr "COPY: $source -> $dest"
+
+    set absolute_path [fileutil::jail $mountpoint [file join $cwd $dest]]
+
+    file copy $source $absolute_path
 }
 
 proc EXPOSE {port} {
@@ -96,10 +164,45 @@ proc EXPOSE {port} {
     puts stderr "EXPOSE $port"
 }
 
-proc RUN {command} {
+proc RUN {args} {
+    variable appc::build::_::mountpoint
+    variable appc::build::_::name
+    variable appc::build::_::from_called
+    
+    if {!$from_called} {
+
+        return -code error -errorcode {BUILD CWD} \
+            "RUN called before FROM.  FROM must be the first command called."
+    }
+
+    if {[llength $args] == 0} {
+
+        return -code error -errorcode {BUILD RUN ARGS} \
+            "RUN invoked without arguments" 
+    }
+
+    set cmd [appc::build::_::build_jail_command {*}$args]
 
     #jail and run command
-    puts stderr "RUN: $command"
+    puts stderr "RUN: $cmd"
+    
+    #TODO: I'm not sure of the best way to run the jail.  I could
+    #just exec jail.  But there may be some down sides with signal
+    #handling. The alternative is fork exec.  I think to start I'll
+    # try to just exec jail by creating a temporary jail file.
+    # Either way, the process is done, I need to kill the jail because
+    # it could still be running if the command started any background
+    # processes.
+    try {
+        exec {*}$cmd >&@ stdout
+    } trap {CHILDSTATUS} {results options} {
+
+        puts stderr "Run failed: $results"
+        return -code error -errorcode {BUILD RUN}
+    }
+
+    puts "after"
+    return
 }
 
 proc CMD {command} {
@@ -107,16 +210,4 @@ proc CMD {command} {
     #create the init script to run with CMD.
 }
 
-proc build_command {args_dict}  {
-
-    variable cmdline_options
-    set cmdline_options $args_dict
-    
-    set appc_file [dict get $cmdline_options {file}]
-
-    source $appc_file
-
-    #Create container definition file
-    #zip up jail and definition file.
-}
 
