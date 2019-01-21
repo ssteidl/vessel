@@ -42,7 +42,7 @@ set command [dict get $options command]
 switch -exact $command {
 
     build {
-        build_command [dict get $options args]
+        appc::build::build_command [dict get $options args]
     }
 }
 #Notes on appc build
