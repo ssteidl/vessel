@@ -2,9 +2,7 @@
 package require uuid
 package require fileutil
 
-source zfs.tcl
 namespace eval appc::build {
-
 
     namespace eval _ {
 
@@ -16,31 +14,55 @@ namespace eval appc::build {
         variable name {}
         variable guid {}
 
-       proc build_jail_command {args} {
+        proc build_jail_command {args} {
 
-           variable name joe
-           variable mountpoint
-           
+            variable name joe
+            variable mountpoint
+            
             #TODO: Allow run jail command parameters to be overridden
-           array set jail_parameters [list \
-                "ip4" "inherit" \
-                "host.hostname" $name]
+            array set jail_parameters [list \
+                                           "ip4" "inherit" \
+                                           "host.hostname" $name]
 
-           #TODO: Allow user to set shell parameter via appc file
-           set shell {/bin/sh}
+            #TODO: Allow user to set shell parameter via appc file
+            set shell {/bin/sh}
 
-           set jail_cmd [list jail -c path=$mountpoint]
-           foreach {param value} [array get jail_parameters] {
+            set jail_cmd [list jail -c path=$mountpoint]
+            foreach {param value} [array get jail_parameters] {
 
-               lappend jail_cmd "${param}=${value}"
-           }
+                lappend jail_cmd "${param}=${value}"
+            }
 
-           set args [string map { \\\{ \{ \{ \" \\\} \} \} \"} $args]
-           set jailed_cmd [list $shell -c $args]
-           set command_parameter "command=$jailed_cmd"
-           set jail_cmd [lappend jail_cmd {*}$command_parameter]
-           return [list {*}$jail_cmd]
-       }
+            set args [string map { \\\{ \{ \{ \" \\\} \} \} \"} $args]
+            set jailed_cmd [list $shell -c $args]
+            set command_parameter "command=$jailed_cmd"
+            set jail_cmd [lappend jail_cmd {*}$command_parameter]
+            return [list {*}$jail_cmd]
+        }
+
+        proc fetch_image {name version} {
+
+            if {$name ne "FreeBSD" } {
+
+                return -code error -errorcode {BUILD IMAGE FETCH} \
+                    "Only FreeBSD images are currently allowed"
+            }
+
+            
+            #TODO: Support a registry.  For now only support
+            #freebsd base.txz
+
+            #TODO: What should we do for a download directory? For now
+            #I'll just use tmp
+
+            #TODO: For now we require the image to be the same as the
+            #host architecture
+            set arch [appc::bsd::host_architecture]
+
+            #TODO: Test needs to be the mountpoint of the new dataset
+            set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
+            exec fetch -o - $url | tar -C test -xvf - >&@ stderr
+        }
     }
     
     proc build_command {args_dict}  {
@@ -92,8 +114,7 @@ proc FROM {image} {
 
     if {!$snapshot_exists} {
 
-        return -code error -errorcode {BUILD IMAGE FETCH NYI} \
-            "Fetching remote images is not yet implemented"
+        appc::build::_::fetch_image $image_name $image_version
     }
 
     # Clone base jail and name new dataset with guid
@@ -209,5 +230,3 @@ proc CMD {command} {
 
     #create the init script to run with CMD.
 }
-
-
