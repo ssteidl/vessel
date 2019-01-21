@@ -5,7 +5,7 @@ set jail_params {
 
 }
 
-FROM basejail:11.2-RELEASE
+FROM FreeBSD:11.2-RELEASE
 
 CWD /
 

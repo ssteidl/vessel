@@ -2,33 +2,11 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 load libappctcl.so
+
+source bsd.tcl
+source zfs.tcl
+
 source build.tcl
-
-namespace eval appc::_ {
-    
-    proc validate_environment {} {
-
-        variable basejail
-	
-        if {$basejail eq {}} {
-
-            puts stderr "variable basejail must be set"
-            exit 1
-        }
-	
-    }
-
-    proc jail_start {mountpoint command} {
-
-        #TODO, execute in a sub interp so we can see when it exits.  Or do
-        #this async so we can catch when it exits and cleanup.
-        exec jail -c ip4=inherit allow.mount.devfs=1 mount.devfs=1 path=$mountpoint command=$command >&@ stdout
-        puts "Exited jail"
-    }
-
-    variable appc_pool {zroot}
-    variable appc_dataset "$appc_pool/appc/jails"
-}
 
 
 #appc --empty 1 --basejail zroot/jails/base

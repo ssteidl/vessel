@@ -1,4 +1,5 @@
 #include <array>
+#include <cassert>
 #include <cerrno>
 #include <iostream>
 #include <list>
