@@ -92,6 +92,36 @@ namespace eval appc::zfs {
 
         return [dict get $mountpoints_dict $dataset value]
     }
+
+    proc update_mountpoints {} {
+        variable mountpoints_dict
+
+        set mountpoints_dict [get_mountpoints]
+    }
+
+    proc update_snapshots {} {
+        variable snapshots_dict
+
+        set snapshots_dict [get_snapshots]
+    }
+    
+    proc create_dataset {new_dataset_name} {
+
+        exec zfs create -p $new_dataset_name >&@ stderr
+
+        update_mountpoints
+        return
+    }
+
+    proc create_snapshot {image_dataset image_version} {
+
+        exec zfs snapshot "${image_dataset}@${image_version}"
+
+        update_snapshots
+        update_mountpoints
+
+        return
+    }
     
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]

@@ -40,7 +40,7 @@ namespace eval appc::build {
             return [list {*}$jail_cmd]
         }
 
-        proc fetch_image {name version} {
+        proc fetch_image {image_dataset name version} {
 
             if {$name ne "FreeBSD" } {
 
@@ -48,6 +48,7 @@ namespace eval appc::build {
                     "Only FreeBSD images are currently allowed"
             }
 
+            set mountpoint [appc::zfs::get_mountpoint $image_dataset]
             
             #TODO: Support a registry.  For now only support
             #freebsd base.txz
@@ -61,7 +62,7 @@ namespace eval appc::build {
 
             #TODO: Test needs to be the mountpoint of the new dataset
             set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-            exec fetch -o - $url | tar -C test -xvf - >&@ stderr
+            exec curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
         }
     }
     
@@ -106,7 +107,7 @@ proc FROM {image} {
 
     set image_name [lindex $image_tuple 0]
     set image_version [lindex $image_tuple 1]
-    set snapshot_name "${image_name}@${image_version}"
+    set snapshot_name "${image_name}/${image_version}@${image_version}"
     set snapshot_path "${appc_parent_dataset}/${snapshot_name}"
 
     set snapshot_exists [appc::zfs::snapshot_exists $snapshot_path]
@@ -114,7 +115,15 @@ proc FROM {image} {
 
     if {!$snapshot_exists} {
 
-        appc::build::_::fetch_image $image_name $image_version
+        #TODO: We need to update the way images are handled.  The dataset should
+        # be /appc/<image_name>/<image_version>
+        # and the snapshot should be /appc/<image_name>/<image_version>@<guid>
+        # perhaps the snapshot should be a repeat of the image version.  Not sure.
+
+        set image_dataset "${appc_parent_dataset}/${image_name}/${image_version}"
+        appc::zfs::create_dataset $image_dataset
+        appc::build::_::fetch_image $image_dataset $image_name $image_version
+        appc::zfs::create_snapshot $image_dataset $image_version
     }
 
     # Clone base jail and name new dataset with guid
