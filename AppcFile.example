@@ -9,7 +9,7 @@ FROM FreeBSD:11.2-RELEASE
 
 CWD /
 
-COPY [pwd] {/jack}
+COPY . /app
 
 #EXPOSE 80
 

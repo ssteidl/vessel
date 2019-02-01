@@ -122,6 +122,15 @@ namespace eval appc::zfs {
 
         return
     }
+
+    proc diff {snapshot dataset} {
+
+        #TODO Add support for async diff to make a package in a streaming
+        #fashion
+
+        set diff_output [exec -keepnewline zfs diff -H $snapshot $dataset]
+        return $diff_output
+    }
     
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]
