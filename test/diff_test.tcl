@@ -2,37 +2,35 @@
 
 source [file join .. zfs.tcl]
 
-set diff_lines [appc::zfs::diff zroot/jails/FreeBSD/11.2-RELEASE@11.2-RELEASE zroot/jails/uwsgi-test]
+package require fileutil
 
-set diff_dict [dict create]
-foreach line [split $diff_lines "\n" ] {
-
-    if {$line eq {}} {
-
-        continue
-    }
-    
-    set change_type [lindex $line 0]
-    set path [lindex $line 1]
-    dict lappend diff_dict $change_type $path
+set pool "zpool"
+if {[info exists env(APPC_POOL)]} {
+    set pool $env(APPC_POOL)
 }
+
+set container "${pool}/jails/minimaltest"
+set container_path "/${container}"
+set diff_dict [appc::zfs::diff ${container}@0 ${container}]
 
 file mkdir work
 cd work
 set whiteout_file [open {whiteouts.txt} {w}]
 
-foreach deleted_file [dict get $diff_dict {-}] {
-    puts $whiteout_file $deleted_file
+if {[dict exists $diff_dict {-}]} {
+    foreach deleted_file [dict get $diff_dict {-}] {
+        puts $whiteout_file $deleted_file
+    }
 }
 
 set files [list {*}[dict get $diff_dict {M}] {*}[dict get $diff_dict {+}]]
 set tar_list_file [open {files.txt} {w}]
+puts $tar_list_file {-C}
+puts $tar_list_file "$container_path"
 foreach path $files {
 
-    puts $tar_list_file $path
+    puts $tar_list_file [fileutil::stripPath "${container_path}" $path]
 }
 flush $tar_list_file
 close $tar_list_file
-exec tar -cvf layer.tar -T {files.txt} >&@ stderr
-
-exec gzip -r work > image.gz
+exec tar -cavf layer.tgz -n -T {files.txt} >&@ stderr

@@ -1,6 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 package require uuid
 package require fileutil
+source definition_file.tcl
 
 namespace eval appc::build {
 
@@ -13,6 +14,7 @@ namespace eval appc::build {
         variable mountpoint {}
         variable name {}
         variable guid {}
+        variable definition_file [definition_file create container_def]
 
         proc build_jail_command {args} {
 
@@ -64,17 +66,55 @@ namespace eval appc::build {
             set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
             exec curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
         }
+
+        proc create_layer {dataset guid} {
+
+            puts "create_layer $dataset"
+            puts "guid: $guid"
+
+            set mountpoint [appc::zfs::get_mountpoint $dataset]
+            set diff_dict [appc::zfs::diff ${dataset}@0 ${dataset}]
+
+            file mkdir $guid
+            cd $guid
+            set whiteout_file [open {whiteouts.txt} {w}]
+
+            if {[dict exists $diff_dict {-}]} {
+                foreach deleted_file [dict get $diff_dict {-}] {
+                    puts $whiteout_file $deleted_file
+                }
+            }
+
+            set files [list {*}[dict get $diff_dict {M}] {*}[dict get $diff_dict {+}]]
+            set tar_list_file [open {files.txt} {w}]
+
+            #If the first line of the file is a '-C' then tar will chdir to the directory
+            # specified in the second line of the file.
+            puts $tar_list_file {-C}
+            puts $tar_list_file "$mountpoint"
+
+            foreach path $files {
+
+                puts $tar_list_file [fileutil::stripPath "${mountpoint}" $path]
+            }
+            flush $tar_list_file
+            close $tar_list_file
+            exec tar -cavf layer.tgz -n -T {files.txt} >&@ stderr
+        }
     }
     
     proc build_command {args_dict}  {
 
         variable _::cmdline_options
+        variable _::current_dataset
+        variable _::guid
         set cmdline_options $args_dict
         
         set appc_file [dict get $cmdline_options {file}]
 
         source $appc_file
 
+        _::create_layer $current_dataset $guid
         #Create container definition file
         #zip up jail and definition file.
     }
@@ -87,11 +127,15 @@ proc FROM {image} {
     variable appc::build::_::from_called
     variable appc::build::_::name
     variable appc::build::_::guid
+
+    global env
     
     puts stderr "FROM: $image"
 
-    #TODO: Where do I get the pool from?
     set pool "zroot"
+    if {[info exists env(APPC_POOL)]} {
+        set pool $env(APPC_POOL)
+    }
 
     #TODO: change to use ${pool}/appc by default
     set appc_parent_dataset "${pool}/jails"
@@ -110,6 +154,7 @@ proc FROM {image} {
     set snapshot_name "${image_name}/${image_version}@${image_version}"
     set snapshot_path "${appc_parent_dataset}/${snapshot_name}"
 
+    puts "[appc::zfs::get_snapshots]"
     set snapshot_exists [appc::zfs::snapshot_exists $snapshot_path]
     puts stderr "${snapshot_path}:${snapshot_exists}"
 
@@ -138,7 +183,9 @@ proc FROM {image} {
     set new_dataset "${appc_parent_dataset}/${name}"
     appc::zfs::clone_snapshot $snapshot_path $new_dataset
 
-    # Set current_dataset using guid.
+    #Snapshot with version 0 is used for zfs diff
+    appc::zfs::create_snapshot $new_dataset 0
+    
     set current_dataset $new_dataset
 
     set mountpoint [appc::zfs::get_mountpoint $new_dataset]
@@ -198,7 +245,7 @@ proc RUN {args} {
     variable appc::build::_::mountpoint
     variable appc::build::_::name
     variable appc::build::_::from_called
-    
+
     if {!$from_called} {
 
         return -code error -errorcode {BUILD CWD} \

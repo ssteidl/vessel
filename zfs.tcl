@@ -2,7 +2,6 @@
 
 namespace eval appc::zfs {
 
-    #TODO: ensemble for public api
     proc get_pools {} {
 
         set pools [exec zpool list -H]
@@ -25,7 +24,7 @@ namespace eval appc::zfs {
     proc get_snapshots {} {
 
         set snapshots [exec zfs list -H -t snap]
-        set lines [split $snapshots {\n}]
+        set lines [split $snapshots \n]
 
         set snapshots_dict [dict create]
         set headers [list name used avail refer mountpoint]
@@ -44,10 +43,10 @@ namespace eval appc::zfs {
     proc clone_snapshot {snapshot new_dataset} {
 
         variable snapshots_dict
-        if {![dict exists $snapshots_dict $snapshot]} {
+        if {![snapshot_exists $snapshot]} {
 
             puts stderr "Attempted to clone a non existent snapshot: $snapshot"
-
+            puts stderr "${snapshots_dict}"
             #TODO: Raise error instead of exit
             exit 1
         }
@@ -125,11 +124,22 @@ namespace eval appc::zfs {
 
     proc diff {snapshot dataset} {
 
-        #TODO Add support for async diff to make a package in a streaming
-        #fashion
-
         set diff_output [exec -keepnewline zfs diff -H $snapshot $dataset]
-        return $diff_output
+        
+        set diff_dict [dict create]
+        foreach line [split $diff_output "\n" ] {
+
+            if {$line eq {}} {
+
+                continue
+            }
+            
+            set change_type [lindex $line 0]
+            set path [lindex $line 1]
+            dict lappend diff_dict $change_type $path
+        }
+
+        return $diff_dict
     }
     
     variable snapshots_dict [get_snapshots]

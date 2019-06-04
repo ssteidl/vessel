@@ -1,0 +1,20 @@
+{
+    /*List of files to be deleted*/
+    "whiteout": [
+	"/path/to/file/1",
+	"/path/to/file/2"
+    ],
+
+    /*Commands are executed serially on startup and can be 
+     * overridden via the commandline
+     */
+    "commands": [
+	{
+	    /*Commands are NOT executed in a shell*/
+	    "command": ["executable", "arg1", "arg2", "arg3"]
+	},
+	{
+	    "command": ["executable", "arg1", "arg2", "arg3"]
+	}
+    ]
+}
