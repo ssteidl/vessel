@@ -2,6 +2,7 @@
 package require uuid
 package require fileutil
 source definition_file.tcl
+source jail.tcl
 
 namespace eval appc::build {
 
@@ -15,32 +16,6 @@ namespace eval appc::build {
         variable name {}
         variable guid {}
         variable definition_file [definition_file create container_def]
-
-        proc build_jail_command {args} {
-
-            variable name joe
-            variable mountpoint
-            
-            #TODO: Allow run jail command parameters to be overridden
-            array set jail_parameters [list \
-                                           "ip4" "inherit" \
-                                           "host.hostname" $name]
-
-            #TODO: Allow user to set shell parameter via appc file
-            set shell {/bin/sh}
-
-            set jail_cmd [list jail -c path=$mountpoint]
-            foreach {param value} [array get jail_parameters] {
-
-                lappend jail_cmd "${param}=${value}"
-            }
-
-            set args [string map { \\\{ \{ \{ \" \\\} \} \} \"} $args]
-            set jailed_cmd [list $shell -c $args]
-            set command_parameter "command=$jailed_cmd"
-            set jail_cmd [lappend jail_cmd {*}$command_parameter]
-            return [list {*}$jail_cmd]
-        }
 
         proc fetch_image {image_dataset name version} {
 

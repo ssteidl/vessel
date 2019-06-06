@@ -7,7 +7,7 @@ source bsd.tcl
 source zfs.tcl
 
 source build.tcl
-
+source run.tcl
 
 #appc --empty 1 --basejail zroot/jails/base
 #appc build [-f {tclscript}]
@@ -21,6 +21,9 @@ switch -exact $command {
 
     build {
         appc::build::build_command [dict get $options args]
+    }
+    run {
+        appc::run::run_command [dict get $options args]
     }
 }
 #Notes on appc build

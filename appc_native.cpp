@@ -118,6 +118,86 @@ namespace
         return tcl_error;
     }
 
+    int parse_run_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        /*At some point we will have a server and need a -it flag, -v etc*/
+        /*appc run <layer> */
+
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"volume", required_argument, nullptr, 'v'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        std::vector<const char*> argv{};
+
+        //Start at 1 because 0 is the command.
+        for(int i = 0; i < argc; ++i)
+        {
+            argv.push_back(Tcl_GetString(args[i]));
+        }
+
+        int ch = -1;
+
+        //This needs to be wrapped in RAII.
+        tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'v':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("volume", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case ':':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
+                return TCL_ERROR;
+            case '?':
+                /*Ignore unknown options case because there could be options in the command arguments.*/
+                break;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        if(optind == argc)
+        {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));
+            return TCL_ERROR;
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("image", -1),
+                                   Tcl_NewStringObj(argv[optind], -1));
+        if(tcl_error) return tcl_error;
+
+        optind++;
+
+        if (optind < argc)
+        {
+            tclobj_ptr command_list(Tcl_NewListObj(0, nullptr), unref_tclobj);
+
+            for(; optind < argc; ++optind)
+            {
+                tcl_error = Tcl_ListObjAppendElement(interp, command_list.get(),
+                                                     Tcl_NewStringObj(argv[optind], -1));
+                if(tcl_error) return tcl_error;
+            }
+            tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                       Tcl_NewStringObj("command", -1),
+                                       command_list.release());
+            if(tcl_error) return tcl_error;
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
+        return TCL_OK;
+    }
+
     /**
      * appc::parse_options $argc $argv
      */
@@ -162,7 +242,8 @@ namespace
         }
         else if(command == "run")
         {
-            assert(0);
+            tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options);
+            if(tcl_error) return tcl_error;
         }
         else
         {

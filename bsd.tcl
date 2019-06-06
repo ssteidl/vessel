@@ -11,4 +11,20 @@ namespace eval appc::bsd {
 
         return [exec uname -r]
     }
+
+    proc null_mount {source_dir dest_dir} {
+
+        if {$source_dir eq {}} {
+
+            return -code error -errorcode {BSD MOUNT PARAM} "source_dir parameter is empty for bind mount"
+        }
+
+        if {$dest_dir eq {}} {
+
+            return -code error -errorcode {BSD MOUNT PARAM} "dest_dir parameter is empty for bind mount"
+        }
+        file mkdir $dest
+
+        exec mount -t nullfs $source_dir $dest_dir
+    }
 }
