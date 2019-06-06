@@ -1,5 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+source environment.tcl
+
 namespace eval appc::jail {
 
     namespace eval _ {
@@ -27,10 +29,10 @@ namespace eval appc::jail {
 	    return [string cat $jail_cmd " " $command_parameter]
 	}
     }
-
+    
     proc run_jail {name mountpoint args} {
 
 	set jail_command [_::build_command $name $mountpoint {*}$args]
-	catch {exec {*}$jail_command >&@ stdout}
+	exec {*}$jail_command >&@ stdout
     }
 }

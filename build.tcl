@@ -232,21 +232,9 @@ proc RUN {args} {
         return -code error -errorcode {BUILD RUN ARGS} \
             "RUN invoked without arguments" 
     }
-
-    set cmd [appc::build::_::build_jail_command {*}$args]
-
-    #jail and run command
-    puts stderr "RUN: $cmd"
     
-    #TODO: I'm not sure of the best way to run the jail.  I could
-    #just exec jail.  But there may be some down sides with signal
-    #handling. The alternative is fork exec.  I think to start I'll
-    # try to just exec jail by creating a temporary jail file.
-    # Either way, the process is done, I need to kill the jail because
-    # it could still be running if the command started any background
-    # processes.
     try {
-        exec {*}$cmd >&@ stdout
+        appc::jail::run_jail "${name}-buildcmd" $mountpoint {*}$args
     } trap {CHILDSTATUS} {results options} {
 
         puts stderr "Run failed: $results"
