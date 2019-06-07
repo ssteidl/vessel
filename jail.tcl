@@ -9,8 +9,12 @@ namespace eval appc::jail {
 
 	    #TODO: Allow run jail command parameters to be overridden
 	    array set jail_parameters [list \
-					   "ip4" "inherit" \
-					   "host.hostname" $name]
+                                       "ip4" "inherit" \
+                                       "host.hostname" $name \
+                                       "sysvshm" "new" \
+                                       "allow.mount" "1" \
+                                       "allow.mount.devfs" "1" \
+                                       "mount.devfs" "1"]
 
 	    #TODO: Allow user to configure shell parameter
 	    set shell {/bin/sh}

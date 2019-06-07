@@ -2,6 +2,7 @@
 package require uuid
 package require fileutil
 source definition_file.tcl
+source environment.tcl
 source jail.tcl
 
 namespace eval appc::build {
@@ -165,9 +166,7 @@ proc FROM {image} {
 
     set mountpoint [appc::zfs::get_mountpoint $new_dataset]
     
-    # copy resolve.conf
-    set resolv_file {/etc/resolv.conf}
-    file copy $resolv_file [fileutil::jail $mountpoint $resolv_file]
+    appc::env::copy_resolv_conf $mountpoint
 
     set from_called true
     return

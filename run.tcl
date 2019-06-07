@@ -1,6 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require fileutil
+package require uuid
 
 source bsd.tcl
 source environment.tcl
@@ -43,19 +44,31 @@ namespace eval appc::run {
         set image [dict get $args_dict "image"]
         set mountpoints_dict [appc::zfs::get_mountpoints]
 
-        set dataset [appc::env::get_dataset_from_image_name $image]
-
-        if {![dict exists $mountpoints_dict $dataset]} {
-            #retrieve and unpack layer
+        set image_dataset [appc::env::get_dataset_from_image_name $image]
+        if {![dict exists $mountpoints_dict $image_dataset]} {
+            #TODO: retrieve and unpack layer
         }
 
-        set mountpoint [appc::zfs::get_mountpoint $dataset]
+        set zero_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@0"]
+        if {$zero_snapshot_exists} {
+
+            set uuid [uuid::uuid generate]
+            set container_dataset [appc::env::get_dataset_from_image_name $uuid]
+
+            appc::zfs::clone_snapshot "${image_dataset}@0" $container_dataset
+        } else {
+            set container_dataset $image_dataset
+        }
+        
+        set mountpoint [appc::zfs::get_mountpoint $container_dataset]
 
         set jailed_mount_path {}
         if {[dict exists $args_dict "volume"]} {
 
             set jailed_mount_path [_::handle_volume_argument $mountpoint [dict get $args_dict "volume"]]
         }
+
+        appc::env::copy_resolv_conf $mountpoint
         
         set command [dict get $args_dict "command"]
         set hostname "appc-container"
@@ -69,5 +82,9 @@ namespace eval appc::run {
         }
 
         appc::bsd::umount $jailed_mount_path
+
+        if {[dict get $args_dict "remove"]} {
+            appc::zfs::destroy $container_dataset
+        }
     }
 }

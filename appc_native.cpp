@@ -127,6 +127,7 @@ namespace
 
         static const struct option long_opts[] = {
             {"volume", required_argument, nullptr, 'v'},
+            {"rm", no_argument, nullptr, 'r'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -141,6 +142,7 @@ namespace
         int ch = -1;
 
         //This needs to be wrapped in RAII.
+        bool remove_container = false;
         tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
         int tcl_error = TCL_OK;
         while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
@@ -153,6 +155,9 @@ namespace
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
+            case 'r':
+                remove_container = true;
+                break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -164,6 +169,12 @@ namespace
                 return TCL_ERROR;
             }
         }
+
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("remove", -1),
+                                   Tcl_NewBooleanObj(remove_container));
+        if(tcl_error) return tcl_error;
 
         if(optind == argc)
         {

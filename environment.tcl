@@ -18,4 +18,11 @@ namespace eval appc::env {
         set pool [get_pool]
         set container_path "${pool}/jails/${image_name}"
     }
+
+    proc copy_resolv_conf {mountpoint} {
+        # copy resolve.conf
+        set resolv_file {/etc/resolv.conf}
+        file copy -force $resolv_file [fileutil::jail $mountpoint $resolv_file]
+
+    }
 }

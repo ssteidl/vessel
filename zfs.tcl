@@ -1,7 +1,8 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 namespace eval appc::zfs {
-
+    #TODO: Make ensemble
+    
     proc get_pools {} {
 
         set pools [exec zpool list -H]
@@ -140,6 +141,10 @@ namespace eval appc::zfs {
         }
 
         return $diff_dict
+    }
+
+    proc destroy {dataset} {
+        exec zfs destroy $dataset
     }
     
     variable snapshots_dict [get_snapshots]
