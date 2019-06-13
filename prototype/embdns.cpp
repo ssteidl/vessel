@@ -1,18 +1,16 @@
 #include <arpa/inet.h>
+#include <array>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <netinet/in.h>
+#include <sstream>
+#include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <iostream>
-#include <cstring>
-#include <cerrno>
-#include <sstream>
 #include <unistd.h>
-
-#include <array>
-#include <list>
-#include <string>
 #include <vector>
 
 namespace  {
@@ -25,6 +23,8 @@ void check_error(const std::string& context)
 
 struct dns_header
 {
+    static const int SIZE = 12; /**< Num bytes in a header*/
+
     uint16_t id;
     bool qr;
     uint8_t opcode;
@@ -186,6 +186,7 @@ struct dns_header
 
 class dns_message
 {
+    static const int MAX_SIZE = 512;
 protected:
     std::vector<unsigned char> raw_bytes;
 
@@ -201,7 +202,7 @@ public:
         : raw_bytes(),
           m_header()
     {
-        raw_bytes.reserve(512);
+        raw_bytes.reserve(MAX_SIZE);
     }
 
     const dns_header& header() const
@@ -212,14 +213,15 @@ public:
 
 struct dns_query : public dns_message
 {
-    std::string qname;
+    std::string qname; /**< Queried name*/
 
-    uint16_t qtype;
-    uint16_t qclass;
+    uint16_t qtype; /**< Query type*/
+
+    uint16_t qclass; /**< Query class*/
     dns_query(const unsigned char* data, size_t size)
         : dns_message(data, size)
     {
-        size_t current_offset = 12;
+        size_t current_offset = dns_header::SIZE;
         while(data[current_offset] != 0x0)
         {
             if(qname.length() > 0)
@@ -255,10 +257,12 @@ struct dns_A_response : public dns_message
           addr(result_addr),
           ttl(ttl)
     {
+        //TODO: A few more of these values need to come from the request
         m_header.set_id(id)
                 .set_response(true)
                 .set_opcode(0)
                 .set_authoritative(true)
+                .set_recursion_desired(false)
                 .set_truncation(false)
                 .set_recursion_available(false)
                 .set_response_code(0)
@@ -266,14 +270,6 @@ struct dns_A_response : public dns_message
                 .set_answer_count(1)
                 .set_nscount(0)
                 .set_additional_records_count(0);
-
-
-//        response_buf[0] = htons(id);
-//        response_buf[1] = 0x0001 << 15;
-//        uint16_t type = htons(0x0001); // A Record
-//        uint16_t clas = htons(0x0001); // Internet
-//        uint32_t ttl = htonl(_ttl); //30 Seconds TTL
-//        uint16_t rdlength = htons(0x0004); //4 bytes response
     }
 
     size_t serialize(std::array<uint8_t, 512>& msg_buf,
@@ -281,26 +277,16 @@ struct dns_A_response : public dns_message
     {
         size_t bytes_used = 0;
         memset(msg_buf.data(), 0, msg_buf.size());
-        m_header.serialize(msg_buf.data(), 12);
-        bytes_used = 12;
+        m_header.serialize(msg_buf.data(), dns_header::SIZE);
+        bytes_used = dns_header::SIZE;
 
-        /*Start at 12 to skip the query header.  TODO: clean up these magic numbers*/
-        for(int i = 12; i < query_size; ++i)
+        for(int i = dns_header::SIZE; i < query_size; ++i)
         {
             msg_buf[bytes_used++] = query[i];
         }
 
-//        std::istringstream name_stream(name);
-//        for(std::string name_part; std::getline(name_stream, name_part, '.');)
-//        {
-//            uint8_t size = name_part.size();
-//            msg_buf[bytes_used++] = size;
-//            for(size_t i = 0; i < size; ++i)
-//            {
-//                msg_buf[bytes_used++] = name_part.at(i);
-//            }
-//        }
-//        msg_buf[bytes_used++] = 0x0;//Null terminator
+        /*We currently only support one domain name lookup.  So we
+         * can hardcode this value*/
         msg_buf[bytes_used++] = 0xc0;
         msg_buf[bytes_used++] = 0x0c;
 
@@ -310,11 +296,12 @@ struct dns_A_response : public dns_message
         msg_buf[bytes_used++] = 0x00; //INTERNET record
         msg_buf[bytes_used++] = 0x01;
 
-        msg_buf[bytes_used++] = (ttl & 0xff << 24) >> 24; //ttl
+        msg_buf[bytes_used++] = (ttl & 0xff << 24) >> 24;
         msg_buf[bytes_used++] = (ttl & 0xff << 16) >> 16;
         msg_buf[bytes_used++] = (ttl & 0xff << 8) >> 8;
         msg_buf[bytes_used++] = (ttl & 0xff << 0) >> 0;
 
+        /*We only support ipv4 for now*/
         msg_buf[bytes_used++] = 0x00; //rdlength
         msg_buf[bytes_used++] = 0x04;
 
@@ -328,6 +315,9 @@ struct dns_A_response : public dns_message
 
 
 }
+
+/*TODO: Remove this and use as library with process_packet
+ * and generate response calls.*/
 int main(int argc, char** argv)
 {
     //TODO: RAII
