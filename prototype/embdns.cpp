@@ -276,24 +276,33 @@ struct dns_A_response : public dns_message
 //        uint16_t rdlength = htons(0x0004); //4 bytes response
     }
 
-    size_t serialize(std::array<uint8_t, 512>& msg_buf)
+    size_t serialize(std::array<uint8_t, 512>& msg_buf,
+                     const unsigned char* query, size_t query_size)
     {
         size_t bytes_used = 0;
         memset(msg_buf.data(), 0, msg_buf.size());
         m_header.serialize(msg_buf.data(), 12);
         bytes_used = 12;
 
-        std::istringstream name_stream(name);
-        for(std::string name_part; std::getline(name_stream, name_part, '.');)
+        /*Start at 12 to skip the query header.  TODO: clean up these magic numbers*/
+        for(int i = 12; i < query_size; ++i)
         {
-            uint8_t size = name_part.size();
-            msg_buf[bytes_used++] = size;
-            for(size_t i = 0; i < size; ++i)
-            {
-                msg_buf[bytes_used++] = name_part.at(i);
-            }
+            msg_buf[bytes_used++] = query[i];
         }
-        msg_buf[bytes_used++] = 0x0;//Null terminator
+
+//        std::istringstream name_stream(name);
+//        for(std::string name_part; std::getline(name_stream, name_part, '.');)
+//        {
+//            uint8_t size = name_part.size();
+//            msg_buf[bytes_used++] = size;
+//            for(size_t i = 0; i < size; ++i)
+//            {
+//                msg_buf[bytes_used++] = name_part.at(i);
+//            }
+//        }
+//        msg_buf[bytes_used++] = 0x0;//Null terminator
+        msg_buf[bytes_used++] = 0xc0;
+        msg_buf[bytes_used++] = 0x0c;
 
         msg_buf[bytes_used++] = 0x00; //A record
         msg_buf[bytes_used++] = 0x01;
@@ -301,8 +310,10 @@ struct dns_A_response : public dns_message
         msg_buf[bytes_used++] = 0x00; //INTERNET record
         msg_buf[bytes_used++] = 0x01;
 
-        msg_buf[bytes_used++] = (ttl & 0xff00) >> 8; //ttl
-        msg_buf[bytes_used++] = ttl & 0x00ff;
+        msg_buf[bytes_used++] = (ttl & 0xff << 24) >> 24; //ttl
+        msg_buf[bytes_used++] = (ttl & 0xff << 16) >> 16;
+        msg_buf[bytes_used++] = (ttl & 0xff << 8) >> 8;
+        msg_buf[bytes_used++] = (ttl & 0xff << 0) >> 0;
 
         msg_buf[bytes_used++] = 0x00; //rdlength
         msg_buf[bytes_used++] = 0x04;
@@ -338,26 +349,26 @@ int main(int argc, char** argv)
     error = ::bind(fd, (sockaddr*)&addr, sizeof(addr));
     if(error == -1) check_error("bind");
 
-    unsigned char buf[512]; //512 is the max dns datagram
-    memset(buf, 0, sizeof(buf));
+    unsigned char query_buf[512]; //512 is the max dns datagram
+    memset(query_buf, 0, sizeof(query_buf));
 
     sockaddr_in from_addr;
     memset(&from_addr, 0, sizeof(from_addr));
     socklen_t from_len = sizeof(from_addr);
-    ssize_t bytes_received = ::recvfrom(fd, buf, sizeof(buf), 0,
-                                        (sockaddr*)&from_addr, &from_len);
+    ssize_t query_size = ::recvfrom(fd, query_buf, sizeof(query_buf), 0,
+                                   (sockaddr*)&from_addr, &from_len);
 
-    std::cerr << "Hey bytes received: " << bytes_received << ", "
+    std::cerr << "Hey bytes received: " << query_size << ", "
               << strerror(errno) << ", "
               << "From: " << inet_ntoa(from_addr.sin_addr) << std::endl;
 
-    dns_header header(buf, bytes_received);
+    dns_header header(query_buf, query_size);
 
-    ::write(fileno(stdout), buf, bytes_received);
+    ::write(fileno(stdout), query_buf, query_size);
 
     if(header.is_query())
     {
-        dns_query query(buf, bytes_received);
+        dns_query query(query_buf, query_size);
         std::cerr << "ID: " << query.header().id << std::endl;
         std::cerr << "QR: " << query.header().qr << std::endl;
         std::cerr << "RD: " << query.header().rd << std::endl;
@@ -378,7 +389,7 @@ int main(int argc, char** argv)
 
         dns_A_response response(header.id, query.qname, resolved_address, 10);
         std::array<uint8_t, 512> response_pkt;
-        size_t response_size = response.serialize(response_pkt);
+        size_t response_size = response.serialize(response_pkt, query_buf, query_size);
         std::cerr << "Response size: " << response_size << std::endl;
         std::cout << "||" << std::endl;
         ::write(fileno(stdout), response_pkt.data(), response_size);
