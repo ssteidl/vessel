@@ -7,8 +7,10 @@
 #include <iostream>
 #include <cstring>
 #include <cerrno>
+#include <sstream>
 #include <unistd.h>
 
+#include <array>
 #include <list>
 #include <string>
 #include <vector>
@@ -80,7 +82,6 @@ struct dns_header
         return (qr == 0);
     }
 
-
     dns_header& set_id(uint16_t id)
     {
         this->id = id;
@@ -89,7 +90,7 @@ struct dns_header
 
     dns_header& set_response(bool is_response)
     {
-        qr = 1;
+        qr = is_response;
         return *this;
     }
 
@@ -151,6 +152,35 @@ struct dns_header
     {
         this->arcount = arcount;
         return *this;
+    }
+
+    void serialize(unsigned char* buf, size_t buf_size)
+    {
+        if(buf_size < 12)
+        {
+            throw std::invalid_argument("buf size to serialize header is < 12");
+        }
+
+        memset(buf, 0, buf_size);
+
+        buf[0] = (id & 0xff00) >> 8;
+        buf[1] = id & 0x00ff;
+        buf[2] |= (qr << 7);
+        buf[2] |= (opcode & 0x0f) << 6;
+        buf[2] |= aa << 2;
+        buf[2] |= tc << 1;
+        buf[2] |= rd << 0;
+        buf[3] |= ra << 7;
+        buf[3] |= z << 6 & 0x07;
+        buf[3] |= rcode & 0xf;
+        buf[4] = (qdcount & 0xff00) >> 8;
+        buf[5] = qdcount & 0x00ff;
+        buf[6] = (ancount & 0xff00) >> 8;
+        buf[7] = ancount & 0x00ff;
+        buf[8] = (nscount & 0xff00) >> 8;
+        buf[9] = nscount & 0x00ff;
+        buf[10] = (arcount & 0xff00) >> 8;
+        buf[11] = arcount & 0x00ff;
     }
 };
 
@@ -215,6 +245,7 @@ struct dns_A_response : public dns_message
     std::string name;
     in_addr_t addr;
     uint32_t ttl;
+
     dns_A_response(uint16_t id,
                    const std::string& name,
                    in_addr_t result_addr,
@@ -243,6 +274,44 @@ struct dns_A_response : public dns_message
 //        uint16_t clas = htons(0x0001); // Internet
 //        uint32_t ttl = htonl(_ttl); //30 Seconds TTL
 //        uint16_t rdlength = htons(0x0004); //4 bytes response
+    }
+
+    size_t serialize(std::array<uint8_t, 512>& msg_buf)
+    {
+        size_t bytes_used = 0;
+        memset(msg_buf.data(), 0, msg_buf.size());
+        m_header.serialize(msg_buf.data(), 12);
+        bytes_used = 12;
+
+        std::istringstream name_stream(name);
+        for(std::string name_part; std::getline(name_stream, name_part, '.');)
+        {
+            uint8_t size = name_part.size();
+            msg_buf[bytes_used++] = size;
+            for(size_t i = 0; i < size; ++i)
+            {
+                msg_buf[bytes_used++] = name_part.at(i);
+            }
+        }
+        msg_buf[bytes_used++] = 0x0;//Null terminator
+
+        msg_buf[bytes_used++] = 0x00; //A record
+        msg_buf[bytes_used++] = 0x01;
+
+        msg_buf[bytes_used++] = 0x00; //INTERNET record
+        msg_buf[bytes_used++] = 0x01;
+
+        msg_buf[bytes_used++] = (ttl & 0xff00) >> 8; //ttl
+        msg_buf[bytes_used++] = ttl & 0x00ff;
+
+        msg_buf[bytes_used++] = 0x00; //rdlength
+        msg_buf[bytes_used++] = 0x04;
+
+        msg_buf[bytes_used++] = (addr & (0xff << 0)) >> 0;
+        msg_buf[bytes_used++] = (addr & (0xff << 8)) >> 8;
+        msg_buf[bytes_used++] = (addr & (0xff << 16)) >> 16;
+        msg_buf[bytes_used++] = (addr & (0xff << 24)) >> 24;
+        return bytes_used;
     }
 };
 
@@ -284,6 +353,8 @@ int main(int argc, char** argv)
 
     dns_header header(buf, bytes_received);
 
+    ::write(fileno(stdout), buf, bytes_received);
+
     if(header.is_query())
     {
         dns_query query(buf, bytes_received);
@@ -297,7 +368,21 @@ int main(int argc, char** argv)
         std::cerr << "QNAME: " << query.qname << std::endl;
         std::cerr << "QTYPE: " << query.qtype << std::endl;
         std::cerr << "QCLASS: " << query.qclass << std::endl;
+
+        in_addr_t resolved_address;
+        error = inet_pton(AF_INET, "192.168.3.7", &resolved_address);
+        if(error <= 0)
+        {
+            check_error("parse dest");
+        }
+
+        dns_A_response response(header.id, query.qname, resolved_address, 10);
+        std::array<uint8_t, 512> response_pkt;
+        size_t response_size = response.serialize(response_pkt);
+        std::cerr << "Response size: " << response_size << std::endl;
+        std::cout << "||" << std::endl;
+        ::write(fileno(stdout), response_pkt.data(), response_size);
+        sendto(fd, response_pkt.data(), response_size, 0, (sockaddr*)&from_addr, from_len);
     }
-    ::write(fileno(stdout), buf, bytes_received);
     exit(0);
 }
