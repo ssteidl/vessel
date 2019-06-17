@@ -12,6 +12,7 @@
 
 #include <getopt.h>
 
+#include "prototype/embdns.h"
 namespace
 {
     void unref_tclobj(Tcl_Obj* obj)
@@ -24,6 +25,11 @@ namespace
 
     using tclobj_ptr = std::unique_ptr<Tcl_Obj, decltype(&unref_tclobj)>;
 
+    void tclobj_delete_proc(void* client_data, Tcl_Interp* interp)
+    {
+        Tcl_DecrRefCount((Tcl_Obj*)client_data);
+    }
+
     template<typename... CODES>
     int syserror_result(Tcl_Interp* interp, CODES... error_codes)
     {
@@ -32,36 +38,6 @@ namespace
         Tcl_SetErrorCode(interp, &error_codes..., Tcl_ErrnoId(), nullptr);
         return TCL_ERROR;
     }
-
-//    int Appc_StartJail(void *clientData, Tcl_Interp *interp,
-//                       int objc, struct Tcl_Obj *const *objv)
-//    {
-//        std::array<int, 2> sv = {};
-//        int error = socketpair(PF_LOCAL, SOCK_SEQPACKET|SOCK_NONBLOCK, 0, sv.data());
-//        if(error)
-//        {
-//            return syserror_result(interp, "SYS", "SOCKETPAIR");
-//        }
-
-//        //TODO: kqueue or devd to monitor jail process
-
-//        pid_t pid = fork();
-//        switch(pid)
-//        {
-//        case -1:
-//            return syserror_result(interp, "SYS", "FORK");
-//        case 0:
-//            //Child function
-//            //TODO: jail function, set resources, capsicum and execute
-//            sv
-//            break;
-//        default:
-//            //parent;
-//            break;
-//        }
-
-//        return TCL_OK;
-//    }
 
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
@@ -272,6 +248,91 @@ namespace
         return TCL_OK;
     }
 
+    int Appc_DNSParseQuery(void *clientData, Tcl_Interp *interp,
+                           int objc, struct Tcl_Obj *const *objv)
+    {
+        /*appc::dns::parse_query <binary obj>
+         * @returns array with the following keys:
+         *     qname, type, class
+         */
+
+        if(objc != 2)
+        {
+            Tcl_WrongNumArgs(interp, objc, objv, "binary_buffer");
+            return TCL_ERROR;
+        }
+
+        int buf_len = 0;
+        unsigned char* query_buf = Tcl_GetByteArrayFromObj(objv[1], &buf_len);
+
+        embdns::dns_query query = embdns::parse_packet(query_buf, (size_t)buf_len);
+
+        Tcl_Obj* query_dict = Tcl_NewDictObj();
+        Tcl_DictObjPut(interp, query_dict,
+                       Tcl_NewStringObj("qname", -1),
+                       Tcl_NewStringObj(query.qname.c_str(), query.qname.size()));
+
+        Tcl_DictObjPut(interp, query_dict,
+                       Tcl_NewStringObj("type", -1),
+                       Tcl_NewIntObj(query.qtype) /*TODO: map int to string*/);
+
+        Tcl_DictObjPut(interp, query_dict,
+                       Tcl_NewStringObj("class", -1),
+                       Tcl_NewIntObj(query.qclass) /*TODO: map int to string*/);
+
+        Tcl_DictObjPut(interp, query_dict,
+                       Tcl_NewStringObj("raw_query", -1),
+                       Tcl_NewByteArrayObj(query.raw().data(), query.raw().size()));
+
+        Tcl_SetObjResult(interp, query_dict);
+        return TCL_OK;
+    }
+
+
+    int Appc_DNSGenerateAResponse(void *clientData, Tcl_Interp *interp,
+                                 int objc, struct Tcl_Obj *const *objv)
+    {
+
+        /*generate_A_response addr ttl raw_query*/
+        if(objc != 4)
+        {
+            Tcl_WrongNumArgs(interp, objc, objv, "addr ttl raw_query");
+            return TCL_ERROR;
+        }
+
+        std::string addr(Tcl_GetString(objv[1]));
+        uint32_t ttl = 0;
+        int tcl_error = Tcl_GetIntFromObj(interp, objv[2], (int*)&ttl);
+        if(tcl_error) return tcl_error;
+
+        int query_size = 0;
+        unsigned char* raw_query = Tcl_GetByteArrayFromObj(objv[3], &query_size);
+
+        embdns::dns_query query = embdns::parse_packet(raw_query, (size_t)query_size);
+        if(query.qtype != 1)
+        {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Attempted to generate dns A record response for non A record query", -1));
+            return TCL_ERROR;
+        }
+
+        std::array<uint8_t, embdns::dns_message::MAX_SIZE> pkt_buf;
+        size_t response_size = embdns::generate_response(pkt_buf, query, addr, ttl);
+        Tcl_Obj* response_buf_obj = Tcl_NewByteArrayObj(pkt_buf.data(), (int)response_size);
+        Tcl_SetObjResult(interp, response_buf_obj);
+        return TCL_OK;
+    }
+
+    void init_dns(Tcl_Interp* interp)
+    {
+        Tcl_Obj* query_handler = nullptr;
+        Tcl_SetAssocData(interp, "dns.query_handler", tclobj_delete_proc,
+                         query_handler);
+
+
+            (void)Tcl_CreateObjCommand(interp, "appc::dns::parse_query", Appc_DNSParseQuery, nullptr, nullptr);
+            (void)Tcl_CreateObjCommand(interp, "appc::dns::generate_A_response", Appc_DNSGenerateAResponse,
+                                       nullptr, nullptr);
+    }
 }
 
 extern "C" {
@@ -283,8 +344,12 @@ extern int Appctcl_Init(Tcl_Interp* interp)
         return TCL_ERROR;
     }
 
-//    (void)Tcl_CreateObjCommand(interp, "appc::start_jail", Appc_StartJail, nullptr, nullptr);
+    std::cerr << "Appctcl_Init" << std::endl;
+
     (void)Tcl_CreateObjCommand(interp, "appc::parse_options", Appc_ParseOptions, nullptr, nullptr);
+
+    //TODO:
+    init_dns(interp);
 
     return TCL_OK;
 }
