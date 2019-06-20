@@ -8,8 +8,13 @@ load libappctcl.so
 
 namespace eval appc::dns {
 
+    namespace export create_server
+    namespace ensemble create
+    
     namespace eval _ {
 
+        variable domain_store [dict create]
+        
         oo::class create transform {
 
             constructor {} {
@@ -55,29 +60,65 @@ namespace eval appc::dns {
                 set response [appc::dns::generate_A_response $addr $ttl $raw_query]
                 return $response
             }
+
+            destructor {
+
+                puts "Transform destructor"
+            }
         }
+
+        proc read_ready_handler {dns_server} {
+
+            $dns_server _pkt_ready
+        }
+        
+        oo::class create DNSServer {
+
+            variable store
+            variable udp_channel
+            variable message_channel
+
+            constructor {port} {
+
+                set udp_channel [udp_open $port]
+                fconfigure $udp_channel -translation binary -buffering none -blocking false
+
+                puts "self [self]"
+                #TODO: Proper way to delete this
+                set dns_transform [appc::dns::_::transform new]
+                set message_channel [chan push $udp_channel $dns_transform]
+                fileevent $udp_channel readable [list [self] _pkt_ready]
+
+            }
+
+            method _pkt_ready {} {
+
+                set pkt [read $message_channel]
+                fconfigure $sock -remote [fconfigure $udp_channel -peer]
+
+                #TODO: Lookup ip address
+                set response [dict create]
+                dict set response address "192.168.3.7"
+                dict set response raw_query [dict get $pkt raw_query]
+                dict set response ttl 30
+
+                puts -nonewline $message_channel $response
+                flush $message_channel       
+            }
+            
+            destructor {
+
+                close $udp_channel
+            }
+        }
+    }
+
+    proc create_server {{port 53}} {
+
+        return [_::DNSServer new $port]
     }
 }
 
-proc udpevent_handler {sock transform_handle} {
 
-    set pkt [read $transform_handle]
-    fconfigure $sock -remote [fconfigure $sock -peer]
-    set response [dict create]
-    dict set response address "192.168.3.7"
-    dict set response raw_query [dict get $pkt raw_query]
-    dict set response ttl 30
-    puts -nonewline $transform_handle $response
-    flush $transform_handle
-}
-
-set dns_sock [udp_open 53]
-fconfigure $dns_sock -translation binary -buffering none -blocking false
-
-set dns_transform [appc::dns::_::transform new]
-puts stderr "channel name $dns_transform"
-set transform_handle [chan push $dns_sock $dns_transform]
-fileevent $dns_sock readable [list udpevent_handler $dns_sock $transform_handle]
-
-puts stderr "Waiting for request"
+set server [appc::dns create_server]
 vwait forever
