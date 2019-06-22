@@ -248,3 +248,5 @@ proc CMD {command} {
 
     #create the init script to run with CMD.
 }
+
+package provide appc::build 1.0.0

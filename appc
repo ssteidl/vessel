@@ -1,13 +1,9 @@
 #!/usr/bin/env tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-load libappctcl.so
-
-source bsd.tcl
-source zfs.tcl
-
-source build.tcl
-source run.tcl
+package require appc::native
+package require appc::build
+package require appc::run
 
 #appc --empty 1 --basejail zroot/jails/base
 #appc build [-f {tclscript}]

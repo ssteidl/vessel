@@ -7,4 +7,4 @@ find_package(TCL)
 message("TCL ${TCL_LIBRARY}, ${TCL_INCLUDE_PATH}")
 include_directories(${TCL_INCLUDE_PATH})
 
-add_library(appctcl SHARED appc_native.cpp prototype/embdns.cpp)
+add_library(appctcl SHARED appc_native.cpp dns/embdns.cpp)

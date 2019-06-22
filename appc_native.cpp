@@ -12,7 +12,7 @@
 
 #include <getopt.h>
 
-#include "prototype/embdns.h"
+#include "dns/embdns.h"
 namespace
 {
     void unref_tclobj(Tcl_Obj* obj)
@@ -350,6 +350,8 @@ extern int Appctcl_Init(Tcl_Interp* interp)
 
     //TODO:
     init_dns(interp);
+
+    Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;
 }

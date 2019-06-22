@@ -150,3 +150,5 @@ namespace eval appc::zfs {
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]
 }
+
+package provide appc::zfs 1.0.0

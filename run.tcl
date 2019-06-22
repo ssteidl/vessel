@@ -3,9 +3,9 @@
 package require fileutil
 package require uuid
 
-source bsd.tcl
-source environment.tcl
-source zfs.tcl
+package require appc::bsd
+package require appc::env
+package require appc::zfs
 
 namespace eval appc::run {
 
@@ -88,3 +88,5 @@ namespace eval appc::run {
         }
     }
 }
+
+package provide appc::run 1.0.0

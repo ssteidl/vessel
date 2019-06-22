@@ -35,3 +35,5 @@ namespace eval appc::bsd {
         }
     }
 }
+
+package provide appc::bsd 1.0.0

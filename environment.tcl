@@ -26,3 +26,4 @@ namespace eval appc::env {
 
     }
 }
+package provide appc::env 1.0.0
