@@ -17,6 +17,7 @@ namespace eval appc::build {
         variable name {}
         variable guid {}
         variable definition_file [definition_file create container_def]
+        variable cmd {}
 
         proc fetch_image {image_dataset name version} {
 
@@ -45,14 +46,17 @@ namespace eval appc::build {
 
         proc create_layer {dataset guid} {
 
-            puts "create_layer $dataset"
-            puts "guid: $guid"
+            puts stderr "create_layer $dataset"
+            puts stderr "guid: $guid"
 
             set mountpoint [appc::zfs::get_mountpoint $dataset]
             set diff_dict [appc::zfs::diff ${dataset}@0 ${dataset}]
 
-            file mkdir $guid
-            cd $guid
+            set build_dir $guid
+
+            file mkdir $build_dir
+            set old_dir [pwd]
+            cd $build_dir
             set whiteout_file [open {whiteouts.txt} {w}]
 
             if {[dict exists $diff_dict {-}]} {
@@ -75,7 +79,29 @@ namespace eval appc::build {
             }
             flush $tar_list_file
             close $tar_list_file
-            exec tar -cavf layer.tgz -n -T {files.txt} >&@ stderr
+            exec tar -cavf ${guid}-layer.tgz -n -T {files.txt} >&@ stderr
+
+            #TODO: Use a trace to return to the old directory. Or better
+            # yet, don't change directory
+            cd $old_dir
+            return $build_dir
+        }
+
+        proc create_image {image_dir image_name image_tag} {
+            variable cmd
+            variable cwd
+            set command [subst {
+#! /bin/sh
+
+cd $cwd
+$cmd
+            }]
+
+            set command_file [open "$image_dir/command.sh" w+ 755]
+            puts $command_file $command
+            close $command_file
+
+            exec zip -m -r  ${image_name}:${image_tag} $image_dir
         }
     }
     
@@ -85,14 +111,37 @@ namespace eval appc::build {
         variable _::current_dataset
         variable _::guid
         set cmdline_options $args_dict
-        
+        puts stderr $cmdline_options
         set appc_file [dict get $cmdline_options {file}]
 
         source $appc_file
 
-        _::create_layer $current_dataset $guid
+        set name $_::guid
+        if {[dict exists $cmdline_options name]} {
+            set name [dict get $cmdline_options name]
+        }
+        set build_dir [_::create_layer $current_dataset $guid]
         #Create container definition file
         #zip up jail and definition file.
+        #TODO: _::create_image
+        #NOTE: My current thoughts for the difference between a layer
+        # and an image is that a layer is just the filesystem artifacts
+        # where-as an image is the fs artifacts as well as the meta data
+        # files.  Example:
+        #
+        # layer: <guid>-layer.tgz
+        # image: name:tag.zip
+        #        - <guid>-layer.tgz
+        #        - <whiteouts.txt>
+        #        - <command.sh>
+        #        - <files.txt>
+
+        set tag {latest}
+        if {[dict exists $cmdline_options tag]} {
+            set tag [dict get $cmdline_options tag]
+        }
+
+        _::create_image $build_dir $name $tag
     }
 }
 
@@ -165,7 +214,11 @@ proc FROM {image} {
     set current_dataset $new_dataset
 
     set mountpoint [appc::zfs::get_mountpoint $new_dataset]
-    
+
+    #resolv_conf is needed here because RUN commands may need to
+    #access the internet.  Running a container should always update
+    #resolv conf.  In the future, maybe we just ignore it instead
+    #of leaving it in the image.
     appc::env::copy_resolv_conf $mountpoint
 
     set from_called true
@@ -244,9 +297,15 @@ proc RUN {args} {
     return
 }
 
-proc CMD {command} {
+proc CMD {args} {
 
-    #create the init script to run with CMD.
+    variable cmd
+
+    if {$cmd ne {}} {
+        return -code error -errorcode {BUILD CMD EEXISTS} "Only one CMD is allowed"
+    }
+
+    set cmd $command
 }
 
 package provide appc::build 1.0.0

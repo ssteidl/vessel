@@ -46,6 +46,7 @@ namespace
         static const struct option long_opts[] = {
             {"file", required_argument, nullptr, 'f'},
             {"name", required_argument, nullptr, 'n'},
+            {"tag", required_argument, nullptr, 't'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -62,7 +63,7 @@ namespace
         //This needs to be wrapped in RAII.
         tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -75,6 +76,12 @@ namespace
             case 'n':
                 tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                            Tcl_NewStringObj("name", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 't':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("tag", -1),
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;

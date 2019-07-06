@@ -36,8 +36,7 @@ namespace eval appc::run {
     }
 
     proc run_command {args_dict} {
-
-        #TODO: Handle the 'volume' argument
+        #TODO: Mount the dataset if not mounted
         
         puts $args_dict
 
