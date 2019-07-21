@@ -37,6 +37,7 @@ namespace eval appc::jail {
     proc run_jail {name mountpoint args} {
 
         set jail_command [_::build_command $name $mountpoint {*}$args]
+        puts stderr "JAIL COMMAND: $jail_command"
         exec {*}$jail_command >&@ stdout
     }
 }

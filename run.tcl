@@ -44,18 +44,23 @@ namespace eval appc::run {
         set mountpoints_dict [appc::zfs::get_mountpoints]
 
         set image_dataset [appc::env::get_dataset_from_image_name $image]
+        puts stderr "RUN COMMAND image dataset: $image_dataset"
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
         }
 
-        set zero_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@0"]
-        if {$zero_snapshot_exists} {
+        set b_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@b"]
+        puts stderr "RUN COMMAND b snapshot exists: $b_snapshot_exists"
+        if {$b_snapshot_exists} {
 
             set uuid [uuid::uuid generate]
             set container_dataset [appc::env::get_dataset_from_image_name $uuid]
 
-            appc::zfs::clone_snapshot "${image_dataset}@0" $container_dataset
+            puts stderr "Cloning b snapshot: ${image_dataset}@b $container_dataset"
+            appc::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
         } else {
+
+            #Support manually created datasets
             set container_dataset $image_dataset
         }
         

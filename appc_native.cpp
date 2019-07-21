@@ -239,6 +239,10 @@ namespace
             tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options);
             if(tcl_error) return tcl_error;
         }
+        else if(command == "publish")
+        {
+            /*publish doesn't yet accept arguments.  The repo is in the environment*/
+        }
         else
         {
             Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown command given: %s", command.c_str()));
@@ -249,7 +253,8 @@ namespace
          * - appc build -f Dockerfile .
          */
 
-        tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("command", -1), argument_objs[0]);
+        tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("command", -1),
+                                   argument_objs[0]);
         if(tcl_error) return tcl_error;
         Tcl_SetObjResult(interp, command_options);
         return TCL_OK;

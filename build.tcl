@@ -50,7 +50,7 @@ namespace eval appc::build {
             puts stderr "guid: $guid"
 
             set mountpoint [appc::zfs::get_mountpoint $dataset]
-            set diff_dict [appc::zfs::diff ${dataset}@0 ${dataset}]
+            set diff_dict [appc::zfs::diff ${dataset}@a ${dataset}@b]
 
             set build_dir $guid
 
@@ -115,6 +115,10 @@ $cmd
         set appc_file [dict get $cmdline_options {file}]
 
         source $appc_file
+
+        #create a snapshot that can be cloned by the run command
+        # and also used as the right hand side of zfs diff
+        appc::zfs::create_snapshot $current_dataset b
 
         set name $_::guid
         if {[dict exists $cmdline_options name]} {
@@ -208,8 +212,8 @@ proc FROM {image} {
     set new_dataset "${appc_parent_dataset}/${name}"
     appc::zfs::clone_snapshot $snapshot_path $new_dataset
 
-    #Snapshot with version 0 is used for zfs diff
-    appc::zfs::create_snapshot $new_dataset 0
+    #Snapshot with version a is used for zfs diff
+    appc::zfs::create_snapshot $new_dataset a
     
     set current_dataset $new_dataset
 
@@ -286,6 +290,7 @@ proc RUN {args} {
     }
     
     try {
+        puts stderr "RUN mountpoint: $mountpoint"
         appc::jail::run_jail "${name}-buildcmd" $mountpoint {*}$args
     } trap {CHILDSTATUS} {results options} {
 

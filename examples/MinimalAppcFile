@@ -1,4 +1,3 @@
-#!/usr/bin/env tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 set jail_params {
