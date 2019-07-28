@@ -149,11 +149,7 @@ public:
         (void)curl_url_get(u.h, CURLUPART_USER, &u.m_user, 0);
         (void)curl_url_get(u.h, CURLUPART_PASSWORD, &u.m_password, 0);
 
-        uc = curl_url_get(u.h, CURLUPART_HOST, &u.m_host, 0);
-        if(uc) {
-          result = url_result(uc, "Host parse failed");
-          return nullptr;
-        }
+        (void)curl_url_get(u.h, CURLUPART_HOST, &u.m_host, 0);
 
         (void)curl_url_get(u.h, CURLUPART_PORT, &u.m_port, 0);
 
@@ -168,7 +164,7 @@ public:
         (void)curl_url_get(u.h, CURLUPART_QUERY, &u.m_query, 0);
 
         result = url_result(CURLUE_OK, "Parse success");
-        return std::move(url_ptr);
+        return url_ptr;
     }
 
     /*TODO: make accessor methods for url parts.  These methods should return strings.*/

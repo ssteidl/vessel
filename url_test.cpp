@@ -21,7 +21,7 @@ int main(void)
   if(uc)
     goto fail;
  
-  /* extract host name from the parsed URL */ 
+  /* extract scheme name from the parsed URL */
   uc = curl_url_get(h, CURLUPART_SCHEME, &host, 0);
   if(!uc) {
     printf("Host name: %s\n", host);

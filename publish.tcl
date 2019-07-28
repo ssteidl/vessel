@@ -1,8 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require appc::env
-
-package require uri
+package require appc::native
 
 namespace eval appc::publish {
 
@@ -15,21 +14,32 @@ namespace eval appc::publish {
         }
     }
     
-    proc publish {image_name tag} {
+    proc publish_command {args_dict} {
 
+        set tag [dict get $args_dict tag]
+        if {$tag eq {}} {
+            set tag {latest}
+        }
+
+        set image_name [dict get $args_dict image]
         
+        set workdir [appc::env::get_workdir]
         set repo_url [appc::env::get_repo]
-
-        set repo_url_dict [uri::split $repo]
+        set repo_url_dict [appc::url::parse $repo_url]
 
         set scheme [dict get $repo_url_dict scheme]
+        set path [dict get $repo_url_dict path]
         switch -exact  $scheme {
 
             file {
-                
+                if {![file isdirectory $path]} {
+                    return -code error -errorcode {PUBLISH ENOTDIR} "Path is not a directory: $path"
+                }
+
+                file copy [file join $workdir "${image_name}:${tag}.zip"] $path
             }
             s3 {
-
+                return -code error -errorcode {PUBLISH NYI S3} "S3 support is not yet implemented"
             }
             default {
                 return -code error -errorcode {PUBLISH SCHEME ENOTSUPPORTED } \
@@ -39,13 +49,4 @@ namespace eval appc::publish {
     }
 }
 
-::uri::register {s3 S3} {
-	variable NIDpart {[a-zA-Z0-9][a-zA-Z0-9-]{0,31}}
-    variable esc {%[0-9a-fA-F]{2}}
-    variable trans {a-zA-Z0-9$_.+!*'(,):=@;-}
-    variable NSSpart "($esc|\[$trans\])+"
-    variable URNpart "($NIDpart):($NSSpart)"
-    variable schemepart $URNpart
-	variable url "s3:$NIDpart:$NSSpart"
-}
 package provide appc::publish 1.0.0

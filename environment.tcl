@@ -21,13 +21,14 @@ namespace eval appc::env {
     }
 
     proc get_workdir {} {
-
-        return [get_from_env APPC_WORKDIR [uri::join path [pwd]/.workdir scheme file]
+#        [uri::join path [pwd]/.workdir scheme file]
+        return [get_from_env APPC_WORKDIR [file join [pwd] .workdir]]
     }
     
     proc get_repo {} {
 
-        return [get_workdir]/repo
+        #Defaults to a directory in the workdir
+        return [get_from_env APPC_REPO_URL [uri::join path [get_workdir]/local_repo scheme file]]
     }
     
     proc get_dataset_from_image_name {image_name} {

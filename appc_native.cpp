@@ -13,30 +13,20 @@
 #include <getopt.h>
 
 #include "dns/embdns.h"
+#include "tcl_util.h"
+#include "url_cmd.h"
 namespace
 {
-    void unref_tclobj(Tcl_Obj* obj)
+    std::vector<const char*> argv_vector_from_command_args(int argc, Tcl_Obj** args)
     {
-        if(obj)
+        std::vector<const char*> argv{};
+
+        for(int i = 0; i < argc; ++i)
         {
-            Tcl_DecrRefCount(obj);
+            argv.push_back(Tcl_GetString(args[i]));
         }
-    }
 
-    using tclobj_ptr = std::unique_ptr<Tcl_Obj, decltype(&unref_tclobj)>;
-
-    void tclobj_delete_proc(void* client_data, Tcl_Interp* interp)
-    {
-        Tcl_DecrRefCount((Tcl_Obj*)client_data);
-    }
-
-    template<typename... CODES>
-    int syserror_result(Tcl_Interp* interp, CODES... error_codes)
-    {
-
-        Tcl_SetResult(interp, (char*)Tcl_ErrnoMsg(errno), TCL_STATIC);
-        Tcl_SetErrorCode(interp, &error_codes..., Tcl_ErrnoId(), nullptr);
-        return TCL_ERROR;
+        return argv;
     }
 
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
@@ -50,18 +40,12 @@ namespace
             {nullptr, 0, nullptr, 0}
         };
 
-        std::vector<const char*> argv{};
-
-        //Start at 1 because 0 is the command.
-        for(int i = 0; i < argc; ++i)
-        {
-            argv.push_back(Tcl_GetString(args[i]));
-        }
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
 
         int ch = -1;
 
         //This needs to be wrapped in RAII.
-        tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:t:", long_opts, nullptr)) != -1)
         {
@@ -103,7 +87,7 @@ namespace
 
     int parse_run_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
-        /*At some point we will have a server and need a -it flag, -v etc*/
+        /*At some point we will have a server and need a -it flag*/
         /*appc run <layer> */
 
         assert(argc > 0);
@@ -114,19 +98,13 @@ namespace
             {nullptr, 0, nullptr, 0}
         };
 
-        std::vector<const char*> argv{};
-
-        //Start at 1 because 0 is the command.
-        for(int i = 0; i < argc; ++i)
-        {
-            argv.push_back(Tcl_GetString(args[i]));
-        }
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
 
         int ch = -1;
 
         //This needs to be wrapped in RAII.
         bool remove_container = false;
-        tclobj_ptr args_dict(Tcl_NewDictObj(), unref_tclobj);
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
         {
@@ -174,7 +152,7 @@ namespace
 
         if (optind < argc)
         {
-            tclobj_ptr command_list(Tcl_NewListObj(0, nullptr), unref_tclobj);
+            appc::tclobj_ptr command_list(Tcl_NewListObj(0, nullptr), appc::unref_tclobj);
 
             for(; optind < argc; ++optind)
             {
@@ -188,7 +166,78 @@ namespace
             if(tcl_error) return tcl_error;
         }
 
-        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
+        tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                   Tcl_NewStringObj("args", -1),
+                                   args_dict.release());
+        return TCL_OK;
+    }
+
+    int parse_publish_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"tag", required_argument, nullptr, 't'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        if(argc < 2)
+        {
+            Tcl_WrongNumArgs(interp, argc, args, "publish <image> [--tag]");
+            return TCL_ERROR;
+        }
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        std::string image{};
+        std::string tag{};
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 't':
+                tag = optarg;
+                break;
+            case ':':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
+                return TCL_ERROR;
+            case '?':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown argument for optind: %d", optind));
+                return TCL_ERROR;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown error for optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        std::cerr << "optind: " << optind << "," << argc << std::endl;
+        if((argc - optind) <= 0)
+        {
+            Tcl_SetObjResult(interp, Tcl_ObjPrintf("image name not provided"));
+            return TCL_ERROR;
+        }
+
+        image = argv[optind];
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("tag", -1),
+                       Tcl_NewStringObj(tag.c_str(), tag.size()));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("image", -1),
+                       Tcl_NewStringObj(image.c_str(), image.size()));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,
+                       Tcl_NewStringObj("args", -1),
+                       args_dict.release());
+        if(tcl_error) return tcl_error;
+
         return TCL_OK;
     }
 
@@ -241,17 +290,14 @@ namespace
         }
         else if(command == "publish")
         {
-            /*publish doesn't yet accept arguments.  The repo is in the environment*/
+            tcl_error = parse_publish_options(interp, arg_count, argument_objs, command_options);
+            if(tcl_error) return tcl_error;
         }
         else
         {
             Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown command given: %s", command.c_str()));
             return TCL_ERROR;
         }
-        /*TODO: Parse command then command options.  First option should always be a command
-         * - appc run -it --rm <image-name>
-         * - appc build -f Dockerfile .
-         */
 
         tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("command", -1),
                                    argument_objs[0]);
@@ -337,13 +383,18 @@ namespace
     void init_dns(Tcl_Interp* interp)
     {
         Tcl_Obj* query_handler = nullptr;
-        Tcl_SetAssocData(interp, "dns.query_handler", tclobj_delete_proc,
+        Tcl_SetAssocData(interp, "dns.query_handler", appc::tclobj_delete_proc,
                          query_handler);
 
 
             (void)Tcl_CreateObjCommand(interp, "appc::dns::parse_query", Appc_DNSParseQuery, nullptr, nullptr);
             (void)Tcl_CreateObjCommand(interp, "appc::dns::generate_A_response", Appc_DNSGenerateAResponse,
                                        nullptr, nullptr);
+    }
+
+    void init_url(Tcl_Interp* interp)
+    {
+        (void)Tcl_CreateObjCommand(interp, "appc::url::parse", Appc_ParseURL, nullptr, nullptr);
     }
 }
 
@@ -360,9 +411,8 @@ extern int Appctcl_Init(Tcl_Interp* interp)
 
     (void)Tcl_CreateObjCommand(interp, "appc::parse_options", Appc_ParseOptions, nullptr, nullptr);
 
-    //TODO:
     init_dns(interp);
-
+    init_url(interp);
     Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;

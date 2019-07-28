@@ -52,8 +52,9 @@ namespace eval appc::build {
             set mountpoint [appc::zfs::get_mountpoint $dataset]
             set diff_dict [appc::zfs::diff ${dataset}@a ${dataset}@b]
 
-            set build_dir $guid
-
+            set workdir [appc::env::get_workdir]
+            set build_dir [file join $workdir $guid]
+            
             file mkdir $build_dir
             set old_dir [pwd]
             cd $build_dir
@@ -97,11 +98,15 @@ cd $cwd
 $cmd
             }]
 
-            set command_file [open "$image_dir/command.sh" w+ 755]
+            set command_file [open [file join $image_dir command.sh] w+ 755]
             puts $command_file $command
             close $command_file
 
-            exec zip -m -r  ${image_name}:${image_tag} $image_dir
+            set workdir [appc::env::get_workdir]
+            puts "workdir: $workdir"
+            set zip_path [file join $workdir ${image_name}:${image_tag}]
+            puts stderr "zip_path: $zip_path"
+            exec zip -v -m -r $zip_path $image_dir
         }
     }
     
