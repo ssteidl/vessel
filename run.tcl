@@ -1,5 +1,6 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+package require debug
 package require fileutil
 package require uuid
 
@@ -9,6 +10,9 @@ package require appc::zfs
 
 namespace eval appc::run {
 
+    debug define run
+    debug on run 1 stderr
+    
     namespace eval _ {
 
         proc handle_volume_argument {mountpoint volume_argument} {
@@ -36,15 +40,23 @@ namespace eval appc::run {
     }
 
     proc run_command {args_dict} {
-        #TODO: Mount the dataset if not mounted
+        #TODO: Mount the pool if not mounted
         
         puts $args_dict
 
+        #TODO: IMAGE should be it's own class
         set image [dict get $args_dict "image"]
+        set image_components [split $image :]
+        set image_name [lindex $image_components 0]
+        set tag {latest}
+        if {[llength $image_components] > 1} {
+            set tag [lindex $image_components 1]
+        }
+        
         set mountpoints_dict [appc::zfs::get_mountpoints]
 
-        set image_dataset [appc::env::get_dataset_from_image_name $image]
-        puts stderr "RUN COMMAND image dataset: $image_dataset"
+        set image_dataset [appc::env::get_dataset_from_image_name $image $tag]
+        debug.run "RUN COMMAND image dataset: $image_dataset"
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
         }

@@ -25,16 +25,16 @@ namespace eval appc::env {
         return [get_from_env APPC_WORKDIR [file join [pwd] .workdir]]
     }
     
-    proc get_repo {} {
+    proc get_repo_url {} {
 
         #Defaults to a directory in the workdir
         return [get_from_env APPC_REPO_URL [uri::join path [get_workdir]/local_repo scheme file]]
     }
     
-    proc get_dataset_from_image_name {image_name} {
+    proc get_dataset_from_image_name {image_name tag} {
 
         set pool [get_pool]
-        set container_path "${pool}/jails/${image_name}"
+        set container_path "${pool}/jails/${image_name}/${tag}"
         return $container_path
     }
 

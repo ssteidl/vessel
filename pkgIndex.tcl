@@ -5,6 +5,7 @@ package ifneeded appc::env 1.0.0 [list source [file join $dir environment.tcl]]
 package ifneeded appc::jail 1.0.0 [list source [file join $dir jail.tcl]]
 package ifneeded appc::native 1.0.0 [list load [file join $dir libappctcl.so]]
 package ifneeded appc::publish 1.0.0 [list source [file join $dir publish.tcl]]
+package ifneeded appc::pull 1.0.0 [list source [file join $dir pull.tcl]]
 package ifneeded appc::run 1.0.0 [list source [file join $dir run.tcl]]
 package ifneeded appc::zfs 1.0.0 [list source [file join $dir zfs.tcl]]
 

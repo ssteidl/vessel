@@ -102,7 +102,6 @@ namespace
 
         int ch = -1;
 
-        //This needs to be wrapped in RAII.
         bool remove_container = false;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
@@ -172,7 +171,8 @@ namespace
         return TCL_OK;
     }
 
-    int parse_publish_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    int parse_publish_pull_options(Tcl_Interp* interp, int argc,
+                                   Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         assert(argc > 0);
 
@@ -195,7 +195,7 @@ namespace
         std::string tag{};
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -290,7 +290,14 @@ namespace
         }
         else if(command == "publish")
         {
-            tcl_error = parse_publish_options(interp, arg_count, argument_objs, command_options);
+            tcl_error = parse_publish_pull_options(interp, arg_count,
+                                                   argument_objs, command_options);
+            if(tcl_error) return tcl_error;
+        }
+        else if(command == "pull")
+        {
+            tcl_error = parse_publish_pull_options(interp, arg_count,
+                                                   argument_objs, command_options);
             if(tcl_error) return tcl_error;
         }
         else
@@ -299,7 +306,8 @@ namespace
             return TCL_ERROR;
         }
 
-        tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("command", -1),
+        tcl_error = Tcl_DictObjPut(interp, command_options,
+                                   Tcl_NewStringObj("command", -1),
                                    argument_objs[0]);
         if(tcl_error) return tcl_error;
         Tcl_SetObjResult(interp, command_options);

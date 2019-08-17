@@ -4,6 +4,7 @@
 package require appc::native
 package require appc::build
 package require appc::publish
+package require appc::pull
 package require appc::run
 
 #appc --empty 1 --basejail zroot/jails/base
@@ -24,6 +25,9 @@ switch -exact $command {
     }
     publish {
         appc::publish::publish_command [dict get $options args]
+    }
+    pull {
+        appc::pull::pull_command [dict get $options args]
     }
 }
 #Notes on appc build

@@ -98,7 +98,8 @@ cd $cwd
 $cmd
             }]
 
-            set command_file [open [file join $image_dir command.sh] w+ 755]
+            set command_file_path [file join $image_dir command.sh]
+            set command_file [open $command_file_path w+ 0755]
             puts $command_file $command
             close $command_file
 
@@ -106,7 +107,22 @@ $cmd
             puts "workdir: $workdir"
             set zip_path [file join $workdir ${image_name}:${image_tag}]
             puts stderr "zip_path: $zip_path"
-            exec zip -v -m -r $zip_path $image_dir
+
+            #Revert to the old director when we pop the stack
+            set traced_pwd [pwd]
+            trace add variable traced_pwd unset [list apply {{traced_pwd name1 name2 op} {
+                cd $traced_pwd
+            }} $traced_pwd]
+
+            #Ensure we cd back to the initial directory. Should probably just
+            # use tcllib defer
+            trace add variable workdir unset [list apply {{old_pwd _1 _2 _3} {
+                cd $old_pwd
+            } } [pwd]]
+            cd $workdir
+            set relative_image_dir [file join . [fileutil::stripPwd $image_dir]]
+            puts stderr "image_dir: $relative_image_dir"
+            exec zip -v -r -m ${image_name}:${image_tag} $relative_image_dir
         }
     }
     

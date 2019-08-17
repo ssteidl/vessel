@@ -1,10 +1,11 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+package require debug
 package require appc::env
 package require appc::native
 
 namespace eval appc::publish {
-
+    
     namespace eval _:: {
 
         proc publish_s3 {uri_dict} {
@@ -24,7 +25,7 @@ namespace eval appc::publish {
         set image_name [dict get $args_dict image]
         
         set workdir [appc::env::get_workdir]
-        set repo_url [appc::env::get_repo]
+        set repo_url [appc::env::get_repo_url]
         set repo_url_dict [appc::url::parse $repo_url]
 
         set scheme [dict get $repo_url_dict scheme]
@@ -32,6 +33,10 @@ namespace eval appc::publish {
         switch -exact  $scheme {
 
             file {
+                if {![file exists $path]} {
+                    file mkdir $path
+                }
+                
                 if {![file isdirectory $path]} {
                     return -code error -errorcode {PUBLISH ENOTDIR} "Path is not a directory: $path"
                 }
