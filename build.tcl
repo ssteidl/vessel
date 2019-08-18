@@ -137,6 +137,9 @@ $cmd
 
         source $appc_file
 
+        if {[appc::zfs::snapshot_exists ${current_dataset}@b]} {
+            appc::zfs::destroy ${current_dataset}@b
+        }
         #create a snapshot that can be cloned by the run command
         # and also used as the right hand side of zfs diff
         appc::zfs::create_snapshot $current_dataset b
@@ -188,7 +191,7 @@ proc FROM {image} {
     }
 
     #TODO: change to use ${pool}/appc by default
-    set appc_parent_dataset "${pool}/jails"
+    set appc_parent_dataset "${pool}/appc"
     
     #Image is in the form <image name>:<version>
     #So image name is the dataset and version is the snapshot name
@@ -226,16 +229,19 @@ proc FROM {image} {
     set guid [uuid::uuid generate]
 
     if {$name eq {}} {
-
         set name $guid
     }
     
     set new_dataset "${appc_parent_dataset}/${name}"
-    appc::zfs::clone_snapshot $snapshot_path $new_dataset
+    if {![appc::zfs::dataset_exists $new_dataset]} {
+        appc::zfs::clone_snapshot $snapshot_path $new_dataset
+    }
 
-    #Snapshot with version a is used for zfs diff
-    appc::zfs::create_snapshot $new_dataset a
-    
+    if {![appc::zfs::snapshot_exists "${new_dataset}@a"]} {
+        #Snapshot with version a is used for zfs diff
+        appc::zfs::create_snapshot $new_dataset a
+    }
+        
     set current_dataset $new_dataset
 
     set mountpoint [appc::zfs::get_mountpoint $new_dataset]

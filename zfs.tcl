@@ -74,6 +74,12 @@ namespace eval appc::zfs {
         return $mp_dict
     }
 
+    proc dataset_exists {dataset} {
+        variable mountpoints_dict
+
+        return [dict exists $mountpoints_dict $dataset]
+    }
+    
     proc snapshot_exists {snapshot_path} {
         variable snapshots_dict
 
@@ -146,7 +152,7 @@ namespace eval appc::zfs {
     proc destroy {dataset} {
         exec zfs destroy $dataset
     }
-    
+
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]
 }
