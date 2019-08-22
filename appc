@@ -1,11 +1,13 @@
 #!/usr/bin/env tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+package require appc::env
 package require appc::native
 package require appc::build
 package require appc::publish
 package require appc::pull
 package require appc::run
+package require appc::zfs
 
 #appc --empty 1 --basejail zroot/jails/base
 #appc build [-f {tclscript}]
@@ -14,6 +16,13 @@ package require appc::run
 set options [appc::parse_options $argv]
 
 set command [dict get $options command]
+
+set pool [appc::env::get_pool]
+
+if {![appc::zfs::is_mounted $pool]} {
+    puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+    appc::zfs::mount $pool
+}
 
 switch -exact $command {
 

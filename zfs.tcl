@@ -79,6 +79,16 @@ namespace eval appc::zfs {
 
         return [dict exists $mountpoints_dict $dataset]
     }
+
+    proc is_mounted {dataset} {
+        set mounted_line [exec zfs get -H mounted $dataset]
+
+        return [expr [lindex $mounted_line 2] eq {yes}]
+    }
+
+    proc mount {dataset} {
+        exec zfs mount $dataset
+    }
     
     proc snapshot_exists {snapshot_path} {
         variable snapshots_dict

@@ -2,6 +2,7 @@ package require debug
 package require appc::env
 package require appc::native
 package require defer
+package require fileutil
 package require uri
 package require TclOO
 #Pull is responsible for retrieving and unpacking an image
@@ -102,6 +103,46 @@ namespace eval appc::pull {
 		puts stderr "destroying repo"
 	    }
 	}
+
+	proc create_layer {image_name version image_dir} {
+
+	    #TODO: Fix this it's gross.  We don't know the uuid so
+	    # we glob in the image_dir and use what should be the only thing there
+	    set image_dir [glob "${image_dir}/*"]
+	    set uuid [lindex [file split $image_dir] end]
+	    #Read parent image from file
+	    set parent_image [fileutil::cat [file join $image_dir {parent_image.txt}]]
+	    set parent_image [string trim $parent_image]
+	    
+	    set parent_image_parts [split $parent_image :]
+	    set parent_image_name [lindex $parent_image_parts 0]
+
+	    set parent_image_version [lindex $parent_image_parts 1]
+
+	    set parent_image_snapshot [appc::env::get_dataset_from_image_name $parent_image_name $parent_image_version]
+	    set parent_image_snapshot "${parent_image_snapshot}@${parent_image_version}"
+	    
+	    #pull parent filesystem if it doesn't exist
+	    if {![appc::zfs::snapshot_exists $parent_image_snapshot]} {
+		return -code error -errorcode {NYI} \
+		    "Pulling parent image is not yet implemented: '$parent_image_snapshot'"
+	    }
+
+	    #Clone parent filesystem
+	    
+	    set new_dataset [appc::env::get_dataset_from_image_name $image_name $version]
+	    appc::zfs::clone_snapshot $parent_image_snapshot $new_dataset
+
+	    appc::zfs::create_snapshot $new_dataset a
+
+	    #Untar layer on top of parent file system
+	    set mountpoint [appc::zfs::get_mountpoint $new_dataset]
+	    exec tar -C $mountpoint  -xvf [file join $image_dir ${uuid}-layer.tgz] >&@ stderr
+
+	    #TODO: delete files from whitelist
+	    
+	    appc::zfs::create_snapshot $new_dataset b
+	}
     }
     
     proc pull {image tag repo_url} {
@@ -113,14 +154,16 @@ namespace eval appc::pull {
 
 	set downloaddir [file join $workdir {downloaded_images}]
 
-	_::file_repo create repo $repo_url
-	defer::defer repo destroy
-
+	set repo_var [_::file_repo create repo $repo_url]
+	defer::with [list repo_var] {
+	    $repo_var destroy
+	}
 	repo pull_image $image $tag $downloaddir
 
 	set extracted_path [file join $downloaddir "${image}:${tag}"]
 
 	exec unzip -d $extracted_path [file join $downloaddir "${image}:${tag}.zip"] >&@ stderr
+	_::create_layer $image $tag $extracted_path
     }
 
     proc pull_command {args_dict} {

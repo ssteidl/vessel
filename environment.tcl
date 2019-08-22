@@ -31,10 +31,13 @@ namespace eval appc::env {
         return [get_from_env APPC_REPO_URL [uri::join path [get_workdir]/local_repo scheme file]]
     }
     
-    proc get_dataset_from_image_name {image_name tag} {
+    proc get_dataset_from_image_name {image_name {tag {}}} {
 
         set pool [get_pool]
-        set container_path "${pool}/jails/${image_name}/${tag}"
+        set container_path "${pool}/jails/${image_name}"
+        if {$tag ne {}} {
+            set container_path "${container_path}/${tag}"
+        }
         return $container_path
     }
 

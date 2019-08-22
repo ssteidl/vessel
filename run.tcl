@@ -40,7 +40,6 @@ namespace eval appc::run {
     }
 
     proc run_command {args_dict} {
-        #TODO: Mount the pool if not mounted
         
         puts $args_dict
 
@@ -55,14 +54,14 @@ namespace eval appc::run {
         
         set mountpoints_dict [appc::zfs::get_mountpoints]
 
-        set image_dataset [appc::env::get_dataset_from_image_name $image $tag]
+        set image_dataset [appc::env::get_dataset_from_image_name $image_name $tag]
         debug.run "RUN COMMAND image dataset: $image_dataset"
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
         }
 
         set b_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@b"]
-        puts stderr "RUN COMMAND b snapshot exists: $b_snapshot_exists"
+        debug.run "RUN COMMAND b snapshot exists: $b_snapshot_exists"
         if {$b_snapshot_exists} {
 
             set uuid [uuid::uuid generate]
@@ -72,7 +71,7 @@ namespace eval appc::run {
             appc::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
         } else {
 
-            #Support manually created datasets
+            #Support manually created or pulled datasets
             set container_dataset $image_dataset
         }
         

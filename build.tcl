@@ -11,6 +11,7 @@ namespace eval appc::build {
 
         variable cmdline_options [dict create]
         variable from_called false
+        variable parent_image {}
         variable current_dataset {}
         variable cwd {/}
         variable mountpoint {}
@@ -91,6 +92,7 @@ namespace eval appc::build {
         proc create_image {image_dir image_name image_tag} {
             variable cmd
             variable cwd
+            variable parent_image
             set command [subst {
 #! /bin/sh
 
@@ -98,10 +100,17 @@ cd $cwd
 $cmd
             }]
 
+            #Write the command file
             set command_file_path [file join $image_dir command.sh]
             set command_file [open $command_file_path w+ 0755]
             puts $command_file $command
             close $command_file
+
+            #Write the parent image file
+            set parent_image_file_path [file join $image_dir parent_image.txt]
+            set parent_image_file [open $parent_image_file_path w+ 0644]
+            puts $parent_image_file $parent_image
+            close $parent_image_file
 
             set workdir [appc::env::get_workdir]
             puts "workdir: $workdir"
@@ -180,9 +189,16 @@ proc FROM {image} {
     variable appc::build::_::from_called
     variable appc::build::_::name
     variable appc::build::_::guid
+    variable appc::build::_::parent_image
 
     global env
+
+    if {$from_called} {
+        return -code error -errorcode {BUILD INVALIDSTATE EFROMALRDY} \
+            "Multiple FROM commands is not supported"
+    }
     
+    set parent_image $image
     puts stderr "FROM: $image"
 
     set pool "zroot"
@@ -191,7 +207,7 @@ proc FROM {image} {
     }
 
     #TODO: change to use ${pool}/appc by default
-    set appc_parent_dataset "${pool}/appc"
+    set appc_parent_dataset "${pool}/jails"
     
     #Image is in the form <image name>:<version>
     #So image name is the dataset and version is the snapshot name
