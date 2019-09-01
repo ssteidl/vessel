@@ -95,6 +95,7 @@ namespace
         static const struct option long_opts[] = {
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
+            {"tag", required_argument, nullptr, 't'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -103,9 +104,10 @@ namespace
         int ch = -1;
 
         bool remove_container = false;
+        int tag = -1;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -117,6 +119,9 @@ namespace
                 break;
             case 'r':
                 remove_container = true;
+                break;
+            case 't':
+                tag = atoi(optarg);
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
@@ -136,6 +141,13 @@ namespace
                                    Tcl_NewBooleanObj(remove_container));
         if(tcl_error) return tcl_error;
 
+        if(tag > -1)
+        {
+            tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                       Tcl_NewStringObj("tag", -1),
+                                       Tcl_NewIntObj(tag));
+            if(tcl_error) return tcl_error;
+        }
         if(optind == argc)
         {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));

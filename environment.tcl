@@ -21,7 +21,6 @@ namespace eval appc::env {
     }
 
     proc get_workdir {} {
-#        [uri::join path [pwd]/.workdir scheme file]
         return [get_from_env APPC_WORKDIR [file join [pwd] .workdir]]
     }
     

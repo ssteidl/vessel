@@ -110,6 +110,7 @@ namespace eval appc::pull {
 	    # we glob in the image_dir and use what should be the only thing there
 	    set image_dir [glob "${image_dir}/*"]
 	    set uuid [lindex [file split $image_dir] end]
+
 	    #Read parent image from file
 	    set parent_image [fileutil::cat [file join $image_dir {parent_image.txt}]]
 	    set parent_image [string trim $parent_image]
@@ -129,19 +130,33 @@ namespace eval appc::pull {
 	    }
 
 	    #Clone parent filesystem
+	    set new_dataset [appc::env::get_dataset_from_image_name $image_name]
+	    if {![appc::zfs::dataset_exists $new_dataset]} {
+		debug.pull "Cloning parent image snapshot: '$parent_image_snapshot' to '$new_dataset'"
+		appc::zfs::clone_snapshot $parent_image_snapshot $new_dataset
+	    }
+
+	    if {![appc::zfs::snapshot_exists ${new_dataset}@a]} {
 	    
-	    set new_dataset [appc::env::get_dataset_from_image_name $image_name $version]
-	    appc::zfs::clone_snapshot $parent_image_snapshot $new_dataset
-
-	    appc::zfs::create_snapshot $new_dataset a
-
+	    
+		appc::zfs::create_snapshot ${new_dataset} a
+	    }
+	    
+	    #Now clone the new dataset into a version dataset.  This means that the 'new_dataset' will
+	    #always be the same as its parent dataset.  We have to do this because we can't have a
+	    #dataset without a parent.  So for example, the appcdevel image (named devel) can't
+	    #have a dataset called <appc_pool>/jails/devel/0 without first having <appc_pool>/jails/devel
+	    set versioned_new_dataset [appc::env::get_dataset_from_image_name $image_name $version]
+	    appc::zfs::clone_snapshot ${new_dataset}@a $versioned_new_dataset
+	    
+	    appc::zfs::create_snapshot $versioned_new_dataset a
 	    #Untar layer on top of parent file system
-	    set mountpoint [appc::zfs::get_mountpoint $new_dataset]
-	    exec tar -C $mountpoint  -xvf [file join $image_dir ${uuid}-layer.tgz] >&@ stderr
+	    set mountpoint [appc::zfs::get_mountpoint $versioned_new_dataset]
+	    exec tar -C $mountpoint -xvf [file join $image_dir ${uuid}-layer.tgz] >&@ stderr
 
 	    #TODO: delete files from whitelist
 	    
-	    appc::zfs::create_snapshot $new_dataset b
+	    appc::zfs::create_snapshot $versioned_new_dataset b
 	}
     }
     

@@ -50,6 +50,8 @@ namespace eval appc::run {
         set tag {latest}
         if {[llength $image_components] > 1} {
             set tag [lindex $image_components 1]
+        } elseif {[dict exists $args_dict tag]} {
+            set tag [dict get $args_dict tag]
         }
         
         set mountpoints_dict [appc::zfs::get_mountpoints]
