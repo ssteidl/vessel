@@ -91,7 +91,11 @@ namespace eval appc::pull {
 		}
 
 		debug.repo "Copying image: ${image_path} -> ${downloaddir}"
-		file copy $image_path $downloaddir
+		try {
+		    file copy $image_path $downloaddir
+		} trap {POSIX EEXIST} {1 2} {
+		    debug.repo "Image already exists.  Continuing"
+		}
 
 	    }
 

@@ -67,7 +67,7 @@ namespace eval appc::run {
         if {$b_snapshot_exists} {
 
             set uuid [uuid::uuid generate]
-            set container_dataset [appc::env::get_dataset_from_image_name $uuid]
+            set container_dataset [appc::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
 
             puts stderr "Cloning b snapshot: ${image_dataset}@b $container_dataset"
             appc::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
@@ -99,6 +99,7 @@ namespace eval appc::run {
         }
 
         appc::bsd::umount $jailed_mount_path
+        appc::bsd::umount [file join $mountpoint dev]
 
         if {[dict get $args_dict "remove"]} {
             appc::zfs::destroy $container_dataset
