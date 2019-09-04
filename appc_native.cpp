@@ -280,36 +280,68 @@ namespace
             return TCL_ERROR;
         }
 
+
+        //TODO: RAII on command_options since it is top level object.
+        appc::tclobj_ptr command_options(Tcl_NewDictObj(), appc::unref_tclobj);
+        Tcl_Obj* pre_command_flags = Tcl_NewDictObj();
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(),
+                                   Tcl_NewStringObj("pre_command_flags", -1),
+                                   pre_command_flags);
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                   Tcl_NewStringObj("local", -1),
+                                   Tcl_NewBooleanObj(0));
+        if(tcl_error) return tcl_error;
+
+        /*Parse pre command options like --local*/
+        int command_index = 0; /*Index of the command in the options list*/
+        for (int i=0; i < arg_count; i++)
+        {
+            std::string pre_command_option(Tcl_GetStringFromObj(argument_objs[i], nullptr));
+            if(pre_command_option == "--local")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("local", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
+            else
+            {
+                break;
+            }
+
+            command_index++;
+        }
+        arg_count -= command_index;
+        argument_objs += command_index;
         std::string command(Tcl_GetString(argument_objs[0]));
 
         /*TODO: Make command lookup table for commands.*/
-
-        Tcl_Obj* command_options = Tcl_NewDictObj();
-        tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("args", -1),
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(), Tcl_NewStringObj("args", -1),
                                    Tcl_NewStringObj("", 0));
         if(tcl_error) return tcl_error;
 
         if(command == "build")
         {
             //parse args if any remaining.  shift to first non-command argument
-            tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options);
+            tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "run")
         {
-            tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options);
+            tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "publish")
         {
             tcl_error = parse_publish_pull_options(interp, arg_count,
-                                                   argument_objs, command_options);
+                                                   argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "pull")
         {
             tcl_error = parse_publish_pull_options(interp, arg_count,
-                                                   argument_objs, command_options);
+                                                   argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else
@@ -318,11 +350,11 @@ namespace
             return TCL_ERROR;
         }
 
-        tcl_error = Tcl_DictObjPut(interp, command_options,
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(),
                                    Tcl_NewStringObj("command", -1),
                                    argument_objs[0]);
         if(tcl_error) return tcl_error;
-        Tcl_SetObjResult(interp, command_options);
+        Tcl_SetObjResult(interp, command_options.release());
         return TCL_OK;
     }
 
@@ -426,8 +458,6 @@ extern int Appctcl_Init(Tcl_Interp* interp)
     {
         return TCL_ERROR;
     }
-
-    std::cerr << "Appctcl_Init" << std::endl;
 
     (void)Tcl_CreateObjCommand(interp, "appc::parse_options", Appc_ParseOptions, nullptr, nullptr);
 

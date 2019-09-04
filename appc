@@ -9,12 +9,12 @@ package require appc::pull
 package require appc::run
 package require appc::zfs
 
-#appc --empty 1 --basejail zroot/jails/base
-#appc build [-f {tclscript}]
-#Check if base jail exists if not create from pool and
-# pull down tarball and extract
-set options [appc::parse_options $argv]
+package require debug
 
+debug define appc
+debug on appc 1 stderr
+set options [appc::parse_options $argv]
+debug.appc "Options: $options"
 set command [dict get $options command]
 
 set pool [appc::env::get_pool]
@@ -24,19 +24,27 @@ if {![appc::zfs::is_mounted $pool]} {
     appc::zfs::mount $pool
 }
 
-switch -exact $command {
+set pre_command_flags [dict get $options pre_command_flags]
+set run_local [dict get $pre_command_flags local]
 
-    build {
-        appc::build::build_command [dict get $options args]
-    }
-    run {
-        appc::run::run_command [dict get $options args]
-    }
-    publish {
-        appc::publish::publish_command [dict get $options args]
-    }
-    pull {
-        appc::pull::pull_command [dict get $options args]
+if {$run_local} {
+    switch -exact $command {
+
+        build {
+            appc::build::build_command [dict get $options args]
+        }
+        run {
+            appc::run::run_command [dict get $options args]
+        }
+        publish {
+            appc::publish::publish_command [dict get $options args]
+        }
+        pull {
+            appc::pull::pull_command [dict get $options args]
+        }
+        default {
+            puts stderr "Unknown command: $command"
+        }
     }
 }
 #Notes on appc build
@@ -44,25 +52,4 @@ switch -exact $command {
 # - We commands will be executed in that jail
 # - The jail is created and deleted for each "build" invocation
 
-#initialize basejail to commandline
-# set basejail $::appc::_::basejail_snapshot
-# set appc_dataset $::appc::_::appc_dataset
-# set mountpoint [pwd]/mnt
-# set jailname {testjail}
-# if {[dict exists $::appc::_::zfs_snapshots $basejail]} {
-
-#     puts stderr "Exists.. cloning"
-
-#     #TODO: Where to mount?  Maybe: ~/.appc/mounts/<jailname>
-#     ::appc::_::zfs_clone_snapshot $basejail [join "$appc_dataset $jailname" /] $mountpoint
-# }
-
-# ::appc::_::jail_start $mountpoint {/bin/sh}
-
-#TODO: I probably need an appc pool to manage
-#if basejail is a snapshot clone it
-#if basejail is not a snapshot but exists, snapshot it
-#if basejail is not a snapshot and does not exist create it from pool specified
-# in first part of dataset path by creating the dataset,
-# pulling down base.tar.gz and untar'ing it.
 
