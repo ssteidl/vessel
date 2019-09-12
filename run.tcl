@@ -6,6 +6,7 @@ package require uuid
 
 package require appc::bsd
 package require appc::env
+package require appc::jail
 package require appc::zfs
 
 namespace eval appc::run {
@@ -94,10 +95,13 @@ namespace eval appc::run {
             set hostname [dict get $args_dict "name"]
         }
 
-        catch {
+        set error [catch {
             appc::jail::run_jail $hostname $mountpoint {*}$command
+        } error_msg info_dict]
+        if {$error} {
+            puts stderr $error_msg
         }
-
+        
         appc::bsd::umount $jailed_mount_path
         appc::bsd::umount [file join $mountpoint dev]
 

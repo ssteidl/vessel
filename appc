@@ -17,8 +17,9 @@ set options [appc::parse_options $argv]
 debug.appc "Options: $options"
 set command [dict get $options command]
 
+#TODO: This belongs someplace common with appcd.  Perhaps
+# an appc_init.tcl module
 set pool [appc::env::get_pool]
-
 if {![appc::zfs::is_mounted $pool]} {
     puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
     appc::zfs::mount $pool
@@ -46,6 +47,13 @@ if {$run_local} {
             puts stderr "Unknown command: $command"
         }
     }
+} else {
+    set appcd_channel [socket {localhost} 6432]
+    fconfigure $appcd_channel -encoding {utf-8} \
+        -buffering line \
+        -translation crlf
+
+    puts $appcd_channel $options
 }
 #Notes on appc build
 # - We will pull down the "FROM" images into a special jail for building the image

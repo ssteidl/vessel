@@ -41,3 +41,5 @@ namespace eval appc::jail {
         exec {*}$jail_command >&@ stdout
     }
 }
+
+package provide appc::jail 1.0.0
