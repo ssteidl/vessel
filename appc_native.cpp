@@ -13,8 +13,10 @@
 #include <getopt.h>
 
 #include "dns/embdns.h"
+#include "exec.h"
 #include "tcl_util.h"
 #include "url_cmd.h"
+
 namespace
 {
     std::vector<const char*> argv_vector_from_command_args(int argc, Tcl_Obj** args)
@@ -448,9 +450,18 @@ namespace
     {
         (void)Tcl_CreateObjCommand(interp, "appc::url::parse", Appc_ParseURL, nullptr, nullptr);
     }
+
+    void init_exec(Tcl_Interp* interp)
+    {
+        (void)Tcl_CreateObjCommand(interp, "appc::exec", Appc_Exec, nullptr, nullptr);
+    }
 }
 
 extern "C" {
+
+/*Forward declare PTY_Init from pty.c module.*/
+int
+Pty_Init(Tcl_Interp *interp);
 
 extern int Appctcl_Init(Tcl_Interp* interp)
 {
@@ -463,6 +474,8 @@ extern int Appctcl_Init(Tcl_Interp* interp)
 
     init_dns(interp);
     init_url(interp);
+    init_exec(interp);
+    Pty_Init(interp);
     Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;

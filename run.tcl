@@ -40,7 +40,7 @@ namespace eval appc::run {
         }
     }
 
-    proc run_command {args_dict} {
+    proc run_command {pty args_dict} {
         
         puts $args_dict
 
@@ -96,7 +96,7 @@ namespace eval appc::run {
         }
 
         set error [catch {
-            appc::jail::run_jail $hostname $mountpoint {*}$command
+            appc::jail::run_jail $hostname $mountpoint $pty {*}$command
         } error_msg info_dict]
         if {$error} {
             puts stderr $error_msg

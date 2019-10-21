@@ -1,0 +1,129 @@
+#!/usr/bin/env tclsh8.6
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+package require TclOO
+package require appc::pull
+package require appc::run
+package require debug
+package require debug::heartbeat
+
+#NOTES: Quick notes on first features of the daemon
+#since i'm in a plane and can't get online.
+# The first features we need:
+# 1. Pull an image
+# 2. Run a pulled image in the background and on a pty
+# 2a. Standard out and/or standard err should go
+#     to syslog (or some log)
+# 2b. We don't yet support executing the command file that is
+#     part of the package.  We also don't delete the whitelist
+#     files
+# 3. Run multiple containers and setup the networking
+#    between them.
+# 3a. Run the dns server
+# 4. Monitor and close containers (cleanup)
+# 5. Other features like capsicum and ractl
+
+namespace eval appcd::_ {
+
+    variable connections [list]
+
+    #For the first iteration, commands will just be line delimited tcl dicts
+    # send over localhost.
+    proc handle_data_available {conn} {
+
+        set request [$conn read_request]
+        if {$request eq {}} {
+
+            puts stderr "Data available but not a complete request"
+            return -code ok
+        }
+
+        set command [dict get $request command]
+        set args [dict get $request args]
+
+        set pty_list [pty::open]
+        set master_pty [lindex $pty_list 0]
+        set slave_pty [lindex $pty_list 1]
+        puts "ptys: $pty_list"
+        fconfigure $master_pty -buffering line
+        switch -exact $command {
+            pull {
+                #TODO: Implement pulling image
+                appc::pull::pull_command $args
+            }
+            run {
+                #By default, send output to dev null and it's not interactive.  jail
+                #command will be opened async.  So we need a syslog channel.
+                #Perhaps the simplest thing to do is have everything sent to the daemons
+                #standard out for now and have that go to syslog with specific tags
+                appc::run::run_command $master_pty $args
+            }
+            default {
+                puts $conn "Unknown command $command"
+            }
+        }
+    }
+    
+    oo::class create Connection {
+
+        variable channel
+        variable clientaddr
+        variable clientport
+        
+        constructor {_channel _clientaddr _clientport \
+                     _readable_script} {
+
+            set channel $_channel
+            set clientaddr $_clientaddr
+            set clientport $_clientport
+
+            fconfigure $channel -encoding {utf-8} \
+                -blocking 0 \
+                -buffering line \
+                -buffersize 2048 \
+                -translation crlf
+
+            chan event $channel readable [list $_readable_script [self] ]
+        }
+
+        
+        method read_request {} {
+
+            set request {}
+            gets $channel request
+            if {[fblocked $channel]} {
+
+                puts stderr "Full request not available.  Waiting for more data"
+            } elseif {[eof $channel]} {
+                puts stderr "EOF for channel found (${clientaddr}:${clientport}).  Closing connection."
+                close $channel
+            }
+
+            return $request
+        }
+    }
+
+    proc add_connection {connection} {
+
+        variable connections
+        lappend connections $connection
+        puts stderr "Connection added"
+    }
+}
+
+proc new_connection {channel clientaddr clientport} {
+
+    appcd::_::add_connection [appcd::_::Connection new $channel $clientaddr $clientport \
+                                  [list appcd::_::handle_data_available]]
+}
+
+#Needed for the heartbeat module
+proc every {ms body} {
+    eval $body
+    variable debug::timer [after $ms [info level 0]]
+    return
+}
+
+socket -server [list new_connection] -myaddr 127.0.0.1 6432
+debug::heartbeat 10000
+vwait _forever_

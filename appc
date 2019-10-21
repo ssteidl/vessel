@@ -29,13 +29,14 @@ set pre_command_flags [dict get $options pre_command_flags]
 set run_local [dict get $pre_command_flags local]
 
 if {$run_local} {
+    set pty stdout
     switch -exact $command {
 
         build {
             appc::build::build_command [dict get $options args]
         }
         run {
-            appc::run::run_command [dict get $options args]
+            appc::run::run_command $pty [dict get $options args]
         }
         publish {
             appc::publish::publish_command [dict get $options args]
