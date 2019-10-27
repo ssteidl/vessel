@@ -1,18 +1,140 @@
+#include <array>
 #include <cerrno>
 #include "exec.h"
 #include <fcntl.h>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <termios.h>
 #include <vector>
 #include <unistd.h>
+#include <sys/event.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include "tcl_util.h"
 
+/*TODO: Consistent naming conventions*/
+/*TODO: Better logging support.  There is too much logging to cerr for an extension*/
+/*TODO: There are actually 3 potentially separate modules in this file.  kqueue, process monitoring
+ * and exec*/
 namespace
 {
+    struct kqueue_state
+    {
+        int kqueue_fd;
+        bool ready;
+
+        kqueue_state(int kqueue_fd)
+            : kqueue_fd(kqueue_fd),
+              ready(false)
+        {}
+
+        ~kqueue_state()
+        {
+            if(kqueue_fd != -1)
+            {
+                close(kqueue_fd);
+            }
+        }
+    };
+
+    /**
+     * Class for monitoring a heirarchy of processes.
+     */
+    class monitored_process_group
+    {
+        pid_t m_child; /**< The process that was directly forked*/
+        bool m_child_exited; /**< True if the child has exited.  Note that descendants
+                               * can still be added if the child has exited.*/
+        uint64_t m_child_exit_status = 0;
+
+        std::set<pid_t> m_descendants; /**< Flattened set of descendant processes.*/
+
+    public:
+        monitored_process_group(pid_t child)
+            : m_child(child),
+              m_descendants()
+        {}
+
+        void add_descendant(pid_t pid)
+        {
+            m_descendants.insert(pid);
+        }
+
+        /**
+         * Remove pid from the monitor group.
+         *
+         * @returns true if all processes from the monitor group have exited.
+         */
+        bool exited(pid_t pid, uint64_t exit_status)
+        {
+            if(pid == m_child)
+            {
+                m_child_exited = true;
+                m_child_exit_status = exit_status;
+
+                std::cerr << "Waiting for child process: " << pid << std::endl;
+                int status = 0;
+                pid_t waitedpid = waitpid(pid, &status, 0);
+                std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
+                          << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
+                          << WIFSTOPPED(status)<< std::endl;
+                std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
+                /*TODO: Have a background error here if waitpid fails.*/
+            }
+            else
+            {
+                size_t removed_count = m_descendants.erase(pid);
+                if(removed_count == 0)
+                {
+                    throw std::runtime_error("Tried to remove a pid that does not exist in descendants");
+                }
+            }
+
+            return (m_child_exited && m_descendants.empty());
+        }
+    };
+
+    struct process_group_tcl_event : public Tcl_Event
+    {
+        Tcl_Interp* interp;
+        Tcl_Obj* callback_script;
+        std::unique_ptr<monitored_process_group> mpg;
+
+        static int event_proc(Tcl_Event *ev, int flags)
+        {
+            (void)flags;
+            process_group_tcl_event* _this = reinterpret_cast<process_group_tcl_event*>(ev);
+
+            int ret = Tcl_EvalObjEx(_this->interp, _this->callback_script, TCL_EVAL_GLOBAL);
+
+            /*If this event has been queued then the last child has exited and it
+             * is safe to delete _this
+             */
+            delete _this;
+
+            return ret;
+        }
+
+        process_group_tcl_event(Tcl_Interp* interp, Tcl_Obj* callback_script,
+                                pid_t child_pid)
+            : interp(interp),
+              callback_script(callback_script),
+              mpg(std::make_unique<monitored_process_group>(child_pid))
+        {
+            this->proc = event_proc;
+            this->nextPtr = nullptr;
+
+            Tcl_IncrRefCount(callback_script);
+        }
+
+        ~process_group_tcl_event()
+        {
+            Tcl_DecrRefCount(callback_script);
+        }
+    };
 
     int dup_fd(int old_fd, int new_fd, const std::string& fd_name, int error_fd = 2)
     {
@@ -29,24 +151,150 @@ namespace
 
         return 0;
     }
+
+    /*Kqueue fd is active*/
+    void KqueueEventReady(void *clientData, int flags)
+    {
+        kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
+        state->ready = true;
+    }
+
+    void KqueueEventSetupProc(void *clientData, int flags)
+    {
+        (void)flags;
+
+        kqueue_state* state = (kqueue_state*)clientData;
+        if(state == nullptr || state->kqueue_fd == -1)
+        {
+            return;
+        }
+
+        Tcl_CreateFileHandler(state->kqueue_fd, TCL_READABLE, KqueueEventReady, state);
+    }
+
+    void handle_kqueue_proc_event(struct kevent& event)
+    {
+        if(event.fflags & NOTE_TRACKERR)
+        {
+            std::cerr << "Error tracking child process of " << event.ident << std::endl;
+            return;
+        }
+
+        assert(event.udata);
+        process_group_tcl_event* pge = reinterpret_cast<process_group_tcl_event*>(event.udata);
+
+        if(event.fflags & NOTE_CHILD)
+        {
+            pge->mpg->add_descendant((pid_t)event.ident);
+        }
+        else if(event.fflags & NOTE_EXIT)
+        {
+            bool is_process_group_empty = pge->mpg->exited(event.ident, event.data);
+            if(is_process_group_empty)
+            {
+                Tcl_QueueEvent(pge, TCL_QUEUE_TAIL);
+            }
+        }
+    }
+
+    void KqueueEventCheckProc(void *clientData, int flags)
+    {
+        (void)flags;
+
+        kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
+        assert(state);
+
+        if(!state->ready)
+        {
+            return;
+        }
+
+        /*Kqueue is ready.  Get the available events and process them.*/
+        std::array<struct kevent, 16> events = {};
+
+        ssize_t event_count = kevent(state->kqueue_fd, nullptr, 0,
+                                     events.data(), events.size(),
+                                     nullptr);
+
+        if(event_count == -1)
+        {
+            std::ostringstream msg;
+            msg << "Error occurred while retrieving kevents: " << strerror(errno);
+            std::cerr << msg.str() << std::endl;
+            throw std::runtime_error(msg.str());
+        }
+
+        for(int i = 0; i < event_count; ++i)
+        {
+            switch(events[i].filter)
+            {
+            case EVFILT_PROC:
+                handle_kqueue_proc_event(events[i]);
+                break;
+            default:
+                throw std::runtime_error("Unexexpected filter type: " + std::to_string(events[i].filter));
+                break;
+            }
+        }
+    }
+
+    void KqueueDeleteProc(void *clientData, Tcl_Interp *interp)
+    {
+        int kqueue_fd = -1;
+        Tcl_Obj* fd_obj = (Tcl_Obj*)clientData;
+        int tcl_error = Tcl_GetIntFromObj(interp, fd_obj, &kqueue_fd);
+
+        if(!tcl_error)
+        {
+            Tcl_DecrRefCount(fd_obj);
+            close(kqueue_fd);
+        }
+    }
+}
+
+int Appc_ExecInit(Tcl_Interp* interp)
+{
+    /*TODO: We should probably make our own kqueue module
+     * for appc::native extension
+     */
+    int kqueue_fd = kqueue();
+    if(kqueue_fd == -1)
+    {
+        return appc::syserror_result(interp, "EXEC KQUEUE");
+    }
+
+    std::unique_ptr<kqueue_state> state = std::make_unique<kqueue_state>(kqueue_fd);
+
+    (void)Tcl_CreateObjCommand(interp, "appc::exec", Appc_Exec, state.get(),
+                               appc::cpp_delete<kqueue_state>);
+    Tcl_CreateEventSource(KqueueEventSetupProc, KqueueEventCheckProc, state.release());
+    return TCL_OK;
 }
 
 int Appc_Exec(void *clientData, Tcl_Interp *interp,
               int objc, struct Tcl_Obj *const *objv)
 {
-    (void)clientData;
+    std::cerr << "Client data: " << clientData << std::endl;
+    kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
 
-    if(objc < 3)
+    if(objc < 4)
     {
-        Tcl_WrongNumArgs(interp, objc, objv, "<fd_dict> cmd...");
+        Tcl_WrongNumArgs(interp, objc, objv, "<fd_dict> <callback_prefix> cmd...");
         return TCL_ERROR;
     }
+
+    /*TODO: Accept a -daemon flag which will do a double fork so it is
+     * reparented by init.  daemon flag can just cause daemon() to be called.
+     * This flag will affect whether we need to reap the child or not.
+     */
 
     int stdin_fd = 0;
     int stderr_fd = 1;
     int stdout_fd = 2;
 
     Tcl_Obj* fd_dict = objv[1];
+    Tcl_Obj* callback_prefix = objv[2];
+    std::cerr << Tcl_GetStringFromObj(fd_dict, nullptr) << std::endl;
     Tcl_DictSearch search;
     Tcl_Obj* key = nullptr;
     Tcl_Obj* value = nullptr;
@@ -56,60 +304,35 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         done == 0;
         Tcl_DictObjNext(&search, &key, &value, &done))
     {
-        int handle = -1;
+        long handle = -1;
         if(std::string("stdin") == Tcl_GetString(key))
         {
-            Tcl_Channel stdin = Tcl_GetChannel(interp, Tcl_GetString(value), nullptr);
-            if(stdin == nullptr) return TCL_ERROR;
+            tcl_error = appc::get_handle_from_channel(interp, value, handle);
+            if(tcl_error) return tcl_error;
+            stdin_fd = (int)handle;
 
-            tcl_error = Tcl_GetChannelHandle(stdin, TCL_READABLE, (void**)&handle);
-            if(tcl_error)
-            {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("Error getting stdin handle from fd_dict", -1));
-                return tcl_error;
-            }
-
-            stdin_fd = handle;
         }
         else if(std::string("stdout") == Tcl_GetString(key))
         {
-            Tcl_Channel stdout = Tcl_GetChannel(interp, Tcl_GetString(value), nullptr);
-            if(stdout == nullptr) return TCL_ERROR;
+            tcl_error = appc::get_handle_from_channel(interp, value, handle);
+            if(tcl_error) return tcl_error;
 
-            tcl_error = Tcl_GetChannelHandle(stdout, TCL_WRITABLE, (void**)&handle);
-            if(tcl_error)
-            {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("Error getting stdout handle from fd_dict", -1));
-                return tcl_error;
-            }
-
-            stdout_fd = handle;
+            stdout_fd = (int)handle;
         }
         else if(std::string("stderr") == Tcl_GetString(key))
         {
-            Tcl_Channel stderr = Tcl_GetChannel(interp, Tcl_GetString(value), nullptr);
-            if(stderr == nullptr) return TCL_ERROR;
 
-            tcl_error = Tcl_GetChannelHandle(stderr, TCL_WRITABLE, (void**)&handle);
-            if(tcl_error)
-            {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("Error getting stdout handle from fd_dict", -1));
-                return tcl_error;
-            }
+            tcl_error = appc::get_handle_from_channel(interp, value, handle);
+            if(tcl_error) return tcl_error;
 
-            stderr_fd = handle;
+            stderr_fd = (int)handle;
         }
     }
 
     /*Now create the vector of arguments so that we can fork/exec*/
     std::vector<char*> args;
-    for(int i = 0; i < objc; ++i)
+    for(int i = 3; i < objc; ++i)
     {
-        std::cerr << "objc: " << objc << ", " << Tcl_GetString(objv[i]) << std::endl;
-    }
-    for(int i = 2; i < objc; ++i)
-    {
-        std::cerr << "YO: " << Tcl_GetString(objv[i]) << std::endl;
         args.push_back(Tcl_GetString(objv[i]));
     }
     args.push_back(nullptr);
@@ -121,36 +344,6 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
     case 0:
     {
         /*Child*/
-//        close(stdin_fd);
-//        close(stdout_fd);
-//        close(stderr_fd);
-
-        int masterfd = posix_openpt(O_RDWR);
-        if(masterfd == -1)
-        {
-            perror("openpt");
-            exit(1);
-        }
-
-        int error = grantpt(masterfd);
-        if(error == -1)
-        {
-            perror("grantpg");
-            exit(1);
-        }
-
-        error = unlockpt(masterfd);
-        if(error == -1)
-        {
-            perror("unlockpt");
-            exit(1);
-        }
-
-        std::cerr << "ptname: " << ptsname(masterfd) << std::endl;
-
-        stdin_fd = masterfd;
-        stdout_fd = masterfd;
-        stderr_fd = masterfd;
 
         /*I don't think we want to touch the interp as even deleting it calls
          * deletion callbacks*/
@@ -158,22 +351,17 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         pid_t process_grpid = 0;
         if(isatty(stdin_fd))
         {
-            int tmp_stderr = 2;//fcntl(2, F_DUPFD_CLOEXEC);
-            int fd = open("/usr/home/shane/shane.log", O_WRONLY | O_CREAT);
-
             process_grpid = setsid();
 
-            std::cerr << "setsid" << std::endl;
+            std::cerr << "setsid: " << stdin_fd << std::endl;
             if(process_grpid == (int)-1)
             {
                 perror("setsid");
                 exit(1);
             }
 
-            signal(SIGHUP, SIG_IGN);
-
             std::cerr << "tcsetsid" << std::endl;
-            error = tcsetsid(stdin_fd, process_grpid);
+            int error = tcsetsid(stdin_fd, process_grpid);
             if(error == -1)
             {
                  perror("tcsetsid");
@@ -182,113 +370,81 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
 
             error = tcsetpgrp(stdin_fd, 0);
 
-            pid_t shell_pid = fork();
-            switch(shell_pid)
-            {
-            default:
-            {
-                error = setpgid(shell_pid, 0);
-//                if(error == -1)
-//                {
-//                    perror("setpgid");
-//                    _exit(1);
-//                }
-
-                error = tcsetpgrp(stdin_fd, shell_pid);
-//                if(error == -1)
-//                {
-//                    std::ostringstream msg;
-//                    msg << "tcsetpgrp: " << strerror(errno) << std::endl;
-//                    write(tmp_stderr, msg.str().c_str(), msg.str().size());
-//                    exit(1);
-//                }
-
-                int status = 0;
-                wait(&status);
-                _exit(1);
-            }
-                break;
-            case 0:
-
-                break;
-            case -1:
-                perror("second fork");
-                _exit(1);
-            }
-
             /*shell child*/
             std::cerr << "Process: " << getpid() << ", terminal: " << tcgetsid(stdin_fd) << std::endl;
 
-            error = setpgid(getpid(), getpid());
-//            if(error == -1)
-//            {
-//                perror("setpgid2");
-//                _exit(1);
-//            }
-
             error = tcsetpgrp(stdin_fd, getpid());
-//            if(error == -1)
-//            {
-//                std::ostringstream msg;
-//                msg << "tcsetpgrp2: " << strerror(errno) << std::endl;
-//                write(tmp_stderr, msg.str().c_str(), msg.str().size());
-//                exit(1);
-//            }
-
-            signal(SIGHUP, SIG_DFL);
-
-            error = dup_fd(stdin_fd, 0, "stdin");
-            if(error) exit(1);
-
-            error = dup_fd(stdout_fd, 1, "stdout");
-            if(error) exit(1);
-
-            error = dup_fd(stderr_fd, 2, "stderr", tmp_stderr);
-            if(error) exit(1);
-
-            closefrom(3);
-            /*For now we keep the same environment or at least don't do anything special
-             * to change the environment.  In the future we can use exect to setup environment
-             * and do things with resource control, etc.*/
-            error = execvp(args[0], args.data());
-            if(error)
+            if(error == -1)
             {
                 std::ostringstream msg;
-                msg << "execvp error: " << strerror(errno) << std::endl;
+                msg << "tcsetpgrp2: " << strerror(errno) << std::endl;
                 exit(1);
             }
 
+            struct termios tios;
+            error = tcgetattr(stdin_fd, &tios);
+            if(error == -1)
+            {
+                perror("tcgetattr");
+                exit(1);
+            }
+
+            cfmakesane(&tios);
+
+            error = tcsetattr(stdin_fd, TCSANOW, &tios);
+            if(error == -1)
+            {
+                perror("tcsetattr");
+                exit(1);
+            }
         }
-        exit(1);
+
+        signal(SIGHUP, SIG_DFL);
+
+        int error = dup_fd(stdin_fd, 0, "stdin");
+        if(error) exit(1);
+
+        error = dup_fd(stdout_fd, 1, "stdout");
+        if(error) exit(1);
+
+        error = dup_fd(stderr_fd, 2, "stderr");
+        if(error) exit(1);
+
+        closefrom(3);
+
+        /*For now we keep the same environment or at least don't do anything special
+         * to change the environment.  In the future we can use exect to setup environment
+         * and do things with resource control, etc.*/
+
+        error = execvp(args[0], args.data());
+        if(error)
+        {
+            std::ostringstream msg;
+            msg << "execvp error: " << strerror(errno) << std::endl;
+            exit(1);
+        }
     }
     case -1:
         Tcl_SetResult(interp, (char*)Tcl_ErrnoMsg(errno), TCL_STATIC);
         return TCL_ERROR;
     default:
     {
+        std::cerr << "Parent" << std::endl;
         /*Parent*/
-        /*TODO: Monitor process using kqueue with tcl event source*/
+        struct kevent event;
+        process_group_tcl_event* pge = new process_group_tcl_event(interp, callback_prefix, pid);
+        EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, (void*)pge);
 
-        /*For initial testing just do a waitpid*/
-//        std::cerr << "Waiting for child process: " << pid << std::endl;
-//        int status = 0;
-//        pid_t waitedpid = waitpid(pid, &status, 0);
-//        std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
-//                  << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
-//                  << WIFSTOPPED(status)<< std::endl;
-//        std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
-//        if(waitedpid != (pid_t)-1)
-//        {
-//            std::cerr << "Exit status: " << WEXITSTATUS(status) << std::endl;
-//            Tcl_SetObjResult(interp, Tcl_NewIntObj(waitedpid));
-//        }
-//        else
-//        {
-//            std::ostringstream msg;
-//            msg << "wait() " << Tcl_PosixError(interp);
-//            Tcl_SetResult(interp, (char*)msg.str().c_str(), TCL_VOLATILE);
-//            return TCL_ERROR;
-//        }
+        std::cerr << "Creating Kqueue" << state << std::endl;
+        int error = kevent(state->kqueue_fd, &event, 1, nullptr, 0, nullptr);
+        std::cerr << "Kevent created" << std::endl;
+        if(error == -1)
+        {
+            return appc::syserror_result(interp, "EXEC", "MONITOR", "KQUEUE");
+        }
+
+
+        std::cerr << "breaking" << std::endl;
         break;
     }
     }

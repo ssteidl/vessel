@@ -2,6 +2,8 @@
 #define EXEC_H
 #include <tcl.h>
 
+int Appc_ExecInit(Tcl_Interp* interp);
+
 int Appc_Exec(void *clientData, Tcl_Interp *interp,
               int objc, struct Tcl_Obj *const *objv);
 

@@ -453,7 +453,7 @@ namespace
 
     void init_exec(Tcl_Interp* interp)
     {
-        (void)Tcl_CreateObjCommand(interp, "appc::exec", Appc_Exec, nullptr, nullptr);
+        (void)Appc_ExecInit(interp);
     }
 }
 

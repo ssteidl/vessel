@@ -31,21 +31,16 @@ namespace eval appcd::_ {
     # send over localhost.
     proc handle_data_available {conn} {
 
-        set request [$conn read_request]
-        if {$request eq {}} {
+        set msg [$conn read_msg]
+        if {$msg eq {}} {
 
-            puts stderr "Data available but not a complete request"
+            puts stderr "Data available but not a complete msg"
             return -code ok
         }
 
-        set command [dict get $request command]
-        set args [dict get $request args]
+        set command [dict get $msg cli_options command]
+        set args [dict get $msg cli_options args]
 
-        set pty_list [pty::open]
-        set master_pty [lindex $pty_list 0]
-        set slave_pty [lindex $pty_list 1]
-        puts "ptys: $pty_list"
-        fconfigure $master_pty -buffering line
         switch -exact $command {
             pull {
                 #TODO: Implement pulling image
@@ -56,7 +51,11 @@ namespace eval appcd::_ {
                 #command will be opened async.  So we need a syslog channel.
                 #Perhaps the simplest thing to do is have everything sent to the daemons
                 #standard out for now and have that go to syslog with specific tags
-                appc::run::run_command $master_pty $args
+
+                set pty [dict get $msg pty]
+                set interactive false
+
+                appc::run::run_command $pty $args
             }
             default {
                 puts $conn "Unknown command $command"
@@ -87,19 +86,19 @@ namespace eval appcd::_ {
         }
 
         
-        method read_request {} {
+        method read_msg {} {
 
-            set request {}
-            gets $channel request
+            set msg {}
+            gets $channel msg
             if {[fblocked $channel]} {
 
-                puts stderr "Full request not available.  Waiting for more data"
+                puts stderr "Full msg not available.  Waiting for more data"
             } elseif {[eof $channel]} {
                 puts stderr "EOF for channel found (${clientaddr}:${clientport}).  Closing connection."
                 close $channel
             }
 
-            return $request
+            return $msg
         }
     }
 

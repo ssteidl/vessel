@@ -39,12 +39,23 @@ namespace eval appc::jail {
         set jail_command [_::build_command $name $mountpoint {*}$args]
         puts stderr "JAIL COMMAND: $jail_command"
         puts stderr "using pty: $pty"
-        set jail_command_list [list | {*}$jail_command >&@ $pty]
-        puts "jail command list: $jail_command_list"
-        set command_channel [open $jail_command_list w]
-        set "blocking on command channel"
-        close $command_channel
-        set "command channel closed"
+
+        if {$pty ne {}} {
+            #Interactive
+            set pty_chan [open $pty RDWR]
+            set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chann]
+            appc::exec $chan_dict {*}$jail_command
+        } else {
+            #Non-interactive
+            #I think we want to implement this as well instead of
+            #using tcl utilities but not 100% sure yet
+        }
+        # set jail_command_list [list | {*}$jail_command >&@ $pty]
+        # puts "jail command list: $jail_command_list"
+        # set command_channel [open $jail_command_list w]
+        # set "blocking on command channel"
+        # close $command_channel
+        # set "command channel closed"
     }
 }
 

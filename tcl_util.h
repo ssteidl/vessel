@@ -25,5 +25,13 @@ int syserror_result(Tcl_Interp* interp, CODES... error_codes)
     Tcl_SetErrorCode(interp, &error_codes..., Tcl_ErrnoId(), nullptr);
     return TCL_ERROR;
 }
+
+int get_handle_from_channel(Tcl_Interp* interp, Tcl_Obj* chan_name, long& handle);
+
+template <typename T>
+void cpp_delete(void* client_data)
+{
+    delete((T*)client_data);
+}
 }
 #endif // TCL_UTIL_H

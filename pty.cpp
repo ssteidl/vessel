@@ -19,23 +19,6 @@
 
 namespace {
 
-int get_handle_from_channel(Tcl_Interp* interp, Tcl_Obj* chan_name, long& handle)
-{
-    int mode = -1;
-
-    Tcl_Channel chan = Tcl_GetChannel(interp, Tcl_GetString(chan_name), &mode);
-    if(chan == nullptr) return TCL_ERROR;
-
-    int tcl_error = Tcl_GetChannelHandle(chan, mode, (ClientData*)&handle);
-    if(tcl_error)
-    {
-        Tcl_SetObjResult(interp, Tcl_NewStringObj("Error getting handle from channel", -1));
-        return tcl_error;
-    }
-
-    return TCL_OK;
-}
-
 int
 Pty_Open(ClientData clientData,
          Tcl_Interp *interp,
@@ -45,7 +28,6 @@ Pty_Open(ClientData clientData,
   intptr_t masterfd;
   char* slaveName;
   Tcl_Channel masterChan;
-  Tcl_Channel slaveChan;
   char *argStr;
   int lengthArgStr;
   int argNum;
@@ -151,7 +133,7 @@ Pty_MakeRaw(ClientData clientData,
     Tcl_Obj* chan_name = objv[1];
 
     long handle = -1;
-    int tcl_error = get_handle_from_channel(interp, chan_name, handle);
+    int tcl_error = appc::get_handle_from_channel(interp, chan_name, handle);
     if(tcl_error) return tcl_error;
 
     termios tios;
@@ -190,12 +172,12 @@ Pty_CopyWindowSize(ClientData clientData,
 
     Tcl_Obj* src_chan_name = objv[1];
     long src_handle = -1;
-    int tcl_error = get_handle_from_channel(interp, src_chan_name, src_handle);
+    int tcl_error = appc::get_handle_from_channel(interp, src_chan_name, src_handle);
     if(tcl_error) return tcl_error;
 
     Tcl_Obj* dest_chan_name = objv[2];
     long dest_handle = -1;
-    tcl_error = get_handle_from_channel(interp, dest_chan_name, dest_handle);
+    tcl_error = appc::get_handle_from_channel(interp, dest_chan_name, dest_handle);
     if(tcl_error) return tcl_error;
 
     winsize ws;
@@ -227,7 +209,7 @@ Pty_TermiosRestore(ClientData clientData,
     }
 
     long handle = 0;
-    int tcl_error = get_handle_from_channel(interp, objv[1], handle);
+    int tcl_error = appc::get_handle_from_channel(interp, objv[1], handle);
     if(tcl_error) return tcl_error;
 
     int length = 0;
