@@ -1,6 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-source environment.tcl
+package require appc::native
+package require appc::env
 
 namespace eval appc::jail {
 
@@ -33,6 +34,11 @@ namespace eval appc::jail {
             return [string cat $jail_cmd " " $command_parameter]
         }
     }
+
+    proc tmp_callback {} {
+
+        puts stderr "Temp callback for jail complete"
+    }
     
     proc run_jail {name mountpoint pty args} {
 
@@ -40,16 +46,13 @@ namespace eval appc::jail {
         puts stderr "JAIL COMMAND: $jail_command"
         puts stderr "using pty: $pty"
 
-        if {$pty ne {}} {
-            #Interactive
-            set pty_chan [open $pty RDWR]
-            set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chann]
-            appc::exec $chan_dict {*}$jail_command
-        } else {
-            #Non-interactive
-            #I think we want to implement this as well instead of
-            #using tcl utilities but not 100% sure yet
-        }
+        #Interactive
+        set pty_chan [open $pty RDWR]
+        set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
+        appc::exec $chan_dict [list tmp_callback] {*}$jail_command
+
+        puts stderr "Jail started: $jail_command"
+        
         # set jail_command_list [list | {*}$jail_command >&@ $pty]
         # puts "jail command list: $jail_command_list"
         # set command_channel [open $jail_command_list w]

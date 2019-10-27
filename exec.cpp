@@ -110,10 +110,8 @@ namespace
 
             int ret = Tcl_EvalObjEx(_this->interp, _this->callback_script, TCL_EVAL_GLOBAL);
 
-            /*If this event has been queued then the last child has exited and it
-             * is safe to delete _this
-             */
-            delete _this;
+            /*Explicitly call the destructor because TCL event loop owns the memory*/
+            _this->~process_group_tcl_event();
 
             return ret;
         }
@@ -432,7 +430,8 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         std::cerr << "Parent" << std::endl;
         /*Parent*/
         struct kevent event;
-        process_group_tcl_event* pge = new process_group_tcl_event(interp, callback_prefix, pid);
+        void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
+        process_group_tcl_event* pge = new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
         EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, (void*)pge);
 
         std::cerr << "Creating Kqueue" << state << std::endl;

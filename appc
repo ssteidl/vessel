@@ -49,8 +49,9 @@ if {$run_local} {
         }
     }
 } else {
+    package require appcd::client
 
-    appc::client::main $options
+    appcd::client::main $options
 }
 
 

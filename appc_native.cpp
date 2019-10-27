@@ -98,6 +98,7 @@ namespace
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
             {"tag", required_argument, nullptr, 't'},
+            {"interactive", no_argument, nullptr, 'i'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -109,7 +110,8 @@ namespace
         int tag = -1;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:t:", long_opts, nullptr)) != -1)
+        bool interactive = false;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -124,6 +126,9 @@ namespace
                 break;
             case 't':
                 tag = atoi(optarg);
+                break;
+            case 'i':
+                interactive = true;
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
@@ -150,6 +155,12 @@ namespace
                                        Tcl_NewIntObj(tag));
             if(tcl_error) return tcl_error;
         }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("interactive", -1),
+                                   Tcl_NewBooleanObj(interactive));
+        if(tcl_error) return tcl_error;
+
         if(optind == argc)
         {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));

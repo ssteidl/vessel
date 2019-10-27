@@ -2,6 +2,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require TclOO
+package require appc::env
 package require appc::pull
 package require appc::run
 package require debug
@@ -38,6 +39,7 @@ namespace eval appcd::_ {
             return -code ok
         }
 
+        puts stderr $msg
         set command [dict get $msg cli_options command]
         set args [dict get $msg cli_options args]
 
@@ -122,6 +124,13 @@ proc every {ms body} {
     variable debug::timer [after $ms [info level 0]]
     return
 }
+
+set pool [appc::env::get_pool]
+if {![appc::zfs::is_mounted $pool]} {
+    puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+    appc::zfs::mount $pool
+}
+
 
 socket -server [list new_connection] -myaddr 127.0.0.1 6432
 debug::heartbeat 10000
