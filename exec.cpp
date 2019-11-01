@@ -110,10 +110,15 @@ namespace
 
             int ret = Tcl_EvalObjEx(_this->interp, _this->callback_script, TCL_EVAL_GLOBAL);
 
+            if(ret != TCL_OK)
+            {
+                Tcl_BackgroundError(_this->interp);
+            }
+
             /*Explicitly call the destructor because TCL event loop owns the memory*/
             _this->~process_group_tcl_event();
 
-            return ret;
+            return 1; /*Event has been processed*/
         }
 
         process_group_tcl_event(Tcl_Interp* interp, Tcl_Obj* callback_script,
@@ -172,14 +177,15 @@ namespace
 
     void handle_kqueue_proc_event(struct kevent& event)
     {
-        if(event.fflags & NOTE_TRACKERR)
-        {
-            std::cerr << "Error tracking child process of " << event.ident << std::endl;
-            return;
-        }
-
         assert(event.udata);
         process_group_tcl_event* pge = reinterpret_cast<process_group_tcl_event*>(event.udata);
+
+        if(event.fflags & NOTE_TRACKERR)
+        {
+            Tcl_SetObjResult(pge->interp, Tcl_ObjPrintf("Error tracking child process of %i", event.ident));
+            Tcl_BackgroundError(pge->interp);
+            return;
+        }
 
         if(event.fflags & NOTE_CHILD)
         {
@@ -206,16 +212,22 @@ namespace
         {
             return;
         }
+        state->ready = false;
 
         /*Kqueue is ready.  Get the available events and process them.*/
         std::array<struct kevent, 16> events = {};
 
+        /*Use timespec instead of nullptr so kevent doesn't block*/
+        timespec spec;
+        spec.tv_sec = 0;
+        spec.tv_nsec = 0;
         ssize_t event_count = kevent(state->kqueue_fd, nullptr, 0,
                                      events.data(), events.size(),
-                                     nullptr);
+                                     &spec);
 
         if(event_count == -1)
         {
+            /*TODO: We should use tcl background errors instead of c++ exceptions*/
             std::ostringstream msg;
             msg << "Error occurred while retrieving kevents: " << strerror(errno);
             std::cerr << msg.str() << std::endl;
@@ -351,14 +363,12 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         {
             process_grpid = setsid();
 
-            std::cerr << "setsid: " << stdin_fd << std::endl;
             if(process_grpid == (int)-1)
             {
                 perror("setsid");
                 exit(1);
             }
 
-            std::cerr << "tcsetsid" << std::endl;
             int error = tcsetsid(stdin_fd, process_grpid);
             if(error == -1)
             {
@@ -369,7 +379,6 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
             error = tcsetpgrp(stdin_fd, 0);
 
             /*shell child*/
-            std::cerr << "Process: " << getpid() << ", terminal: " << tcgetsid(stdin_fd) << std::endl;
 
             error = tcsetpgrp(stdin_fd, getpid());
             if(error == -1)
@@ -419,6 +428,7 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         {
             std::ostringstream msg;
             msg << "execvp error: " << strerror(errno) << std::endl;
+            std::cerr << msg.str() << std::endl;
             exit(1);
         }
     }
@@ -427,23 +437,19 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         return TCL_ERROR;
     default:
     {
-        std::cerr << "Parent" << std::endl;
         /*Parent*/
         struct kevent event;
         void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
-        process_group_tcl_event* pge = new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
-        EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, (void*)pge);
 
-        std::cerr << "Creating Kqueue" << state << std::endl;
+        new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
+        EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, pge_buffer);
+
         int error = kevent(state->kqueue_fd, &event, 1, nullptr, 0, nullptr);
-        std::cerr << "Kevent created" << std::endl;
         if(error == -1)
         {
             return appc::syserror_result(interp, "EXEC", "MONITOR", "KQUEUE");
         }
 
-
-        std::cerr << "breaking" << std::endl;
         break;
     }
     }

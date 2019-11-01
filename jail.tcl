@@ -40,7 +40,7 @@ namespace eval appc::jail {
         puts stderr "Temp callback for jail complete"
     }
     
-    proc run_jail {name mountpoint pty args} {
+    proc run_jail {name mountpoint pty callback args} {
 
         set jail_command [_::build_command $name $mountpoint {*}$args]
         puts stderr "JAIL COMMAND: $jail_command"
@@ -49,16 +49,7 @@ namespace eval appc::jail {
         #Interactive
         set pty_chan [open $pty RDWR]
         set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
-        appc::exec $chan_dict [list tmp_callback] {*}$jail_command
-
-        puts stderr "Jail started: $jail_command"
-        
-        # set jail_command_list [list | {*}$jail_command >&@ $pty]
-        # puts "jail command list: $jail_command_list"
-        # set command_channel [open $jail_command_list w]
-        # set "blocking on command channel"
-        # close $command_channel
-        # set "command channel closed"
+        appc::exec $chan_dict $callback {*}$jail_command
     }
 }
 

@@ -24,7 +24,11 @@ package require debug::heartbeat
 # 4. Monitor and close containers (cleanup)
 # 5. Other features like capsicum and ractl
 
+
 namespace eval appcd::_ {
+
+    debug define appcd
+    debug on appcd 1 stderr
 
     variable connections [list]
 
@@ -57,7 +61,7 @@ namespace eval appcd::_ {
                 set pty [dict get $msg pty]
                 set interactive false
 
-                appc::run::run_command $pty $args
+                coroutine ${conn}_run_coro appc::run::run_command $pty $args
             }
             default {
                 puts $conn "Unknown command $command"
@@ -108,12 +112,13 @@ namespace eval appcd::_ {
 
         variable connections
         lappend connections $connection
-        puts stderr "Connection added"
+        debug.appcd "Connection added"
     }
 }
 
 proc new_connection {channel clientaddr clientport} {
 
+    debug.appcd "New connection found"
     appcd::_::add_connection [appcd::_::Connection new $channel $clientaddr $clientport \
                                   [list appcd::_::handle_data_available]]
 }
@@ -125,13 +130,17 @@ proc every {ms body} {
     return
 }
 
+proc bgerror {message} {
+    debug.appcd "bgerror: $message"
+}
+
 set pool [appc::env::get_pool]
 if {![appc::zfs::is_mounted $pool]} {
-    puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+    debug.appcd "ZFS pool '$pool' is not mounted.  Attempting to mount now"
     appc::zfs::mount $pool
 }
 
 
 socket -server [list new_connection] -myaddr 127.0.0.1 6432
-debug::heartbeat 10000
+debug::heartbeat 1000
 vwait _forever_

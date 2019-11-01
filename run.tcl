@@ -95,19 +95,27 @@ namespace eval appc::run {
             set hostname [dict get $args_dict "name"]
         }
 
+        set coro_name [info coroutine]
         set error [catch {
-            appc::jail::run_jail $hostname $mountpoint $pty {*}$command
+            appc::jail::run_jail $hostname $mountpoint $pty $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
             puts stderr $error_msg
         }
-        
+
+        #Wait for the command to finish
+        yield
+
+        debug.run "Container exited. Cleaning up"
         appc::bsd::umount $jailed_mount_path
         appc::bsd::umount [file join $mountpoint dev]
 
         if {[dict get $args_dict "remove"]} {
+            debug.run "Destroying container dataset: $container_dataset"
             appc::zfs::destroy $container_dataset
         }
+
+        debug.run "Finished running container: $container_dataset"
     }
 }
 
