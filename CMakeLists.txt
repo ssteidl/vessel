@@ -12,7 +12,9 @@ add_library(appctcl SHARED
     appc_native.cpp
     dns/embdns.cpp
     tcl_util.cpp
-    url_cmd.cpp)
+    url_cmd.cpp
+    pty.cpp
+    exec.cpp)
 
 target_link_libraries(appctcl ${CURL_LIBRARIES})
 

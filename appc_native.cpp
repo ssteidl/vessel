@@ -13,8 +13,10 @@
 #include <getopt.h>
 
 #include "dns/embdns.h"
+#include "exec.h"
 #include "tcl_util.h"
 #include "url_cmd.h"
+
 namespace
 {
     std::vector<const char*> argv_vector_from_command_args(int argc, Tcl_Obj** args)
@@ -96,6 +98,7 @@ namespace
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
             {"tag", required_argument, nullptr, 't'},
+            {"interactive", no_argument, nullptr, 'i'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -107,7 +110,8 @@ namespace
         int tag = -1;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:t:", long_opts, nullptr)) != -1)
+        bool interactive = false;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -122,6 +126,9 @@ namespace
                 break;
             case 't':
                 tag = atoi(optarg);
+                break;
+            case 'i':
+                interactive = true;
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
@@ -148,6 +155,12 @@ namespace
                                        Tcl_NewIntObj(tag));
             if(tcl_error) return tcl_error;
         }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("interactive", -1),
+                                   Tcl_NewBooleanObj(interactive));
+        if(tcl_error) return tcl_error;
+
         if(optind == argc)
         {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));
@@ -448,9 +461,18 @@ namespace
     {
         (void)Tcl_CreateObjCommand(interp, "appc::url::parse", Appc_ParseURL, nullptr, nullptr);
     }
+
+    void init_exec(Tcl_Interp* interp)
+    {
+        (void)Appc_ExecInit(interp);
+    }
 }
 
 extern "C" {
+
+/*Forward declare PTY_Init from pty.c module.*/
+int
+Pty_Init(Tcl_Interp *interp);
 
 extern int Appctcl_Init(Tcl_Interp* interp)
 {
@@ -463,6 +485,8 @@ extern int Appctcl_Init(Tcl_Interp* interp)
 
     init_dns(interp);
     init_url(interp);
+    init_exec(interp);
+    Pty_Init(interp);
     Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;

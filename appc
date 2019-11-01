@@ -29,13 +29,15 @@ set pre_command_flags [dict get $options pre_command_flags]
 set run_local [dict get $pre_command_flags local]
 
 if {$run_local} {
+    set pty stdout
+
     switch -exact $command {
 
         build {
             appc::build::build_command [dict get $options args]
         }
         run {
-            appc::run::run_command [dict get $options args]
+            appc::run::run_command $pty [dict get $options args]
         }
         publish {
             appc::publish::publish_command [dict get $options args]
@@ -48,16 +50,11 @@ if {$run_local} {
         }
     }
 } else {
-    set appcd_channel [socket {localhost} 6432]
-    fconfigure $appcd_channel -encoding {utf-8} \
-        -buffering line \
-        -translation crlf
 
-    puts $appcd_channel $options
+    package require appcd::client
+
+    appcd::client::main $options
 }
-#Notes on appc build
-# - We will pull down the "FROM" images into a special jail for building the image
-# - We commands will be executed in that jail
-# - The jail is created and deleted for each "build" invocation
+
 
 

@@ -1,6 +1,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-source environment.tcl
+package require appc::native
+package require appc::env
 
 namespace eval appc::jail {
 
@@ -33,12 +34,22 @@ namespace eval appc::jail {
             return [string cat $jail_cmd " " $command_parameter]
         }
     }
+
+    proc tmp_callback {} {
+
+        puts stderr "Temp callback for jail complete"
+    }
     
-    proc run_jail {name mountpoint args} {
+    proc run_jail {name mountpoint pty callback args} {
 
         set jail_command [_::build_command $name $mountpoint {*}$args]
         puts stderr "JAIL COMMAND: $jail_command"
-        exec {*}$jail_command >&@ stdout
+        puts stderr "using pty: $pty"
+
+        #Interactive
+        set pty_chan [open $pty RDWR]
+        set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
+        appc::exec $chan_dict $callback {*}$jail_command
     }
 }
 
