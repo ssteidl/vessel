@@ -13,8 +13,10 @@
 #include <getopt.h>
 
 #include "dns/embdns.h"
+#include "exec.h"
 #include "tcl_util.h"
 #include "url_cmd.h"
+
 namespace
 {
     std::vector<const char*> argv_vector_from_command_args(int argc, Tcl_Obj** args)
@@ -96,6 +98,7 @@ namespace
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
             {"tag", required_argument, nullptr, 't'},
+            {"interactive", no_argument, nullptr, 'i'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -107,7 +110,8 @@ namespace
         int tag = -1;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "v:t:", long_opts, nullptr)) != -1)
+        bool interactive = false;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -122,6 +126,9 @@ namespace
                 break;
             case 't':
                 tag = atoi(optarg);
+                break;
+            case 'i':
+                interactive = true;
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
@@ -148,6 +155,12 @@ namespace
                                        Tcl_NewIntObj(tag));
             if(tcl_error) return tcl_error;
         }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("interactive", -1),
+                                   Tcl_NewBooleanObj(interactive));
+        if(tcl_error) return tcl_error;
+
         if(optind == argc)
         {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));
@@ -280,36 +293,68 @@ namespace
             return TCL_ERROR;
         }
 
+
+        //TODO: RAII on command_options since it is top level object.
+        appc::tclobj_ptr command_options(Tcl_NewDictObj(), appc::unref_tclobj);
+        Tcl_Obj* pre_command_flags = Tcl_NewDictObj();
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(),
+                                   Tcl_NewStringObj("pre_command_flags", -1),
+                                   pre_command_flags);
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                   Tcl_NewStringObj("local", -1),
+                                   Tcl_NewBooleanObj(0));
+        if(tcl_error) return tcl_error;
+
+        /*Parse pre command options like --local*/
+        int command_index = 0; /*Index of the command in the options list*/
+        for (int i=0; i < arg_count; i++)
+        {
+            std::string pre_command_option(Tcl_GetStringFromObj(argument_objs[i], nullptr));
+            if(pre_command_option == "--local")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("local", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
+            else
+            {
+                break;
+            }
+
+            command_index++;
+        }
+        arg_count -= command_index;
+        argument_objs += command_index;
         std::string command(Tcl_GetString(argument_objs[0]));
 
         /*TODO: Make command lookup table for commands.*/
-
-        Tcl_Obj* command_options = Tcl_NewDictObj();
-        tcl_error = Tcl_DictObjPut(interp, command_options, Tcl_NewStringObj("args", -1),
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(), Tcl_NewStringObj("args", -1),
                                    Tcl_NewStringObj("", 0));
         if(tcl_error) return tcl_error;
 
         if(command == "build")
         {
             //parse args if any remaining.  shift to first non-command argument
-            tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options);
+            tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "run")
         {
-            tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options);
+            tcl_error = parse_run_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "publish")
         {
             tcl_error = parse_publish_pull_options(interp, arg_count,
-                                                   argument_objs, command_options);
+                                                   argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "pull")
         {
             tcl_error = parse_publish_pull_options(interp, arg_count,
-                                                   argument_objs, command_options);
+                                                   argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else
@@ -318,11 +363,11 @@ namespace
             return TCL_ERROR;
         }
 
-        tcl_error = Tcl_DictObjPut(interp, command_options,
+        tcl_error = Tcl_DictObjPut(interp, command_options.get(),
                                    Tcl_NewStringObj("command", -1),
                                    argument_objs[0]);
         if(tcl_error) return tcl_error;
-        Tcl_SetObjResult(interp, command_options);
+        Tcl_SetObjResult(interp, command_options.release());
         return TCL_OK;
     }
 
@@ -416,9 +461,18 @@ namespace
     {
         (void)Tcl_CreateObjCommand(interp, "appc::url::parse", Appc_ParseURL, nullptr, nullptr);
     }
+
+    void init_exec(Tcl_Interp* interp)
+    {
+        (void)Appc_ExecInit(interp);
+    }
 }
 
 extern "C" {
+
+/*Forward declare PTY_Init from pty.c module.*/
+int
+Pty_Init(Tcl_Interp *interp);
 
 extern int Appctcl_Init(Tcl_Interp* interp)
 {
@@ -427,12 +481,12 @@ extern int Appctcl_Init(Tcl_Interp* interp)
         return TCL_ERROR;
     }
 
-    std::cerr << "Appctcl_Init" << std::endl;
-
     (void)Tcl_CreateObjCommand(interp, "appc::parse_options", Appc_ParseOptions, nullptr, nullptr);
 
     init_dns(interp);
     init_url(interp);
+    init_exec(interp);
+    Pty_Init(interp);
     Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;

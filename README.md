@@ -46,3 +46,11 @@ Application containers for FreeBSD.
 * **Task Scheduling**:
     * Support a scheduler passing tasks to different hosts.  Similar to borg or nomad
     * Perhaps implement a nomad backend.
+
+# Commands needed to be useful for development and deployment
+* **build**: Build an image given spec file.
+* **publish**: Publish a built image into a repository (file and s3)
+* **pull**: Pull an image into the system from a repository (file and s3)
+* **run -t -v <volume> --network=<name>**: Run a container in the foreground with a network on
+  the provided bridge (creating the bridge if necessary).
+* **run**: Run a command in the background monitoring it as needed.  Potentially providing resource limits.

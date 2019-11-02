@@ -6,6 +6,7 @@ package require uuid
 
 package require appc::bsd
 package require appc::env
+package require appc::jail
 package require appc::zfs
 
 namespace eval appc::run {
@@ -39,7 +40,7 @@ namespace eval appc::run {
         }
     }
 
-    proc run_command {args_dict} {
+    proc run_command {pty args_dict} {
         
         puts $args_dict
 
@@ -67,7 +68,7 @@ namespace eval appc::run {
         if {$b_snapshot_exists} {
 
             set uuid [uuid::uuid generate]
-            set container_dataset [appc::env::get_dataset_from_image_name $uuid]
+            set container_dataset [appc::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
 
             puts stderr "Cloning b snapshot: ${image_dataset}@b $container_dataset"
             appc::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
@@ -94,15 +95,27 @@ namespace eval appc::run {
             set hostname [dict get $args_dict "name"]
         }
 
-        catch {
-            appc::jail::run_jail $hostname $mountpoint {*}$command
+        set coro_name [info coroutine]
+        set error [catch {
+            appc::jail::run_jail $hostname $mountpoint $pty $coro_name {*}$command
+        } error_msg info_dict]
+        if {$error} {
+            puts stderr $error_msg
         }
 
+        #Wait for the command to finish
+        yield
+
+        debug.run "Container exited. Cleaning up"
         appc::bsd::umount $jailed_mount_path
+        appc::bsd::umount [file join $mountpoint dev]
 
         if {[dict get $args_dict "remove"]} {
+            debug.run "Destroying container dataset: $container_dataset"
             appc::zfs::destroy $container_dataset
         }
+
+        debug.run "Finished running container: $container_dataset"
     }
 }
 
