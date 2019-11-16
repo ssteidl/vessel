@@ -3,6 +3,7 @@
 
 package require TclOO
 package require appc::env
+package require appc::network
 package require appc::pull
 package require appc::run
 package require debug
@@ -23,7 +24,11 @@ package require debug::heartbeat
 # 3a. Run the dns server
 # 4. Monitor and close containers (cleanup)
 # 5. Other features like capsicum and ractl
-
+#
+# NOTE: The -h flag is going to be huge for this because it can use
+# dns to resolve the hostname of a jail to addresses
+#
+# NOTE: Name must be part of the jail.  If it isn't provided then use the uid
 
 namespace eval appcd::_ {
 
@@ -49,14 +54,9 @@ namespace eval appcd::_ {
 
         switch -exact $command {
             pull {
-                #TODO: Implement pulling image
                 appc::pull::pull_command $args
             }
             run {
-                #By default, send output to dev null and it's not interactive.  jail
-                #command will be opened async.  So we need a syslog channel.
-                #Perhaps the simplest thing to do is have everything sent to the daemons
-                #standard out for now and have that go to syslog with specific tags
 
                 set pty [dict get $msg pty]
                 set interactive false
@@ -64,7 +64,7 @@ namespace eval appcd::_ {
                 coroutine ${conn}_run_coro appc::run::run_command $pty $args
             }
             default {
-                puts $conn "Unknown command $command"
+                debug.appcd "Unknown command $command"
             }
         }
     }
@@ -134,13 +134,28 @@ proc bgerror {message} {
     debug.appcd "bgerror: $message"
 }
 
-set pool [appc::env::get_pool]
-if {![appc::zfs::is_mounted $pool]} {
-    debug.appcd "ZFS pool '$pool' is not mounted.  Attempting to mount now"
-    appc::zfs::mount $pool
+proc init_zpool {} {
+    #Init ZFS
+    set pool [appc::env::get_pool]
+    if {![appc::zfs::is_mounted $pool]} {
+        debug.appcd "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+        appc::zfs::mount $pool
+    }
 }
 
+proc init_networking {} {
+    #Initialize the bridge
+    set bridge_name {appcd-bridge0}
+    set bridge_name [appc::network::bridge create $bridge_name]
 
+    #Initialize the epair interface for appcd and any other program
+    # on the host to communicate with the bridge
+    
+    
+}
+
+#TODO Unix socket so we can restrict connections based on
+#group permissions
 socket -server [list new_connection] -myaddr 127.0.0.1 6432
 debug::heartbeat 1000
 vwait _forever_

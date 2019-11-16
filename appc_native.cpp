@@ -46,7 +46,6 @@ namespace
 
         int ch = -1;
 
-        //This needs to be wrapped in RAII.
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:t:", long_opts, nullptr)) != -1)
@@ -87,6 +86,49 @@ namespace
         return tcl_error;
     }
 
+    int parse_create_network_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"name", required_argument, nullptr, 'n'},
+            {"dns", required_argument, nullptr, 'd'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
+        appc::tclobj_ptr dns_list(Tcl_NewListObj(0, nullptr), appc::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "n:d:", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'n':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("name", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'd':
+                tcl_error = Tcl_ListObjAppendElement(interp, dns_list.get(),
+                                                     Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("dns", -1),
+                                   dns_list.release());
+        return tcl_error;
+    }
     int parse_run_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         /*At some point we will have a server and need a -it flag*/
@@ -356,6 +398,10 @@ namespace
             tcl_error = parse_publish_pull_options(interp, arg_count,
                                                    argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
+        }
+        else if(command == "create-network")
+        {
+
         }
         else
         {

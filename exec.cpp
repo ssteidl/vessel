@@ -182,7 +182,7 @@ namespace
 
         if(event.fflags & NOTE_TRACKERR)
         {
-            Tcl_SetObjResult(pge->interp, Tcl_ObjPrintf("Error tracking child process of %i", event.ident));
+            Tcl_SetObjResult(pge->interp, Tcl_ObjPrintf("Error tracking child process of %lu", event.ident));
             Tcl_BackgroundError(pge->interp);
             return;
         }
