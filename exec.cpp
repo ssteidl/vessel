@@ -55,6 +55,7 @@ namespace
     public:
         monitored_process_group(pid_t child)
             : m_child(child),
+              m_child_exited(false),
               m_descendants()
         {}
 
@@ -182,17 +183,21 @@ namespace
 
         if(event.fflags & NOTE_TRACKERR)
         {
-            Tcl_SetObjResult(pge->interp, Tcl_ObjPrintf("Error tracking child process of %lu", event.ident));
+            Tcl_SetObjResult(pge->interp,
+                             Tcl_ObjPrintf("Error tracking child process of %lu", event.ident));
             Tcl_BackgroundError(pge->interp);
             return;
         }
 
         if(event.fflags & NOTE_CHILD)
         {
+            std::cerr << "NOTE_CHILD: " << event.ident << std::endl;
             pge->mpg->add_descendant((pid_t)event.ident);
         }
         else if(event.fflags & NOTE_EXIT)
         {
+
+            std::cerr << "NOTE_EXIT: " << event.ident << std::endl;
             bool is_process_group_empty = pge->mpg->exited(event.ident, event.data);
             if(is_process_group_empty)
             {
@@ -284,7 +289,6 @@ int Appc_ExecInit(Tcl_Interp* interp)
 int Appc_Exec(void *clientData, Tcl_Interp *interp,
               int objc, struct Tcl_Obj *const *objv)
 {
-    std::cerr << "Client data: " << clientData << std::endl;
     kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
 
     if(objc < 4)
@@ -304,7 +308,6 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
 
     Tcl_Obj* fd_dict = objv[1];
     Tcl_Obj* callback_prefix = objv[2];
-    std::cerr << Tcl_GetStringFromObj(fd_dict, nullptr) << std::endl;
     Tcl_DictSearch search;
     Tcl_Obj* key = nullptr;
     Tcl_Obj* value = nullptr;
@@ -441,6 +444,7 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
         struct kevent event;
         void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
 
+        std::cerr << "Forked pid: " << pid << std::endl;
         new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
         EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, pge_buffer);
 
