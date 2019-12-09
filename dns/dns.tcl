@@ -4,7 +4,7 @@
 package require TclOO
 package require udp
 
-load libappctcl.so
+package require appc::native
 
 namespace eval appc::dns {
 
@@ -74,7 +74,7 @@ namespace eval appc::dns {
         
         oo::class create DNSServer {
 
-            variable store
+            variable store [dict create]
             variable udp_channel
             variable message_channel
 
@@ -83,7 +83,6 @@ namespace eval appc::dns {
                 set udp_channel [udp_open $port]
                 fconfigure $udp_channel -translation binary -buffering none -blocking false
 
-                puts "self [self]"
                 #TODO: Proper way to delete this
                 set dns_transform [appc::dns::_::transform new]
                 set message_channel [chan push $udp_channel $dns_transform]
@@ -105,9 +104,12 @@ namespace eval appc::dns {
                 puts -nonewline $message_channel $response
                 flush $message_channel       
             }
+
+            method add_lookup_mapping {name ip} {
+                set store [dict set $store $name $ip}
+            }
             
             destructor {
-
                 close $udp_channel
             }
         }
@@ -119,6 +121,3 @@ namespace eval appc::dns {
     }
 }
 
-
-set server [appc::dns create_server]
-vwait forever

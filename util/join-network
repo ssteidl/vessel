@@ -1,0 +1,52 @@
+#! /usr/bin/env tclsh8.6
+# -*- mode: tcl; -*-
+
+package require cmdline
+package require appc::network
+
+proc join_network {netname jail ip} {
+
+    #Intentionally don't destroy these objects so the
+    #OS objects (interfaces) are not destroyed.
+    set bridge_obj [appc::network::bridge new "${netname}bridge"]
+
+    set internal_network_obj [appc::network::internal_network new $netname $bridge_obj]
+    $internal_network_obj add_jail $jail $ip
+}
+
+set options {
+    {network.arg "" "Name of the network to create"}
+    {ip.arg "" "Ip address of the host epair"}
+    {jail.arg "" "Network address for jail"}
+}
+
+set usage {}
+try {
+    array set params [::cmdline::getoptions argv $options $usage]
+} trap {CMDLINE USAGE} {msg o} {
+    # Trap the usage signal, print the message, and exit the application.
+    # Note: Other errors are not caught and passed through to higher levels!
+    puts stderr $msg
+    exit 1
+}
+
+parray params
+
+set netname $params(network)
+if {$netname eq {}} {
+    puts stderr "network is required"
+    exit 1
+}
+
+set ip $params(ip)
+if {$ip eq {}} {
+    puts stderr "ip is required"
+    exit 1
+}
+
+set jail $params(jail)
+if {$jail eq {}} {
+    puts stderr "jail is required"
+    exit 1
+}
+join_network $netname $jail $ip

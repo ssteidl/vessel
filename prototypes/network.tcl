@@ -18,11 +18,11 @@ proc create_network {} {
 
     namespace eval create_networkns {}
 
-    defer::defer namespace delete create_networkns
+#    defer::defer namespace delete create_networkns
     set bridge_obj [appc::network::bridge createWithNamespace  create_networkns::acbridge create_networkns "acbridge"]
     
     appc::network::internal_network_vlan createWithNamespace create_networkns::shanenet create_networkns "shanenet" \
-	$bridge_obj 7 192.168.7.3
+	$bridge_obj 7 192.168.101.1
 }
 
 create_network

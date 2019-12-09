@@ -36,6 +36,7 @@ namespace eval appcd::_ {
     debug on appcd 1 stderr
 
     variable connections [list]
+    variable networks [dict create]
 
     #For the first iteration, commands will just be line delimited tcl dicts
     # send over localhost.
@@ -62,6 +63,9 @@ namespace eval appcd::_ {
                 set interactive false
 
                 coroutine ${conn}_run_coro appc::run::run_command $pty $args
+            }
+            create-network {
+                appc::network::create_network $args
             }
             default {
                 debug.appcd "Unknown command $command"
@@ -145,13 +149,11 @@ proc init_zpool {} {
 
 proc init_networking {} {
     #Initialize the bridge
-    set bridge_name {appcd-bridge0}
-    set bridge_name [appc::network::bridge create $bridge_name]
+    set bridge_name {acbridge0}
+    set bridge_obj [appc::network::bridge new $bridge_name]
 
     #Initialize the epair interface for appcd and any other program
     # on the host to communicate with the bridge
-    
-    
 }
 
 #TODO Unix socket so we can restrict connections based on

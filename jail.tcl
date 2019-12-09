@@ -6,16 +6,20 @@ package require appc::env
 namespace eval appc::jail {
 
     namespace eval _ {
+
+        #Build the jail command which can be exec'd
         proc build_command {name mountpoint args} {
 
             #TODO: Allow run jail command parameters to be overridden
+            #TODO: Support ip4=inherit
             array set jail_parameters [list \
-                                           "ip4" "inherit" \
                                            "host.hostname" $name \
+                                           "name" $name \
                                            "sysvshm" "new" \
                                            "allow.mount" "1" \
                                            "allow.mount.devfs" "1" \
-                                           "mount.devfs" "1"]
+                                           "mount.devfs" "1" \
+                                           "vnet" "1"]
 
             #TODO: Allow user to configure shell parameter
             set shell {/bin/sh}

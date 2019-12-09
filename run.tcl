@@ -44,6 +44,11 @@ namespace eval appc::run {
         
         puts $args_dict
 
+        defer::with pty {
+            if {$pty ne {}} {
+                close $pty
+            }
+        }
         #TODO: IMAGE should be it's own class
         set image [dict get $args_dict "image"]
         set image_components [split $image :]

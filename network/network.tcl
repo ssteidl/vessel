@@ -2,6 +2,43 @@ package require TclOO
 
 namespace eval appc::network {
 
+    namespace eval _ {
+
+	#Represents a jail that can join a network.
+	#Note this method does not create or destroy
+	#a jail.  It's just used to reference and operate
+	#on a running jail.
+	# TODO: Handle jail resource cleanup after a jail
+	# exits.
+	oo::class create network_jail {
+
+	    variable _jid
+	    variable _ip 
+	    variable _epair_interface_obj
+	    
+	    constructor {network_name jid ip} {
+		set _jid $jid
+		set _epair_interface_obj [appc::network::epair new "${network_name}${jid}"]
+		set _ip $ip
+	    }
+
+	    method jail_id {} {
+		return $_jid
+	    }
+
+	    method connect_to_network {bridge_obj_ref} {
+	        $_epair_interface_obj add_to_bridge $bridge_obj_ref
+		set jail_nic [$_epair_interface_obj get_aside]
+		exec ifconfig $jail_nic vnet $_jid
+		exec jexec $_jid ifconfig $jail_nic $_ip
+	    }
+	    
+	    destructor {
+		catch {$_epair_interface destroy}
+	    }
+	}
+    }
+    
     oo::class create bridge {
 
 	self export createWithNamespace
@@ -12,13 +49,10 @@ namespace eval appc::network {
 
 	    set _name $name
 	    if {! [my exists]} {
-		#The created name can actually be different then the
-		#name parameter in the case that the bridge already exists.
-		#We check that it doesn't exist but not sure if there are
-		#other cases where it would create the bridge with a
-		#different name (probably not).
 		puts stderr "Bridge doesn't exist, creating"
-		set _name [exec ifconfig bridge create name $name]
+		exec ifconfig bridge create name $name
+		exec ifconfig $name up
+		set _name $name
 	    }
 
 	    puts stderr "Bridge name: $_name"
@@ -33,17 +67,25 @@ namespace eval appc::network {
 
 	    set exists true
 	    if {[catch {exec ifconfig $_name} msg]} {
-		puts stderr "Exists check: $msg"
+		puts stderr "$msg"
 		set exists false
 	    }
 
-	    puts stderr "Exists: $exists"
 	    return $exists
 	}
 
 	method add_member {member_interface} {
 
-	    exec ifconfig $_name addm $member_interface
+	    if {[catch {exec ifconfig $_name addm $member_interface} msg]} {
+		
+		set exists_error_pattern {ifconfig: BRDGADD *: File exists}
+		
+		if {[string match $exists_error_pattern $msg]} {
+		    return -code error -errorcode {BRIDGE ADDM EXISTS} $msg
+		} else {
+		    return -code error -errorcode {BRIDGE ADDM ERROR} $msg
+		}
+	    }
 	}
 
 	method delete_member {member_interface} {
@@ -62,9 +104,15 @@ namespace eval appc::network {
 	self export createWithNamespace
 	
 	variable _name
+
+	#Saves whether or not the interface already existed when this
+	#object is created.  We use this to know if the interface should
+	#be deleted or not.
+	variable _existed
 	
 	method Create {name} {
 	    set _name $name
+	    
 	    if {![my exists]} {
 		set epair_iface [exec ifconfig epair create]
 
@@ -74,7 +122,6 @@ namespace eval appc::network {
 		set epair_iface [string range $epair_iface 0 end-1]
 		exec ifconfig "${epair_iface}a" name "${name}a"
 		exec ifconfig "${epair_iface}b" name "${name}b"
-
 	    }
 	}
 
@@ -91,8 +138,9 @@ namespace eval appc::network {
 	method exists {} {
 
 	    set exists true
-	    if {[catch {exec ifconfig $_name} msg]} {
-		puts stderr "$_name Exists check: $msg"
+	    set aside [my get_aside]
+	    if {[catch {exec ifconfig $aside} msg]} {
+		puts stderr "$aside Exists check: $msg"
 		set exists false
 	    }
 
@@ -107,9 +155,28 @@ namespace eval appc::network {
 	    return "${_name}b"
 	}
 
+	method up {} {
+	    exec ifconfig [my get_bside] up
+	}
+	
 	method add_to_bridge {bridge_obj} {
 
-	    $bridge_obj add_member [my get_bside]
+	    set bside [my get_bside]
+	    try {
+
+		$bridge_obj add_member $bside
+	    } trap {BRIDGE ADDM EXISTS} vlist {
+
+		puts stderr "$bside already a member of bridge"
+	    }
+
+	    my up
+	}
+
+	method set_ip_addr {ip} {
+	    #ip can be with or without the netmask
+	    #192.168.3.2 or 192.168.3.2/24
+	    exec ifconfig [my get_aside] $ip
 	}
 	
 	destructor {
@@ -118,6 +185,8 @@ namespace eval appc::network {
 	}
     }
 
+    #NOTE: I'm not using vlans for now.  As an MVP, a single
+    #non-vlan network would be better.
     oo::class create vlan {
 
 	self export createWithNamespace
@@ -147,8 +216,8 @@ namespace eval appc::network {
 	    exec ifconfig $_name destroy
 	}
     }
-
-    oo::class create internal_network_vlan {
+    
+    oo::class create internal_network {
 
 	self export createWithNamespace
 	
@@ -156,34 +225,51 @@ namespace eval appc::network {
 	variable _bridge_obj_ref
 	variable _ip
 	variable _epair_obj
-	variable _vlan_obj
 
-	#List of jail objects that have networks.
-	variable jail_obj_ref_list
+	#dict of network_jail objs.
+	variable _jail_dict 
+	variable _dns_dict
 	
-	constructor {network_name bridge_obj vlan_tag ip} {
+	constructor {network_name bridge_obj {ip {}} {dns_dict {}}} {
 
 	    set _network_name $network_name
 	    set _bridge_obj_ref $bridge_obj
-	    set _ip $ip
 	    set _epair_obj [appc::network::epair new "${network_name}"]
-	    set _vlan_obj [appc::network::vlan new $vlan_tag [$_epair_obj get_aside]]
 	    $_epair_obj add_to_bridge $_bridge_obj_ref
-	    $_vlan_obj set_ip_addr $ip
+
+	    if {$ip ne {} } {
+		set _ip $ip
+		$_epair_obj set_ip_addr $ip
+	    } else {
+		#TODO: Query host ip from system
+	    }
+	    set _jail_dict [dict create]
+	    set _dns_list $dns_dict
 	}
 
 	method add_jail {jid ip} {
 
-	    return -code error -errorcode {APPC NETWRK NYI} \
-		"add_jail is not yet implemented"
+	    if {![dict exists $_jail_dict $jid]} {
+
+		set netjail_obj [appc::network::_::network_jail new $_network_name $jid $ip]
+		dict set $_jail_dict $jid $netjail_obj
+		$netjail_obj connect_to_network $_bridge_obj_ref
+		
+		
+	    } else {
+		return -code error -errorcode {NETWORK JAIL EXISTS} \
+		    "Attempted to add jail to network which has already been added"
+	    }
 	}
 	
 	destructor {
-	    catch {$_vlan_obj destroy}
 	    catch {$_epair_obj destroy}
 
-	    #TODO: Maintain a list of jails that are connected to
-	    # this network
+	    catch {
+		dict for {jid network} $_jail_dict {
+		    $network destroy
+		}
+	    }
 	}
     }
 }
