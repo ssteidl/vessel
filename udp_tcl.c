@@ -16,70 +16,26 @@
 
 #include "udp_tcl.h"
 
-#ifdef WIN32
-#include <stdlib.h>
-#include <malloc.h>
-typedef int socklen_t;
-#else /* ! WIN32 */
-#if defined(HAVE_SYS_FILIO_H)
 #include <sys/filio.h>
-#endif
-#if defined(HAVE_SYS_IOCTL_H)
 #include <sys/ioctl.h>
-#endif
-#if !defined(HAVE_SYS_FILIO_H) && !defined(HAVE_SYS_IOCTL_H)
-#error "Neither sys/ioctl.h nor sys/filio.h found. We need ioctl()"
-#endif
-#endif /* WIN32 */
 
-#if HAVE_FCNTL_H
-#  include <fcntl.h>
-#endif
+#include <fcntl.h>
 
 /* Tcl 8.4 CONST support */
 #ifndef CONST84
 #define CONST84
 #endif
 
-/* bug #1240127: May not be found on certain versions of mingw-gcc */
-#ifndef IP_TTL
-#define IP_TTL 4
-#endif
-
-#if defined(_XOPEN_SOURCE_EXTENDED) && defined(__hpux)
-/*
- * This won't get defined on HP-UX if _XOPEN_SOURCE_EXTENDED is defined,
- * but we need it and TEA causes this macro to be defined.
- */
-
-struct ip_mreq {
-    struct in_addr imr_multiaddr; /* IP multicast address of group */
-    struct in_addr imr_interface; /* local IP address of interface */
-};
-
-struct ipv6_mreq {
-    struct in6_addr ipv6mr_multiaddr; /* IPv6 multicast addr */
-    unsigned int    ipv6mr_interface; /* interface index */
-};
-
-#endif /* _XOPEN_SOURCE_EXTENDED */
-
 /* define some Win32isms for Unix */
-#ifndef WIN32
 #define SOCKET int
 #define INVALID_SOCKET -1
 #define closesocket close
 #define ioctlsocket ioctl
-#endif /* WIN32 */
 
 #ifdef DEBUG
 #define UDPTRACE udpTrace
 #else
 #define UDPTRACE 1 ? ((void)0) : udpTrace
-#endif
-
-#ifdef _MSC_VER
-#define snprintf _snprintf      /* trust Microsoft to complicate things */
 #endif
 
 FILE *dbg;
@@ -129,24 +85,6 @@ static int udpSetTtlOption(UdpState* statePtr, Tcl_Interp *interp, CONST84 char 
 static int udpGetTtlOption(UdpState *statePtr, Tcl_Interp *interp,unsigned int *value);
 
 /*
- * Windows specific functions
- */
-#ifdef WIN32
-
-int  UdpEventProc(Tcl_Event *evPtr, int flags);
-static void UDP_SetupProc(ClientData data, int flags);
-void UDP_CheckProc(ClientData data, int flags);
-int  Udp_WinHasSockets(Tcl_Interp *interp);
-
-/* FIX ME - these should be part of a thread/package specific structure */
-static HANDLE waitForSock;
-static HANDLE waitSockRead;
-static HANDLE sockListLock;
-static UdpState *sockList;
-
-#endif /* ! WIN32 */
-
-/*
  * This structure describes the channel type for accessing UDP.
  */
 static Tcl_ChannelType Udp_ChannelType = {
@@ -179,21 +117,13 @@ Udp_Init(Tcl_Interp *interp)
     Tcl_InitStubs(interp, "8.1", 0);
 #endif
 
-#ifdef WIN32
-    if (Udp_WinHasSockets(interp) != TCL_OK) {
-        return TCL_ERROR;
-    }
-    Tcl_CreateEventSource(UDP_SetupProc, UDP_CheckProc, NULL);
-#endif
+    Tcl_CreateCommand(interp, "appc::udp_open", udpOpen ,
+                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
+    Tcl_CreateCommand(interp, "appc::udp_conf", udpConf ,
+                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
+    Tcl_CreateCommand(interp, "appc::udp_peek", udpPeek ,
+                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
 
-    Tcl_CreateCommand(interp, "udp_open", udpOpen , 
-                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_CreateCommand(interp, "udp_conf", udpConf , 
-                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_CreateCommand(interp, "udp_peek", udpPeek , 
-                      (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    
-    r = Tcl_PkgProvide(interp, PACKAGE_NAME, PACKAGE_VERSION);
     return r;
 }
 
@@ -384,24 +314,9 @@ udpOpen(ClientData clientData, Tcl_Interp *interp,
     statePtr->localport = localport;
 	statePtr->ss_family = ss_family;
     Tcl_RegisterChannel(interp, statePtr->channel);
-#ifdef WIN32
-    statePtr->threadId = Tcl_GetCurrentThread();    
-    statePtr->packetNum = 0;
-    statePtr->next = NULL;
-    statePtr->packets = NULL;
-    statePtr->packetsTail = NULL;
-#endif
+
     /* Tcl_SetChannelOption(interp, statePtr->channel, "-blocking", "0"); */
     Tcl_AppendResult(interp, channelName, (char *)NULL);
-#ifdef WIN32
-    WaitForSingleObject(sockListLock, INFINITE);
-    statePtr->next = sockList;
-    sockList = statePtr;
-
-    UDPTRACE("Added %d to sockList\n", statePtr->sock);
-    SetEvent(sockListLock);
-    SetEvent(waitForSock);
-#endif
     return TCL_OK;
 }
 
@@ -421,11 +336,7 @@ udpConf(ClientData clientData, Tcl_Interp *interp,
 	Tcl_DString ds;
 	char errmsg[] = 
 		"udp_conf fileId [-mcastadd] [-mcastdrop] groupaddr | "
-#ifdef WIN32
-		"udp_conf fileId [-mcastadd] [-mcastdrop] \"groupaddr netwif_index\" | "
-#else
 		"udp_conf fileId [-mcastadd] [-mcastdrop] \"groupaddr netwif\" | "
-#endif
 		"udp_conf fileId remotehost remoteport | "
 		"udp_conf fileId [-myport] [-remote] [-peer] [-mcastgroups] [-mcastloop] [-broadcast] [-ttl]";
 	
@@ -474,7 +385,6 @@ int
 udpPeek(ClientData clientData, Tcl_Interp *interp,
         int argc, CONST84 char * argv[])
 {
-#ifndef WIN32
     int buffer_size = 16;
     int actual_size;
     socklen_t socksize;
@@ -518,347 +428,7 @@ udpPeek(ClientData clientData, Tcl_Interp *interp,
 
     Tcl_AppendResult(interp, message, (char *)NULL);
     return TCL_OK;
-#else /* WIN32 */
-    Tcl_SetResult(interp, "udp_peek not implemented for this platform",
-                  TCL_STATIC);
-    return TCL_ERROR;
-#endif /* ! WIN32 */
 }
-
-#ifdef WIN32
-/*
- * ----------------------------------------------------------------------
- * UdpEventProc --
- *
- *  Raise an event from the UDP read thread to notify the Tcl interpreter
- *  that something has happened.
- *
- * ----------------------------------------------------------------------
- */
-int
-UdpEventProc(Tcl_Event *evPtr, int flags)
-{
-    UdpEvent *eventPtr = (UdpEvent *) evPtr;
-    int mask = 0;
-    
-    mask |= TCL_READABLE;
-    UDPTRACE("UdpEventProc\n");
-    Tcl_NotifyChannel(eventPtr->chan, mask);
-    return 1;
-}
-
-/*
- * ----------------------------------------------------------------------
- * UDP_SetupProc - called in Tcl_SetEventSource to do the setup step
- * ----------------------------------------------------------------------
- */
-static void 
-UDP_SetupProc(ClientData data, int flags) 
-{
-    UdpState *statePtr;
-    Tcl_Time blockTime = { 0, 0 };
-    
-    /* UDPTRACE("setupProc\n"); */
-    
-    if (!(flags & TCL_FILE_EVENTS)) {
-        return;
-    }
-    
-    WaitForSingleObject(sockListLock, INFINITE);
-    for (statePtr = sockList; statePtr != NULL; statePtr=statePtr->next) {
-        if (statePtr->packetNum > 0) {
-            UDPTRACE("UDP_SetupProc\n");
-            Tcl_SetMaxBlockTime(&blockTime);
-            break;
-        }
-    }
-    SetEvent(sockListLock);
-}
-
-/*
- * ----------------------------------------------------------------------
- * UDP_CheckProc --
- * ----------------------------------------------------------------------
- */
-void 
-UDP_CheckProc(ClientData data, int flags) 
-{
-    UdpState *statePtr;
-    UdpEvent *evPtr;
-    int actual_size;
-    socklen_t socksize;
-    int buffer_size = MAXBUFFERSIZE;
-    char *message;
-    struct sockaddr_storage recvaddr;
-    PacketList *p;
-#ifdef WIN32
-	char hostaddr[256];
-	char* portaddr;
-	char remoteaddr[256];
-  	int remoteaddrlen = sizeof(remoteaddr);
-	memset(hostaddr, 0 , sizeof(hostaddr));
-	memset(remoteaddr,0,sizeof(remoteaddr));
-#endif /*  WIN32 */
-	
-    /* UDPTRACE("checkProc\n"); */
-    
-    /* synchronized */
-    WaitForSingleObject(sockListLock, INFINITE);
-    
-    for (statePtr = sockList; statePtr != NULL; statePtr=statePtr->next) {
-        if (statePtr->packetNum > 0) {
-            UDPTRACE("UDP_CheckProc\n");
-            /* Read the data from socket and put it into statePtr */
-            socksize = sizeof(recvaddr);
-            memset(&recvaddr, 0, socksize);
-              
-            message = (char *)ckalloc(MAXBUFFERSIZE);
-            if (message == NULL) {
-                UDPTRACE("ckalloc error\n");
-                exit(1);
-            }
-            memset(message, 0, MAXBUFFERSIZE);
-            
-            actual_size = recvfrom(statePtr->sock, message, buffer_size, 0,
-                                   (struct sockaddr *)&recvaddr, &socksize);
-            SetEvent(waitSockRead);
-            
-            if (actual_size < 0) {
-                UDPTRACE("UDP error - recvfrom %d\n", statePtr->sock);
-                ckfree(message);
-            } else {
-                p = (PacketList *)ckalloc(sizeof(struct PacketList));
-                p->message = message;
-                p->actual_size = actual_size;
-#ifdef WIN32
-				/* 
-				 * In windows, do not use getnameinfo() since this function does
-				 * not work correctly in case of multithreaded. Also inet_ntop() is
-				 * not available in older windows versions.
-				 */
-				if (WSAAddressToString((struct sockaddr *)&recvaddr,socksize,
-					NULL,remoteaddr,&remoteaddrlen)==0) {
-					/* 
-					 * We now have an address in the format of <ip address>:<port> 
-					 * Search backwards for the last ':'
-					 */
-					portaddr = strrchr(remoteaddr,':') + 1;
-					strncpy(hostaddr,remoteaddr,strlen(remoteaddr)-strlen(portaddr)-1);
-					statePtr->peerport = atoi(portaddr);
-					p->r_port = statePtr->peerport;
-					strcpy(statePtr->peerhost,hostaddr);
-					strcpy(p->r_host,hostaddr);
-				}
-#else
-				if (statePtr->ss_family == AF_INET ) {
-					inet_ntop(AF_INET, ((struct sockaddr_in*)&recvaddr)->sin_addr, statePtr->peerhost, sizeof(statePtr->peerhost) );
-					inet_ntop(AF_INET, ((struct sockaddr_in*)&recvaddr)->sin_addr, p->r_host, sizeof(p->r_host) );
-	               	p->r_port = ntohs(((struct sockaddr_in*)&recvaddr)->sin_port);
-                	statePtr->peerport = ntohs(((struct sockaddr_in*)&recvaddr)->sin_port);                					
-				} else {					
-					inet_ntop(AF_INET6, ((struct sockaddr_in6*)&recvaddr)->sin6_addr, statePtr->peerhost, sizeof(statePtr->peerhost) );
-					inet_ntop(AF_INET6, ((struct sockaddr_in6*)&recvaddr)->sin6_addr, p->r_host, sizeof(p->r_host) );
-  				    p->r_port = ntohs(((struct sockaddr_in6*)&recvaddr)->sin6_port);
-				    statePtr->peerport = ntohs(((struct sockaddr_in6*)&recvaddr)->sin6_port);
-				}
-#endif /*  WIN32 */
-
-                p->next = NULL;
-                 
-                if (statePtr->packets == NULL) {
-                    statePtr->packets = p;
-                    statePtr->packetsTail = p;
-                } else {
-                    statePtr->packetsTail->next = p;
-                    statePtr->packetsTail = p;
-                }
-                
-                UDPTRACE("Received %d bytes from %s:%d through %d\n",
-                         p->actual_size, p->r_host, p->r_port, statePtr->sock);
-                UDPTRACE("%s\n", p->message);
-            }
-            
-            statePtr->packetNum--;
-            statePtr->doread = 1;
-            UDPTRACE("packetNum is %d\n", statePtr->packetNum);
-            
-            if (actual_size >= 0) {
-                evPtr = (UdpEvent *) ckalloc(sizeof(UdpEvent));
-                evPtr->header.proc = UdpEventProc;
-                evPtr->chan = statePtr->channel;
-                Tcl_QueueEvent((Tcl_Event *) evPtr, TCL_QUEUE_TAIL);
-                UDPTRACE("socket %d has data\n", statePtr->sock);
-            }
-        }
-    }
-    
-    SetEvent(sockListLock);
-}
-
-/*
- * ----------------------------------------------------------------------
- * InitSockets
- * ----------------------------------------------------------------------
- */
-static int
-InitSockets() 
-{
-    WSADATA wsaData;
-
-    /*
-     * Load the socket DLL and initialize the function table.
-     */
-    
-    if (WSAStartup(0x0101, &wsaData))
-        return 0;
-    
-    return 1;
-}
-
-/*
- * ----------------------------------------------------------------------
- * SocketThread
- * ----------------------------------------------------------------------
- */
-static DWORD WINAPI
-SocketThread(LPVOID arg) 
-{
-    fd_set readfds; /* variable used for select */
-    struct timeval timeout;
-    UdpState *statePtr;
-    int found;
-    int sockset;
-    
-    FD_ZERO(&readfds);
-    
-    UDPTRACE("In socket thread\n");
-    
-    while (1) {
-        FD_ZERO(&readfds);
-        timeout.tv_sec  = 1;
-        timeout.tv_usec = 0;
-        /* synchronized */
-        WaitForSingleObject(sockListLock, INFINITE);
-        
-        /* no socket, just wait, use event */
-        if (sockList == NULL) {
-            SetEvent(sockListLock);
-            UDPTRACE("Wait for adding socket\n");
-            WaitForSingleObject(waitForSock, INFINITE);
-            /* synchronized */
-            WaitForSingleObject(sockListLock, INFINITE);
-        }
-        
-        /* set each socket for select */
-        for (statePtr = sockList; statePtr != NULL; statePtr=statePtr->next) {
-            FD_SET((unsigned int)statePtr->sock, &readfds);
-            UDPTRACE("SET sock %d\n", statePtr->sock);
-        }
-        
-        SetEvent(sockListLock);
-        UDPTRACE("Wait for select\n");
-        /* block here */
-        found = select(0, &readfds, NULL, NULL, &timeout);
-        UDPTRACE("select end\n");
-        
-        if (found <= 0) {
-            /* We closed the socket during select or time out */
-            continue;
-        }
-        
-        UDPTRACE("Packet comes in\n");
-        
-        WaitForSingleObject(sockListLock, INFINITE);
-        sockset = 0;
-        for (statePtr = sockList; statePtr != NULL; statePtr=statePtr->next) {
-            if (FD_ISSET(statePtr->sock, &readfds)) {
-                statePtr->packetNum++;
-                sockset++;
-                UDPTRACE("sock %d is set\n", statePtr->sock); 
-                break;
-            }
-        }
-        SetEvent(sockListLock);
-        
-        /* wait for the socket data was read */
-        if (sockset > 0) {
-            UDPTRACE( "Wait sock read\n");
-            /* alert the thread to do event checking */
-            Tcl_ThreadAlert(statePtr->threadId);
-            WaitForSingleObject(waitSockRead, INFINITE);
-            UDPTRACE("Sock read finished\n");
-        }
-    }
-}
-
-/*
- * ----------------------------------------------------------------------
- * Udp_WinHasSockets --
- * ----------------------------------------------------------------------
- */
-int
-Udp_WinHasSockets(Tcl_Interp *interp)
-{
-    static int initialized = 0; /* 1 if the socket sys has been initialized. */
-    static int hasSockets = 0;  /* 1 if the system supports sockets. */
-    HANDLE socketThread;
-    DWORD id;
-    
-    if (!initialized) {
-        OSVERSIONINFO info;
-        
-        initialized = 1;
-        
-        /*
-         * Find out if we're running on Win32s.
-         */
-        
-        info.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-        GetVersionEx(&info);
-        
-        /*
-         * Check to see if Sockets are supported on this system.  Since
-         * win32s panics if we call WSAStartup on a system that doesn't
-         * have winsock.dll, we need to look for it on the system first.
-         * If we find winsock, then load the library and initialize the
-         * stub table.
-         */
-        
-        if ((info.dwPlatformId != VER_PLATFORM_WIN32s)
-            || (SearchPath(NULL, "WINSOCK", ".DLL", 0, NULL, NULL) != 0)) {
-            hasSockets = InitSockets();
-        }
-        
-        /*
-         * Start the socketThread window and set the thread priority of the
-         * socketThread as highest
-         */
-        
-        sockList = NULL;
-        waitForSock = CreateEvent(NULL, FALSE, FALSE, NULL);
-        waitSockRead = CreateEvent(NULL, FALSE, FALSE, NULL);
-        sockListLock = CreateEvent(NULL, FALSE, TRUE, NULL);
-        
-        socketThread = CreateThread(NULL, 8000, SocketThread, NULL, 0, &id);
-        SetThreadPriority(socketThread, THREAD_PRIORITY_HIGHEST); 
-        
-        UDPTRACE("Initialize socket thread\n");
-
-        if (socketThread == NULL) {
-            UDPTRACE("Failed to create thread\n");
-        }
-    }
-    if (hasSockets) {
-        return TCL_OK;
-    }
-    if (interp != NULL) {
-        Tcl_AppendResult(interp, "sockets are not available on this system",
-                         NULL);
-    }
-    return TCL_ERROR;
-}
-
-#endif /* ! WIN32 */
 
 /*
  * ----------------------------------------------------------------------
@@ -882,29 +452,8 @@ udpClose(ClientData instanceData, Tcl_Interp *interp)
     int objc;
     Tcl_Obj **objv;
     UdpState *statePtr = (UdpState *) instanceData;
-#ifdef WIN32
-    UdpState *tmp, *p;
-    
-    WaitForSingleObject(sockListLock, INFINITE);
-#endif /* ! WIN32 */
-    
+
     sock = statePtr->sock;
-	
-#ifdef WIN32
-	
-    /* remove the statePtr from the list */
-    for (tmp = p = sockList; p != NULL; tmp = p, p = p->next) {
-		if (p->sock == sock) {
-            UDPTRACE("Remove %d from the list\n", p->sock);
-			if (p == sockList) {
-				sockList = sockList->next;
-			} else {
-				tmp->next = p->next;
-			}
-		}
-    }
-	
-#endif /* ! WIN32 */
 	
     /*
 	* If there are multicast groups added they should be dropped.
@@ -935,20 +484,12 @@ udpClose(ClientData instanceData, Tcl_Interp *interp)
     }
     ckfree((char *) statePtr);
     if (errorCode != 0) {
-#ifndef WIN32
         sprintf(errBuf, "udp_close: %d, error: %d\n", sock, errorCode);
-#else
-        sprintf(errBuf, "udp_cose: %d, error: %d\n", sock, WSAGetLastError());
-#endif
         UDPTRACE("UDP error - close %d", sock);
     } else {
         UDPTRACE("Close socket %d\n", sock);
     }
-    
-#ifdef WIN32
-    SetEvent(sockListLock);
-#endif
-    
+
     return errorCode;
 }
 
@@ -960,7 +501,6 @@ udpClose(ClientData instanceData, Tcl_Interp *interp)
 static void 
 udpWatch(ClientData instanceData, int mask)
 {
-#ifndef WIN32
     UdpState *fsPtr = (UdpState *) instanceData;
     if (mask) {
         UDPTRACE("Tcl_CreateFileHandler\n");
@@ -971,7 +511,6 @@ udpWatch(ClientData instanceData, int mask)
         UDPTRACE("Tcl_DeleteFileHandler\n");
         Tcl_DeleteFileHandler(fsPtr->sock);
     }
-#endif
 }
 
 /*
@@ -991,11 +530,7 @@ udpGetHandle(ClientData instanceData, int direction, ClientData *handlePtr)
 {
     UdpState *statePtr = (UdpState *) instanceData;
     UDPTRACE("udpGetHandle %ld\n", (long)statePtr->sock);
-#ifndef WIN32
     *handlePtr = (ClientData) (intptr_t) statePtr->sock;
-#else
-    *handlePtr = (ClientData) statePtr->sock;
-#endif
     return TCL_OK;
 }
 
@@ -1081,14 +616,10 @@ udpInput(ClientData instanceData, char *buf, int bufSize, int *errorCode)
     UdpState *statePtr = (UdpState *) instanceData;
     int bytesRead;
 
-#ifdef WIN32
-    PacketList *packets;
-#else /* ! WIN32 */
     socklen_t socksize;
     int buffer_size = MAXBUFFERSIZE;
     int sock = statePtr->sock;
-	struct sockaddr_storage recvaddr;
-#endif /* ! WIN32 */
+    struct sockaddr_storage recvaddr;
     
     UDPTRACE("In udpInput\n");
     
@@ -1114,26 +645,7 @@ udpInput(ClientData instanceData, char *buf, int bufSize, int *errorCode)
     if (bufSize == 0) {
         return 0;
     }
-    
-#ifdef WIN32
-    packets = statePtr->packets;
-    UDPTRACE("udp_recv\n");
 
-    if (packets == NULL) {
-        UDPTRACE("packets is NULL\n");
-        *errorCode = EAGAIN;
-        return -1;
-    }
-    memcpy(buf, packets->message, packets->actual_size);
-    ckfree((char *) packets->message);
-    UDPTRACE("udp_recv message\n%s", buf);
-    bufSize = packets->actual_size;
-    strcpy(statePtr->peerhost, packets->r_host);
-    statePtr->peerport = packets->r_port;
-    statePtr->packets = packets->next;
-    ckfree((char *) packets);
-    bytesRead = bufSize;
-#else /* ! WIN32 */
     socksize = sizeof(recvaddr);
     memset(&recvaddr, 0, socksize);
    
@@ -1154,8 +666,7 @@ udpInput(ClientData instanceData, char *buf, int bufSize, int *errorCode)
 	}
  	    
     UDPTRACE("remotehost: %s:%d\n", statePtr->peerhost, statePtr->peerport);
-#endif /* ! WIN32 */
-    
+
     /* we don't want to return anything next time */
     if (bytesRead > 0) {
         buf[bytesRead] = '\0';
@@ -1215,9 +726,7 @@ UdpMulticast(UdpState *statePtr, Tcl_Interp *interp,
 	Tcl_Obj *tcllist , *multicastgrp , *nw_interface;
 	int len,result;
 	int nwinterface_index =-1;
-#ifndef WIN32
 	struct ifreq ifreq;
-#endif /* ! WIN32 */
 
 	/* 
 	 * Parameter 'grp' can be:
@@ -1230,13 +739,8 @@ UdpMulticast(UdpState *statePtr, Tcl_Interp *interp,
 		if (len==2) {
 			Tcl_ListObjIndex(interp, tcllist, 0, &multicastgrp);
 			Tcl_ListObjIndex(interp, tcllist, 1, &nw_interface);
-#ifdef WIN32
-			if ( Tcl_GetIntFromObj(interp,nw_interface,&nwinterface_index) == TCL_ERROR && nwinterface_index < 1) {
-				Tcl_SetResult(interp, "not a valid network interface index; should start with 1", TCL_STATIC);
-				return TCL_ERROR;
-			}
-#else
-			int lenPtr = -1;
+
+            int lenPtr = -1;
 			if (nw_interface->length > IFNAMSIZ ) {
 				Tcl_SetResult(interp, "unknown network interface", TCL_STATIC);
 				return TCL_ERROR;
@@ -1254,8 +758,7 @@ UdpMulticast(UdpState *statePtr, Tcl_Interp *interp,
 			if (nwinterface_index == 0 ) {
 				Tcl_SetResult(interp, "unknown network interface", TCL_STATIC);
 				return TCL_ERROR;
-			}
-#endif /* ! WIN32 */
+            }
 		} else if (len==1) {
 			Tcl_ListObjIndex(interp, tcllist, 0, &multicastgrp);
 		} else {
@@ -1285,13 +788,8 @@ UdpMulticast(UdpState *statePtr, Tcl_Interp *interp,
 		if (nwinterface_index==-1) {
 			/* No interface index specified. Let the system use the default interface. */
 			mreq.imr_interface.s_addr = INADDR_ANY;
-		} else {
-#ifdef WIN32
-			/* Using an interface index of x is indicated by 0.0.0.x */
-			mreq.imr_interface.s_addr = htonl(nwinterface_index);
-#else
+        } else {
 			memcpy(&mreq.imr_interface, &((struct sockaddr_in *) &ifreq.ifr_addr)->sin_addr, sizeof(struct in_addr));
-#endif
 		}
 		
 		if (setsockopt(statePtr->sock, IPPROTO_IP, action, (const char*)&mreq, sizeof(mreq)) < 0) {
@@ -1818,25 +1316,6 @@ static Tcl_Obj *
 ErrorToObj(const char * prefix)
 {
     Tcl_Obj *errObj;
-#ifdef WIN32
-    LPVOID sMsg;
-    DWORD len = 0;
-
-    len = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER
-                         | FORMAT_MESSAGE_FROM_SYSTEM
-                         | FORMAT_MESSAGE_IGNORE_INSERTS,
-                         NULL, GetLastError(),
-                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                         (LPWSTR)&sMsg, 0, NULL);
-    errObj = Tcl_NewStringObj(prefix, -1);
-    Tcl_AppendToObj(errObj, ": ", -1);
-    Tcl_AppendUnicodeToObj(errObj, (LPWSTR)sMsg, len - 1);
-    LocalFree(sMsg);
-#elif defined(HAVE_STRERROR)
-    extern int errno;
-    errObj = Tcl_NewStringObj(prefix, -1);
-    Tcl_AppendStringsToObj(errObj, ": ", strerror(errno), NULL);
-#endif
     return errObj;
 }
 
@@ -1849,21 +1328,10 @@ static void
 udpTrace(const char *format, ...)
 {
     va_list args;
-    
-#ifdef WIN32
-
-    static char buffer[1024];
-    va_start (args, format);
-    _vsnprintf(buffer, 1023, format, args);
-    OutputDebugString(buffer);
-
-#else /* ! WIN32 */
 
     va_start (args, format);
     vfprintf(dbg, format, args);
     fflush(dbg);
-
-#endif /* ! WIN32 */
 
     va_end(args);
 }
