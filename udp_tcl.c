@@ -59,7 +59,8 @@ static Tcl_DriverGetOptionProc udpGetOption;
  * Tcl command procedures
  */
 int Udp_CmdProc(ClientData, Tcl_Interp *, int, Tcl_Obj *CONST []);
-int udpOpen(ClientData , Tcl_Interp *, int , CONST84 char * []);
+int udpOpen(ClientData clientData, Tcl_Interp *interp,
+            int objc, struct Tcl_Obj *const *objv);
 int udpConf(ClientData , Tcl_Interp *, int , CONST84 char * []);
 int udpPeek(ClientData , Tcl_Interp *, int , CONST84 char * []);
 
@@ -102,6 +103,28 @@ static Tcl_ChannelType Udp_ChannelType = {
 
 /*
  * ----------------------------------------------------------------------
+ * checkOption --
+ *
+ *  Checks if the specified option is part of the specified command line options.
+ *  Returns 1 if option is present, otherwise 0.
+ * ----------------------------------------------------------------------
+ */
+static int
+hasOption(int argc, CONST84 char * argv[],const char* option )
+{
+       int i;
+       for (i=0;i<argc;i++) {
+               if (strcmp(option, argv[i])==0) {
+                       /* Option found. */
+                       return 1;
+               }
+       }
+       return 0;
+}
+
+
+/*
+ * ----------------------------------------------------------------------
  * udpInit
  * ----------------------------------------------------------------------
  */
@@ -117,7 +140,7 @@ Udp_Init(Tcl_Interp *interp)
     Tcl_InitStubs(interp, "8.1", 0);
 #endif
 
-    Tcl_CreateCommand(interp, "appc::udp_open", udpOpen ,
+    Tcl_CreateObjCommand(interp, "appc::udp_open", udpOpen ,
                       (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateCommand(interp, "appc::udp_conf", udpConf ,
                       (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
@@ -163,27 +186,6 @@ Udp_CmdProc(ClientData clientData, Tcl_Interp *interp,
 
 /*
  * ----------------------------------------------------------------------
- * checkOption --
- *
- *  Checks if the specified option is part of the specified command line options.
- *  Returns 1 if option is present, otherwise 0.
- * ----------------------------------------------------------------------
- */
-static int
-hasOption(int argc, CONST84 char * argv[],const char* option ) 
-{
-	int i;
-	for (i=0;i<argc;i++) {
-		if (strcmp(option, argv[i])==0) {
-			/* Option found. */
-			return 1;
-		}
-	}
-	return 0;
-}
-
-/*
- * ----------------------------------------------------------------------
  * udpOpen --
  *
  *  opens a UDP socket and addds the file descriptor to the tcl
@@ -192,42 +194,90 @@ hasOption(int argc, CONST84 char * argv[],const char* option )
  */
 int
 udpOpen(ClientData clientData, Tcl_Interp *interp,
-        int argc, CONST84 char * argv[]) 
+        int objc, struct Tcl_Obj *const *objv)
 {
     int sock;
     char channelName[20];
     UdpState *statePtr;
     uint16_t localport = 0;
-    int reuse = 0;
 	struct sockaddr_storage addr,sockaddr;
+    char* addr_string = NULL;
 	socklen_t addr_len;
     unsigned long status = 1;
     socklen_t len;
+    int reusea = 0;
+    int reusep = 0;
 	short ss_family = AF_INET; /* Default ipv4 */ 
-	char errmsg[] = "upd_open [remoteport] [ipv6] [reuse]";
-	int remaining_options = argc;
+    char errmsg[] = "upd_open [-myaddr val] [-reuseaddr] [-reuseport] [remoteport]";
+    int remaining_options = objc;
 	
-    if (argc >= 2) {		
-		if (hasOption(argc,argv,"reuse")) {
-           reuse = 1;
-           remaining_options--;
- 		}
+    static const char *const socketOptions[] = {
+    "-myaddr", "-reuseaddr", "-reuseport",
+    NULL
+    };
 
-		if (hasOption(argc,argv,"ipv6")) {
- 			ss_family = AF_INET6;
- 			remaining_options--;			
- 		}
-		/* The remaining option must be the port (if specified) */
-		if (remaining_options == 2) {
-		   if (udpGetService(interp, argv[1], &localport) != TCL_OK) {
-				Tcl_SetResult (interp, errmsg, NULL);
-				return TCL_ERROR;
-		   }
-		}
-    } 
+    enum udpOptions {UDP_MYADDR, UDP_REUSEADDR, UDP_REUSEPORT};
+
+    int optionIndex = 0;
+    int a;
+    for (a = 1; a < objc; a++) {
+        const char *arg = Tcl_GetString(objv[a]);
+
+        if (arg[0] != '-') {
+            break;
+        }
+        if (Tcl_GetIndexFromObj(interp, objv[a], socketOptions, "option",
+                                TCL_EXACT, &optionIndex) != TCL_OK) {
+            return TCL_ERROR;
+        }
+        switch ((enum udpOptions) optionIndex) {
+
+        case UDP_MYADDR:
+            a++;
+            if (a >= objc) {
+                Tcl_SetObjResult(interp, Tcl_NewStringObj(
+                                     "no argument given for -myaddr option", -1));
+                return TCL_ERROR;
+            }
+            addr_string = Tcl_GetString(objv[a]);
+            break;
+        case UDP_REUSEADDR:
+            a++;
+            if (a >= objc) {
+                Tcl_SetObjResult(interp, Tcl_NewStringObj(
+                                     "no argument given for -reuseaddr option", -1));
+                return TCL_ERROR;
+            }
+            if (Tcl_GetBooleanFromObj(interp, objv[a], &reusea) != TCL_OK) {
+                return TCL_ERROR;
+            }
+            break;
+        case UDP_REUSEPORT:
+            a++;
+            if (a >= objc) {
+                Tcl_SetObjResult(interp, Tcl_NewStringObj(
+                                     "no argument given for -reuseport option", -1));
+                return TCL_ERROR;
+            }
+            if (Tcl_GetBooleanFromObj(interp, objv[a], &reusep) != TCL_OK) {
+                return TCL_ERROR;
+            }
+            break;
+        default:
+            Tcl_Panic("Tcl_UdpObjCmd: bad option index to SocketOptions");
+        }
+    }
+
+    /* The remaining option must be the port (if specified) */
+    if (a < objc) {
+       if (udpGetService(interp, Tcl_GetString(objv[a]), &localport) != TCL_OK) {
+            Tcl_SetResult (interp, errmsg, NULL);
+            return TCL_ERROR;
+       }
+    }
     memset(channelName, 0, sizeof(channelName));
     
-	sock = socket(ss_family, SOCK_DGRAM, 0);
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         snprintf(errBuf, 255, "failed to create socket");
         errBuf[255] = 0;
@@ -236,50 +286,48 @@ udpOpen(ClientData clientData, Tcl_Interp *interp,
         return TCL_ERROR;
     } 
 
-    /*
-     * bug #1477669: avoid socket inheritence after exec
-     */
-
-#if HAVE_FLAG_FD_CLOEXEC
-    fcntl(sock, F_SETFD, FD_CLOEXEC);
-#else
-#ifdef WIN32
-    if (SetHandleInformation((HANDLE)sock, HANDLE_FLAG_INHERIT, 0) == 0) {
-        Tcl_AppendResult(interp, "failed to set close-on-exec bit", NULL);
-        return TCL_ERROR;
-    }
-#endif /* WIN32 */
-#endif /* HAVE_FLAG_FD_CLOEXEC */
-
-    if (reuse) {
-        int one = 1;
-#ifdef SO_REUSEPORT
+    int one = 1;
+    if (reusep) {
         if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT,
                        (const char *)&one, sizeof(one)) < 0) {
-#else
+            Tcl_SetObjResult(interp,
+                            ErrorToObj("error setting socket option reuseport"));
+            closesocket(sock);
+        }
+    }
+
+    if(reusea)
+    {
         if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
                        (const char *)&one, sizeof(one)) < 0) {
-#endif
-             Tcl_SetObjResult(interp, 
-                             ErrorToObj("error setting socket option"));
+             Tcl_SetObjResult(interp,
+                             ErrorToObj("error setting socket option reuseaddr"));
             closesocket(sock);
             return TCL_ERROR;
         }
     }
-     
-	memset(&addr, 0, sizeof(addr));
-	if (ss_family == AF_INET6) {
-		((struct sockaddr_in6 *) &addr)->sin6_family = AF_INET6;
-		((struct sockaddr_in6 *) &addr)->sin6_port = localport;
-		addr_len = sizeof(struct sockaddr_in6);
-	} else {
-		((struct sockaddr_in *) &addr)->sin_family = AF_INET;
-		((struct sockaddr_in *) &addr)->sin_port = localport;
-		addr_len = sizeof(struct sockaddr_in);
-	}
-	if ( bind(sock,(struct sockaddr *)&addr, addr_len) < 0) {
-        Tcl_SetObjResult(interp, 
-                         ErrorToObj("failed to bind socket to port"));
+    memset(&addr, 0, sizeof(addr));
+    if(addr_string != NULL)
+    {
+        int addr_parsed = inet_pton(AF_INET, addr_string, &((struct sockaddr_in *) &addr)->sin_addr);
+        switch(addr_parsed)
+        {
+        case 0:
+            Tcl_SetResult(interp, "Error parsing udp address", TCL_STATIC);
+            return TCL_ERROR;
+        case -1:
+            Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing ip address: %s", Tcl_ErrnoMsg(errno)));
+            return TCL_ERROR;
+        default:
+
+            break;
+        }
+    }
+    ((struct sockaddr_in *) &addr)->sin_family = AF_INET;
+    ((struct sockaddr_in *) &addr)->sin_port = localport;
+    addr_len = sizeof(struct sockaddr_in);
+    if(bind(sock,(struct sockaddr *)&addr, addr_len) < 0) {
+        Tcl_SetObjResult(interp, Tcl_ObjPrintf("failed to bind socket to port: %s", Tcl_ErrnoMsg(errno)));
 
         closesocket(sock);
         return TCL_ERROR;
@@ -315,7 +363,6 @@ udpOpen(ClientData clientData, Tcl_Interp *interp,
 	statePtr->ss_family = ss_family;
     Tcl_RegisterChannel(interp, statePtr->channel);
 
-    /* Tcl_SetChannelOption(interp, statePtr->channel, "-blocking", "0"); */
     Tcl_AppendResult(interp, channelName, (char *)NULL);
     return TCL_OK;
 }
@@ -327,7 +374,7 @@ udpOpen(ClientData clientData, Tcl_Interp *interp,
 */
 int
 udpConf(ClientData clientData, Tcl_Interp *interp,
-		int argc, CONST84 char * argv[]) 
+        int argc, CONST84 char * argv[])
 {
 	Tcl_Channel chan;
 	char remoteOptions[255];

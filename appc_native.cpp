@@ -532,6 +532,9 @@ extern "C" {
 int
 Pty_Init(Tcl_Interp *interp);
 
+int
+Udp_Init(Tcl_Interp *interp);
+
 extern int Appctcl_Init(Tcl_Interp* interp)
 {
     if(Tcl_InitStubs(interp, "8.6", 0) == nullptr)
@@ -545,6 +548,7 @@ extern int Appctcl_Init(Tcl_Interp* interp)
     init_url(interp);
     init_exec(interp);
     Pty_Init(interp);
+    Udp_Init(interp);
     Tcl_PkgProvide(interp, "appc::native", "1.0.0");
 
     return TCL_OK;

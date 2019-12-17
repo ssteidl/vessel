@@ -2,7 +2,6 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require TclOO
-package require udp
 
 package require appc::native
 
@@ -66,11 +65,6 @@ namespace eval appc::dns {
                 puts "Transform destructor"
             }
         }
-
-        proc read_ready_handler {dns_server} {
-
-            $dns_server _pkt_ready
-        }
         
         oo::class create DNSServer {
 
@@ -78,22 +72,24 @@ namespace eval appc::dns {
             variable udp_channel
             variable message_channel
 
-            constructor {port} {
+            constructor {port ip} {
 
-                set udp_channel [udp_open $port]
+                #Add support for listening on a specific ip
+                #address
+                set udp_channel [appc::udp_open -myaddr $ip $port]
                 fconfigure $udp_channel -translation binary -buffering none -blocking false
 
                 #TODO: Proper way to delete this
                 set dns_transform [appc::dns::_::transform new]
                 set message_channel [chan push $udp_channel $dns_transform]
-                fileevent $udp_channel readable [list [self] _pkt_ready]
+                fileevent $udp_channel readable [list [self] pkt_ready]
 
             }
 
-            method _pkt_ready {} {
+            method pkt_ready {} {
 
                 set pkt [read $message_channel]
-                fconfigure $sock -remote [fconfigure $udp_channel -peer]
+                fconfigure $udp_channel -remote [fconfigure $udp_channel -peer]
 
                 #TODO: Lookup ip address
                 set response [dict create]
@@ -106,18 +102,20 @@ namespace eval appc::dns {
             }
 
             method add_lookup_mapping {name ip} {
-                set store [dict set $store $name $ip}
+                set store [dict set store $name $ip]
             }
             
             destructor {
                 close $udp_channel
             }
+            
         }
     }
 
-    proc create_server {{port 53}} {
+    proc create_server {{port 53} {ip {0.0.0.0}}} {
 
-        return [_::DNSServer new $port]
+        return [_::DNSServer new $port $ip]
     }
 }
 
+package provide appc::dns 1.0.0
