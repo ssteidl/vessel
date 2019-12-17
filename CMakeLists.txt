@@ -14,7 +14,8 @@ add_library(appctcl SHARED
     tcl_util.cpp
     url_cmd.cpp
     pty.cpp
-    exec.cpp)
+    exec.cpp
+    udp_tcl.c)
 
 target_link_libraries(appctcl ${CURL_LIBRARIES})
 
