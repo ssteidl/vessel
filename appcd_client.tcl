@@ -18,7 +18,6 @@ namespace eval appcd::client {
 	    debug.client "Connecting..."
 	    
 	    #TODO: Use unix socket so we can check permissions
-	    #TODO: Connect async as part of coroutine
 	    set appcd_channel [socket {localhost} $port]
 	    debug.client "Connected"
 	    
@@ -57,8 +56,25 @@ namespace eval appcd::client {
 		
 		debug.client "pty shell exited.  Exiting event loop."
 		variable vwait_var
+
+		#TODO: Increment vwait var instead of directly exiting.
 		exit 0
 	    }
+	}
+
+	proc pull_coroutine {options} {
+	    set appcd_chan [connect 6432]
+	    set appcd_msg [dict create cli_options $options]
+	    fileevent $appcd_chan readable [info coroutine]
+
+	    #Send the request
+	    puts $appcd_chan $appcd_msg
+
+	    #Wait for a response or the connection to close
+	    yield
+
+	    puts stderr "exiting"
+	    exit 0
 	}
     }
 
@@ -69,6 +85,9 @@ namespace eval appcd::client {
 	switch -exact $command {
 	    run {
 		coroutine client_coro _::run_coroutine $options
+	    }
+	    pull {
+		coroutine client_coro _::pull_coroutine $options
 	    }
 	    default {
 		puts stderr "Unknown command: $command"

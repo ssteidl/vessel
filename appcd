@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
-
+package require Tcl 8.6
 package require TclOO
 package require appc::env
 package require appc::network
@@ -8,6 +8,8 @@ package require appc::pull
 package require appc::run
 package require debug
 package require debug::heartbeat
+package require defer
+package require dicttool
 
 #NOTES: Quick notes on first features of the daemon
 #since i'm in a plane and can't get online.
@@ -35,96 +37,111 @@ namespace eval appcd::_ {
     debug define appcd
     debug on appcd 1 stderr
 
-    variable connections [list]
-    variable networks [dict create]
 
-    #For the first iteration, commands will just be line delimited tcl dicts
-    # send over localhost.
-    proc handle_data_available {conn} {
+    proc read_msgs_coro {channel clientaddr clientport cb_coro} {
+        #Read a message from the channel and yield to the callback coroutine
 
-        set msg [$conn read_msg]
-        if {$msg eq {}} {
-
-            puts stderr "Data available but not a complete msg"
-            return -code ok
-        }
-
-        puts stderr $msg
-        set command [dict get $msg cli_options command]
-        set args [dict get $msg cli_options args]
-
-        switch -exact $command {
-            pull {
-                appc::pull::pull_command $args
-            }
-            run {
-
-                set pty [dict get $msg pty]
-                set interactive false
-
-                coroutine ${conn}_run_coro appc::run::run_command $pty $args
-            }
-            create-network {
-                appc::network::create_network $args
-            }
-            default {
-                debug.appcd "Unknown command $command"
-            }
-        }
-    }
-    
-    oo::class create Connection {
-
-        variable channel
-        variable clientaddr
-        variable clientport
-        
-        constructor {_channel _clientaddr _clientport \
-                     _readable_script} {
-
-            set channel $_channel
-            set clientaddr $_clientaddr
-            set clientport $_clientport
-
-            fconfigure $channel -encoding {utf-8} \
-                -blocking 0 \
-                -buffering line \
-                -buffersize 2048 \
-                -translation crlf
-
-            chan event $channel readable [list $_readable_script [self] ]
-        }
-
-        
-        method read_msg {} {
-
+        yield
+        while {true} {
             set msg {}
             gets $channel msg
             if {[fblocked $channel]} {
+                debug.appcd "Full msg not available.  Waiting for more data"
 
-                puts stderr "Full msg not available.  Waiting for more data"
+                #No message available, setup the callback for when data becomes available
+                chan event $channel readable [info coroutine]
+                yield
+                continue
             } elseif {[eof $channel]} {
-                puts stderr "EOF for channel found (${clientaddr}:${clientport}).  Closing connection."
-                close $channel
-            }
+                debug.appcd "EOF for channel found (${clientaddr}:${clientport}). Closing connection."
 
-            return $msg
+                chan event $channel readable {}
+                
+                #Yield an empty message which signals the connection has closed.  The
+                #receiving coroutine is responsible for deleting this coroutine
+                yieldto $cb_coro {}
+            } else {
+                #Message available.
+
+                #Delete the handle until we are ready for another message
+                chan event $channel readable {}
+
+                #Give the msg to the interested coroutine
+                yieldto $cb_coro $msg
+            }
         }
+
+        return -code error -errorcode {APPCD UNEXPECTED} "Reached the end of message generator"
     }
 
-    proc add_connection {connection} {
+    
+    #For the first iteration, commands will just be line delimited tcl dicts
+    # send over localhost.
+    proc request_coroutine {channel clientaddr clientport} {
 
-        variable connections
-        lappend connections $connection
-        debug.appcd "Connection added"
+        set msg_generator_name ${channel}_msg_generator
+        coroutine $msg_generator_name read_msgs_coro $channel $clientaddr $clientport [info coroutine]
+        defer::with [list channel] {
+            close $channel
+            rename $msg_generator_name {}
+        }
+        
+        fconfigure $channel \
+            -encoding {utf-8} \
+            -blocking 0 \
+            -buffering line \
+            -buffersize 2048 \
+            -translation crlf
+
+        #Initialization yield
+        yield
+        
+        while {true} {
+           
+            debug.appcd "Yielding to message generator"
+            set msg [yieldto $msg_generator_name]
+
+            #I'm not sure why but for some reason the message is a list
+            #of length one containing a string that is the message
+            set msg [lindex $msg 0]
+
+            if {$msg eq {}} {
+
+                appcd.debug "No more messages available on channel.  Exiting processing coroutine"
+                return -code ok
+            }
+
+            set command [dict get $msg cli_options command]
+            set args [dict get $msg cli_options args]
+            switch -exact $command {
+                pull {
+                    appc::pull::pull_command $args
+                }
+                run {
+                    set pty [dict get $msg pty]
+                    set run_coro_name ${conn}_run_coro
+                    coroutine $run_coro_name appc::run::run_command $pty $args
+                    yieldto $run_coro_name
+                }
+                create-network {
+                    appc::network::create_network $args
+                }
+                default {
+                    debug.appcd "Unknown command $command"
+                }
+            }
+        }
     }
 }
 
 proc new_connection {channel clientaddr clientport} {
 
     debug.appcd "New connection found"
-    appcd::_::add_connection [appcd::_::Connection new $channel $clientaddr $clientport \
-                                  [list appcd::_::handle_data_available]]
+    set coro_name ${channel}.${clientaddr}.${clientport}-request_coro
+    coroutine $coro_name appcd::_::request_coroutine $channel $clientaddr $clientport
+
+    #Start the coroutine outside of the context of this proc
+    after idle $coro_name
 }
 
 #Needed for the heartbeat module
@@ -145,15 +162,6 @@ proc init_zpool {} {
         debug.appcd "ZFS pool '$pool' is not mounted.  Attempting to mount now"
         appc::zfs::mount $pool
     }
-}
-
-proc init_networking {} {
-    #Initialize the bridge
-    set bridge_name {acbridge0}
-    set bridge_obj [appc::network::bridge new $bridge_name]
-
-    #Initialize the epair interface for appcd and any other program
-    # on the host to communicate with the bridge
 }
 
 #TODO Unix socket so we can restrict connections based on

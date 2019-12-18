@@ -164,7 +164,7 @@ namespace eval appc::pull {
 	}
     }
     
-    proc pull {image tag repo_url} {
+    proc pull {image tag repo_url status_channel} {
 	debug.pull "pull{}: ${image},${tag},${repo_url}"
 
 	set image_repo_path [string cat $repo_url / "${image}:${tag}.zip"]
@@ -181,11 +181,15 @@ namespace eval appc::pull {
 
 	set extracted_path [file join $downloaddir "${image}:${tag}"]
 
-	exec unzip -d $extracted_path [file join $downloaddir "${image}:${tag}.zip"] >&@ stderr
+	#Extract files into extracted_path overriding files that already exist.
+	exec unzip -o -d $extracted_path [file join $downloaddir "${image}:${tag}.zip"] >&@ $status_channel
 	_::create_layer $image $tag $extracted_path
     }
 
-    proc pull_command {args_dict} {
+    #Pull args_dict keys:
+    # -image
+    # -tag
+    proc pull_command {args_dict {status_channel stderr}} {
 
 	debug.pull "args: $args_dict"
 
@@ -199,7 +203,7 @@ namespace eval appc::pull {
 
 	set repo [appc::env::get_repo_url]
 
-	pull $image $tag $repo
+	pull $image $tag $repo $status_channel
     }
 }
 
