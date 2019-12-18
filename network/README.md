@@ -21,7 +21,7 @@ The following networking features should be supported
 `appc run devel:0 -- bash`
 
 * Create an internal network
-`appc create-network --name="shane-net" --dns="postgres-dev:192.168.3.2"
+`appc create-network --name="shane-net" --dns="postgres-dev:192.168.3.2:<ttl>"
 
 * Run with internal network that is nat'd for outside world
   access.  Network vlan is created if it doesn't yet exist

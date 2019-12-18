@@ -159,5 +159,5 @@ proc init_networking {} {
 #TODO Unix socket so we can restrict connections based on
 #group permissions
 socket -server [list new_connection] -myaddr 127.0.0.1 6432
-debug::heartbeat 1000
+debug::heartbeat [expr 1000 * 60]
 vwait _forever_
