@@ -89,27 +89,38 @@ namespace eval appc::dns {
             method pkt_ready {} {
 
                 #Callback method invoked when the udp channel has a packet ready
-                
+
+                #Read the packet
                 set pkt [read $message_channel]
+
+                #Configure the channel for response
                 fconfigure $udp_channel -remote [fconfigure $udp_channel -peer]
 
+                #Create the response from the stored entries
                 set address {}
                 set qname [dict getnull $pkt "qname"]
                 if {$qname ne {}} {
-                    set address [dict getnull $store $qname]
+                    set entry [dict getnull $store $qname]
+                    set address [lindex $entry 0]
+                    set ttl [lindex $entry 1]
                 }
 
+                if {$ttl eq {}} {
+                    set ttl 0
+                }
+                
                 set response [dict create]
                 dict set response address $address
                 dict set response raw_query [dict get $pkt raw_query]
-                dict set response ttl 30
+                dict set response ttl $ttl
 
+                #Respond
                 puts -nonewline $message_channel $response
                 flush $message_channel       
             }
 
-            method add_lookup_mapping {name ip} {
-                set store [dict set store $name $ip]
+            method add_lookup_mapping {name ip {ttl 0}} {
+                set store [dict set store $name [list $ip $ttl]]
             }
             
             destructor {
