@@ -53,7 +53,7 @@ namespace eval appc::jail {
         #Interactive
         set pty_chan [open $pty RDWR]
         set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
-        appc::exec $chan_dict $callback {*}$jail_command
+        appc::exec $chan_dict [list $callback $pty_chan] {*}$jail_command
     }
 }
 

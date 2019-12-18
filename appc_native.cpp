@@ -153,6 +153,7 @@ namespace
             {"rm", no_argument, nullptr, 'r'},
             {"tag", required_argument, nullptr, 't'},
             {"interactive", no_argument, nullptr, 'i'},
+            {"name", required_argument, nullptr, 'n'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -165,7 +166,7 @@ namespace
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         bool interactive = false;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:n:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -183,6 +184,12 @@ namespace
                 break;
             case 'i':
                 interactive = true;
+                break;
+            case 'n':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("name", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));

@@ -8,7 +8,7 @@ package require TclOO
 #Pull is responsible for retrieving and unpacking an image
 namespace eval appc::pull {
 
-    debug define repo
+    debug define pull
     debug on pull 1 stderr
 
     namespace eval _ {
@@ -90,13 +90,12 @@ namespace eval appc::pull {
 		    file mkdir $downloaddir
 		}
 
-		debug.repo "Copying image: ${image_path} -> ${downloaddir}"
+		debug.pull "Copying image: ${image_path} -> ${downloaddir}"
 		try {
 		    file copy $image_path $downloaddir
 		} trap {POSIX EEXIST} {1 2} {
-		    debug.repo "Image already exists.  Continuing"
+		    debug.pull "Image already exists.  Continuing"
 		}
-
 	    }
 
 	    method put_image {image tag} {
@@ -108,7 +107,7 @@ namespace eval appc::pull {
 	    }
 	}
 
-	proc create_layer {image_name version image_dir} {
+	proc create_layer {image_name version image_dir status_channel} {
 
 	    #TODO: Fix this it's gross.  We don't know the uuid so
 	    # we glob in the image_dir and use what should be the only thing there
@@ -142,7 +141,6 @@ namespace eval appc::pull {
 
 	    if {![appc::zfs::snapshot_exists ${new_dataset}@a]} {
 	    
-	    
 		appc::zfs::create_snapshot ${new_dataset} a
 	    }
 	    
@@ -151,15 +149,24 @@ namespace eval appc::pull {
 	    #dataset without a parent.  So for example, the appcdevel image (named devel) can't
 	    #have a dataset called <appc_pool>/jails/devel/0 without first having <appc_pool>/jails/devel
 	    set versioned_new_dataset [appc::env::get_dataset_from_image_name $image_name $version]
-	    appc::zfs::clone_snapshot ${new_dataset}@a $versioned_new_dataset
-	    
-	    appc::zfs::create_snapshot $versioned_new_dataset a
+	    if {![appc::zfs::dataset_exists $versioned_new_dataset]} {
+		appc::zfs::clone_snapshot ${new_dataset}@a $versioned_new_dataset
+	    }
+
+	    if {![appc::zfs::snapshot_exists ${versioned_new_dataset}@a]} {
+		appc::zfs::create_snapshot $versioned_new_dataset a
+	    }
 	    #Untar layer on top of parent file system
 	    set mountpoint [appc::zfs::get_mountpoint $versioned_new_dataset]
-	    exec tar -C $mountpoint -xvf [file join $image_dir ${uuid}-layer.tgz] >&@ stderr
+	    exec tar -C $mountpoint -xvf [file join $image_dir ${uuid}-layer.tgz] >&@ $status_channel
+	    flush $status_channel
 
 	    #TODO: delete files from whitelist
-	    
+	    if {[appc::zfs::snapshot_exists ${versioned_new_dataset}@b]} {
+	        #If the b snapshot already exists then we need to delete it and
+		#make a new one.
+		appc::zfs::destroy ${versioned_new_dataset}@b
+	    }
 	    appc::zfs::create_snapshot $versioned_new_dataset b
 	}
     }
@@ -183,7 +190,7 @@ namespace eval appc::pull {
 
 	#Extract files into extracted_path overriding files that already exist.
 	exec unzip -o -d $extracted_path [file join $downloaddir "${image}:${tag}.zip"] >&@ $status_channel
-	_::create_layer $image $tag $extracted_path
+	_::create_layer $image $tag $extracted_path $status_channel
     }
 
     #Pull args_dict keys:

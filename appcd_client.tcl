@@ -70,9 +70,23 @@ namespace eval appcd::client {
 	    #Send the request
 	    puts $appcd_chan $appcd_msg
 
-	    #Wait for a response or the connection to close
-	    yield
+	    #Response loop
+	    while {true} {
+		#Wait for a response or the connection to close
+		yield
 
+		gets $appcd_chan msg
+
+		if {$msg ne {}} {
+		    puts stdout $msg
+		} else {
+		    if {[fblocked $appcd_chan]} {
+			continue
+		    } elseif {[eof $appcd_chan]} {
+			break
+		    }
+		}
+	    }
 	    puts stderr "exiting"
 	    exit 0
 	}

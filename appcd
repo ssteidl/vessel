@@ -96,39 +96,36 @@ namespace eval appcd::_ {
         #Initialization yield
         yield
         
-        while {true} {
-           
-            debug.appcd "Yielding to message generator"
-            set msg [yieldto $msg_generator_name]
+        debug.appcd "Yielding to message generator"
+        set msg [yieldto $msg_generator_name]
 
-            #I'm not sure why but for some reason the message is a list
-            #of length one containing a string that is the message
-            set msg [lindex $msg 0]
+        #I'm not sure why but for some reason the message is a list
+        #of length one containing a string that is the message
+        set msg [lindex $msg 0]
+        debug.appcd "Message received: $msg"
+        if {$msg eq {}} {
 
-            if {$msg eq {}} {
+            debug.appcd "No more messages available on channel.  Exiting processing coroutine"
+            return -code ok
+        }
 
-                appcd.debug "No more messages available on channel.  Exiting processing coroutine"
-                return -code ok
+        set command [dict get $msg cli_options command]
+        set args [dict get $msg cli_options args]
+        switch -exact $command {
+            pull {
+                appc::pull::pull_command $args $channel
             }
-
-            set command [dict get $msg cli_options command]
-            set args [dict get $msg cli_options args]
-            switch -exact $command {
-                pull {
-                    appc::pull::pull_command $args
-                }
-                run {
-                    set pty [dict get $msg pty]
-                    set run_coro_name ${conn}_run_coro
-                    coroutine $run_coro_name appc::run::run_command $pty $args
-                    yieldto $run_coro_name
-                }
-                create-network {
-                    appc::network::create_network $args
-                }
-                default {
-                    debug.appcd "Unknown command $command"
-                }
+            run {
+                set pty [dict get $msg pty]
+                set run_coro_name ${channel}.${clientaddr}.{clientport}_run_coro
+                coroutine $run_coro_name appc::run::run_command $pty $args [info coroutine]
+                yieldto $run_coro_name 
+            }
+            create-network {
+                appc::network::create_network $args
+            }
+            default {
+                debug.appcd "Unknown command $command"
             }
         }
     }

@@ -40,15 +40,17 @@ namespace eval appc::run {
         }
     }
 
-    proc run_command {pty args_dict} {
-        
+    proc run_command {pty args_dict cb_coro} {
+
         puts $args_dict
 
-        defer::with pty {
-            if {$pty ne {}} {
-                close $pty
-            }
+        defer::with [list cb_coro] {
+            after idle $cb_coro
         }
+
+        #Initialization yield
+        yield
+
         #TODO: IMAGE should be it's own class
         set image [dict get $args_dict "image"]
         set image_components [split $image :]
@@ -105,14 +107,18 @@ namespace eval appc::run {
             appc::jail::run_jail $hostname $mountpoint $pty $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
-            puts stderr $error_msg
+            puts stderr "Error running jail: $error_msg"
         }
 
         #Wait for the command to finish
-        yield
-
+        set pty_chan [yield]
         debug.run "Container exited. Cleaning up"
+        catch {
+            debug.run "Closing pty channel: $pty_chan"
+            close $pty_chan
+        }
 
+        debug.run "Unmounting jail mount paths"
         appc::bsd::umount $jailed_mount_path
         appc::bsd::umount [file join $mountpoint dev]
 
