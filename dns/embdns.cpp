@@ -205,27 +205,42 @@ const std::vector<unsigned char>& dns_query::raw() const
 }
 
 dns_A_response::dns_A_response(uint16_t id,
-                               const std::string& name,
-                               in_addr_t result_addr,
-                               uint32_t ttl)
+                               const std::string& name)
     : dns_message(),
       name(name),
-      addr(result_addr),
-      ttl(ttl)
+      addr(),
+      ttl(0)
 {
+    memset(&addr, 0, sizeof(addr));
     //TODO: A few more of these values need to come from the request
     m_header.set_id(id)
-            .set_response(true)
+            .set_response(false)
             .set_opcode(0)
-            .set_authoritative(true)
+            .set_authoritative(false)
             .set_recursion_desired(false)
             .set_truncation(false)
             .set_recursion_available(false)
             .set_response_code(0)
             .set_question_count(1)
-            .set_answer_count(1)
+            .set_answer_count(0)
             .set_nscount(0)
             .set_additional_records_count(0);
+}
+
+
+dns_A_response::dns_A_response(uint16_t id,
+                               const std::string& name,
+                               in_addr_t result_addr,
+                               uint32_t ttl)
+    : dns_A_response(id, name)
+{
+    this->addr = result_addr;
+    this->ttl = ttl;
+
+    //TODO: A few more of these values need to come from the request
+    m_header.set_response(true)
+            .set_authoritative(true)
+            .set_answer_count(1);
 }
 
 size_t dns_A_response::serialize(std::array<uint8_t, 512>& msg_buf,
@@ -272,6 +287,14 @@ size_t dns_A_response::serialize(std::array<uint8_t, 512>& msg_buf,
 dns_query embdns::parse_packet(const uint8_t* pkt, size_t size)
 {
     return dns_query(pkt, size);
+}
+
+
+size_t embdns::generate_response(std::array<uint8_t, dns_message::MAX_SIZE>& pkt_buf,
+                               dns_query& assoc_query)
+{
+    dns_A_response response(assoc_query.header().id, assoc_query.qname);
+    return response.serialize(pkt_buf, assoc_query.raw().data(), assoc_query.raw().size());
 }
 
 size_t embdns::generate_response(std::array<uint8_t, dns_message::MAX_SIZE>& pkt_buf,

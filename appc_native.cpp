@@ -497,7 +497,16 @@ namespace
         }
 
         std::array<uint8_t, embdns::dns_message::MAX_SIZE> pkt_buf;
-        size_t response_size = embdns::generate_response(pkt_buf, query, addr, ttl);
+        size_t response_size = 0;
+
+        if(!addr.empty())
+        {
+            response_size = embdns::generate_response(pkt_buf, query, addr, ttl);
+        }
+        else
+        {
+            response_size = embdns::generate_response(pkt_buf, query);
+        }
         Tcl_Obj* response_buf_obj = Tcl_NewByteArrayObj(pkt_buf.data(), (int)response_size);
         Tcl_SetObjResult(interp, response_buf_obj);
         return TCL_OK;

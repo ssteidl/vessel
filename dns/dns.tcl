@@ -2,7 +2,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require TclOO
-
+package require dicttool
 package require appc::native
 
 namespace eval appc::dns {
@@ -88,12 +88,19 @@ namespace eval appc::dns {
 
             method pkt_ready {} {
 
+                #Callback method invoked when the udp channel has a packet ready
+                
                 set pkt [read $message_channel]
                 fconfigure $udp_channel -remote [fconfigure $udp_channel -peer]
 
-                #TODO: Lookup ip address
+                set address {}
+                set qname [dict getnull $pkt "qname"]
+                if {$qname ne {}} {
+                    set address [dict getnull $store $qname]
+                }
+
                 set response [dict create]
-                dict set response address "192.168.3.7"
+                dict set response address $address
                 dict set response raw_query [dict get $pkt raw_query]
                 dict set response ttl 30
 

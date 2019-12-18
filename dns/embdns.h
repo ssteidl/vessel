@@ -93,6 +93,10 @@ namespace embdns {
         in_addr_t addr;
         uint32_t ttl;
 
+        /**Empty response*/
+        dns_A_response(uint16_t id,
+                       const std::string& name);
+
         dns_A_response(uint16_t id,
                        const std::string& name,
                        in_addr_t result_addr,
@@ -103,6 +107,11 @@ namespace embdns {
     };
 
     dns_query parse_packet(const uint8_t* pkt, size_t size);
+
+
+    size_t generate_response(std::array<uint8_t, dns_message::MAX_SIZE>& pkt_buf,
+                             dns_query& assoc_query);
+
     size_t generate_response(std::array<uint8_t, dns_message::MAX_SIZE>& pkt_buf,
                              dns_query& assoc_query, /*Corresponding query*/
                              const std::string& address,
