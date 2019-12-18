@@ -55,6 +55,7 @@ namespace eval appc::run {
         set image [dict get $args_dict "image"]
         set image_components [split $image :]
         set image_name [lindex $image_components 0]
+        set network [dict get $args_dict "network"]
         set tag {latest}
         if {[llength $image_components] > 1} {
             set tag [lindex $image_components 1]
@@ -66,6 +67,7 @@ namespace eval appc::run {
 
         set image_dataset [appc::env::get_dataset_from_image_name $image_name $tag]
         debug.run "RUN COMMAND image dataset: $image_dataset"
+
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
         }
@@ -89,7 +91,6 @@ namespace eval appc::run {
 
         set jailed_mount_path {}
         if {[dict exists $args_dict "volume"]} {
-
             set jailed_mount_path [_::handle_volume_argument $mountpoint [dict get $args_dict "volume"]]
         }
 
@@ -98,13 +99,12 @@ namespace eval appc::run {
         set command [dict get $args_dict "command"]
         set hostname "appc-container"
         if {[dict exists $args_dict "name" ]} {
-            
             set hostname [dict get $args_dict "name"]
         }
 
         set coro_name [info coroutine]
         set error [catch {
-            appc::jail::run_jail $hostname $mountpoint $pty $coro_name {*}$command
+            appc::jail::run_jail $hostname $mountpoint $pty $network $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
             puts stderr "Error running jail: $error_msg"

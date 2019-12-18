@@ -154,6 +154,7 @@ namespace
             {"tag", required_argument, nullptr, 't'},
             {"interactive", no_argument, nullptr, 'i'},
             {"name", required_argument, nullptr, 'n'},
+            {"network", required_argument, nullptr, 'u'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -166,7 +167,8 @@ namespace
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         bool interactive = false;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:n:", long_opts, nullptr)) != -1)
+        std::string network("inherit");
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:n:u:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -190,6 +192,9 @@ namespace
                                            Tcl_NewStringObj("name", -1),
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
+                break;
+            case 'u':
+                network = optarg;
                 break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
@@ -220,6 +225,11 @@ namespace
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("interactive", -1),
                                    Tcl_NewBooleanObj(interactive));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("network", -1),
+                                   Tcl_NewStringObj(network.c_str(), network.size()));
         if(tcl_error) return tcl_error;
 
         if(optind == argc)

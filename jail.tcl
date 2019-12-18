@@ -7,8 +7,19 @@ namespace eval appc::jail {
 
     namespace eval _ {
 
+        proc build_network_parameters {network_param} {
+
+            if {$network_param eq "inherit"} {
+                return [list "ip4" "inherit"]
+            } elseif {$network_param ne {}} {
+                return [list "vnet" "1"]
+            } else {
+                return [list]
+            }
+        }
+        
         #Build the jail command which can be exec'd
-        proc build_command {name mountpoint args} {
+        proc build_command {name mountpoint network args} {
 
             #TODO: Allow run jail command parameters to be overridden
             #TODO: Support ip4=inherit
@@ -19,7 +30,7 @@ namespace eval appc::jail {
                                            "allow.mount" "1" \
                                            "allow.mount.devfs" "1" \
                                            "mount.devfs" "1" \
-                                           "vnet" "1"]
+                                           {*}[build_network_parameters $network]]
 
             #TODO: Allow user to configure shell parameter
             set shell {/bin/sh}
@@ -44,9 +55,9 @@ namespace eval appc::jail {
         puts stderr "Temp callback for jail complete"
     }
     
-    proc run_jail {name mountpoint pty callback args} {
+    proc run_jail {name mountpoint pty network callback args} {
 
-        set jail_command [_::build_command $name $mountpoint {*}$args]
+        set jail_command [_::build_command $name $mountpoint $network {*}$args]
         puts stderr "JAIL COMMAND: $jail_command"
         puts stderr "using pty: $pty"
 
