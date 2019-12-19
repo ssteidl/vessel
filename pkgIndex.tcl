@@ -13,3 +13,4 @@ package ifneeded appc::pull 1.0.0 [list source [file join $dir pull.tcl]]
 package ifneeded appc::run 1.0.0 [list source [file join $dir run.tcl]]
 package ifneeded appc::zfs 1.0.0 [list source [file join $dir zfs.tcl]]
 
+package ifneeded AppcFileCommands 1.0.0 [list source [file join $dir appc_file_commands.tcl]]

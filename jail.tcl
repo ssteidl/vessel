@@ -55,16 +55,12 @@ namespace eval appc::jail {
         puts stderr "Temp callback for jail complete"
     }
     
-    proc run_jail {name mountpoint pty network callback args} {
+    proc run_jail {name mountpoint chan_dict network callback args} {
 
         set jail_command [_::build_command $name $mountpoint $network {*}$args]
         puts stderr "JAIL COMMAND: $jail_command"
-        puts stderr "using pty: $pty"
 
-        #Interactive
-        set pty_chan [open $pty RDWR]
-        set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
-        appc::exec $chan_dict [list $callback $pty_chan] {*}$jail_command
+        appc::exec $chan_dict $callback {*}$jail_command
     }
 }
 

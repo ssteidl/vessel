@@ -90,6 +90,35 @@ namespace eval appcd::client {
 	    puts stderr "exiting"
 	    exit 0
 	}
+
+	proc build_coroutine {options} {
+	    set appcd_chan [connect 6432]
+	    set appcd_msg [dict create cli_options $options]
+	    fileevent $appcd_chan readable [info coroutine]
+
+	    #Send the request
+	    puts $appcd_chan $appcd_msg
+
+	    #Response loop
+	    while {true} {
+		#Wait for a response or the connection to close
+		yield
+
+		gets $appcd_chan msg
+
+		if {$msg ne {}} {
+		    puts stdout $msg
+		} else {
+		    if {[fblocked $appcd_chan]} {
+			continue
+		    } elseif {[eof $appcd_chan]} {
+			break
+		    }
+		}
+	    }
+	    puts stderr "exiting"
+	    exit 0
+	}
     }
 
     proc main {options} {
@@ -102,6 +131,9 @@ namespace eval appcd::client {
 	    }
 	    pull {
 		coroutine client_coro _::pull_coroutine $options
+	    }
+	    build {
+		coroutine client_coro _::build_coroutine $options
 	    }
 	    default {
 		puts stderr "Unknown command: $command"

@@ -308,11 +308,18 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
 
     Tcl_Obj* fd_dict = objv[1];
     Tcl_Obj* callback_prefix = objv[2];
+    int tcl_error = TCL_OK;
+
+    int async = 0;
+    /*If the callback is not an empty string then we run the command
+     * async*/
+    (void)Tcl_GetStringFromObj(callback_prefix, &async);
+    if(tcl_error) return tcl_error;
+
     Tcl_DictSearch search;
     Tcl_Obj* key = nullptr;
     Tcl_Obj* value = nullptr;
     int done;
-    int tcl_error = TCL_OK;
     for(tcl_error = Tcl_DictObjFirst(interp, fd_dict, &search, &key, &value, &done);
         done == 0;
         Tcl_DictObjNext(&search, &key, &value, &done))
@@ -362,7 +369,8 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
          * deletion callbacks*/
 
         pid_t process_grpid = 0;
-        if(isatty(stdin_fd))
+        /**/
+        if(isatty(stdin_fd) && stdin_fd != 0)
         {
             process_grpid = setsid();
 
@@ -411,6 +419,7 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
 
         signal(SIGHUP, SIG_DFL);
 
+        /*dup2 handles the case where the fds are the same*/
         int error = dup_fd(stdin_fd, 0, "stdin");
         if(error) exit(1);
 
@@ -441,19 +450,31 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
     default:
     {
         /*Parent*/
-        struct kevent event;
-        void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
-
-        std::cerr << "Forked pid: " << pid << std::endl;
-        new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
-        EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, pge_buffer);
-
-        int error = kevent(state->kqueue_fd, &event, 1, nullptr, 0, nullptr);
-        if(error == -1)
+        if(async)
         {
-            return appc::syserror_result(interp, "EXEC", "MONITOR", "KQUEUE");
-        }
+            struct kevent event;
+            void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
 
+            std::cerr << "Forked pid: " << pid << std::endl;
+            new(pge_buffer) process_group_tcl_event(interp, callback_prefix, pid);
+            EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, pge_buffer);
+
+            int error = kevent(state->kqueue_fd, &event, 1, nullptr, 0, nullptr);
+            if(error == -1)
+            {
+                return appc::syserror_result(interp, "EXEC", "MONITOR", "KQUEUE");
+            }
+        }
+        else
+        {
+            std::cerr << "Blocking wait for child process: " << pid << std::endl;
+            int status = 0;
+            pid_t waitedpid = waitpid(pid, &status, 0);
+            std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
+                      << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
+                      << WIFSTOPPED(status)<< std::endl;
+            std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
+        }
         break;
     }
     }

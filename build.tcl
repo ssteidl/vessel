@@ -1,9 +1,9 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 package require uuid
 package require fileutil
-source definition_file.tcl
-source environment.tcl
-source jail.tcl
+package require appc::definition_file
+package require appc::env
+package require appc::jail
 
 namespace eval appc::build {
 
@@ -45,7 +45,7 @@ namespace eval appc::build {
             exec curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
         }
 
-        proc create_layer {dataset guid} {
+        proc create_layer {dataset guid status_channel} {
 
             puts stderr "create_layer $dataset"
             puts stderr "guid: $guid"
@@ -76,12 +76,11 @@ namespace eval appc::build {
             puts $tar_list_file "$mountpoint"
 
             foreach path $files {
-
                 puts $tar_list_file [fileutil::stripPath "${mountpoint}" $path]
             }
             flush $tar_list_file
             close $tar_list_file
-            exec tar -cavf ${guid}-layer.tgz -n -T {files.txt} >&@ stderr
+            exec tar -cavf ${guid}-layer.tgz -n -T {files.txt} >&@ $status_channel
 
             #TODO: Use a trace to return to the old directory. Or better
             # yet, don't change directory
@@ -89,10 +88,14 @@ namespace eval appc::build {
             return $build_dir
         }
 
-        proc create_image {image_dir image_name image_tag} {
+        proc create_image {image_dir image_name image_tag status_channel} {
             variable cmd
             variable cwd
             variable parent_image
+
+            #TODO: Let's not do this.  Let's just execute the
+            #command provide on the command line or if one is not
+            #provided use '/bin/sh /etc/rc'
             set command [subst {
 #! /bin/sh
 
@@ -117,12 +120,6 @@ $cmd
             set zip_path [file join $workdir ${image_name}:${image_tag}]
             puts stderr "zip_path: $zip_path"
 
-            #Revert to the old director when we pop the stack
-            set traced_pwd [pwd]
-            trace add variable traced_pwd unset [list apply {{traced_pwd name1 name2 op} {
-                cd $traced_pwd
-            }} $traced_pwd]
-
             #Ensure we cd back to the initial directory. Should probably just
             # use tcllib defer
             trace add variable workdir unset [list apply {{old_pwd _1 _2 _3} {
@@ -131,11 +128,11 @@ $cmd
             cd $workdir
             set relative_image_dir [file join . [fileutil::stripPwd $image_dir]]
             puts stderr "image_dir: $relative_image_dir"
-            exec zip -v -r -m ${image_name}:${image_tag} $relative_image_dir
+            exec zip -v -r -m ${image_name}:${image_tag} $relative_image_dir >&@ $status_channel
         }
     }
     
-    proc build_command {args_dict}  {
+    proc build_command {args_dict status_channel}  {
 
         variable _::cmdline_options
         variable _::current_dataset
@@ -144,20 +141,28 @@ $cmd
         puts stderr $cmdline_options
         set appc_file [dict get $cmdline_options {file}]
 
+        #Sourcing the appc file calls the functions like RUN
+        # and copy at a global level.  We definitely need to do
+        # that in a sub interpreter now since we are a long
+        # running service.
         source $appc_file
 
+        #current_dataset is set by the FROM command
         if {[appc::zfs::snapshot_exists ${current_dataset}@b]} {
             appc::zfs::destroy ${current_dataset}@b
         }
+        
         #create a snapshot that can be cloned by the run command
         # and also used as the right hand side of zfs diff
         appc::zfs::create_snapshot $current_dataset b
 
+        #guid is set from the FROM command
         set name $_::guid
         if {[dict exists $cmdline_options name]} {
             set name [dict get $cmdline_options name]
         }
-        set build_dir [_::create_layer $current_dataset $guid]
+
+        set build_dir [_::create_layer $current_dataset $guid $status_channel]
         #Create container definition file
         #zip up jail and definition file.
         #TODO: _::create_image

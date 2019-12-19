@@ -2,6 +2,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 package require Tcl 8.6
 package require TclOO
+package require appc::build
 package require appc::env
 package require appc::network
 package require appc::pull
@@ -112,6 +113,9 @@ namespace eval appcd::_ {
         set command [dict get $msg cli_options command]
         set args [dict get $msg cli_options args]
         switch -exact $command {
+            build {
+                appc::build::build_command $args $channel
+            }
             pull {
                 appc::pull::pull_command $args $channel
             }

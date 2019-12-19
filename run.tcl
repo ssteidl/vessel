@@ -104,10 +104,12 @@ namespace eval appc::run {
 
         set coro_name [info coroutine]
         set error [catch {
-            appc::jail::run_jail $hostname $mountpoint $pty $network $coro_name {*}$command
+            set pty_chan [open $pty RDWR]
+            set chan_dict [dict create stdin $pty stdout $pty stderr $pty]
+            appc::jail::run_jail $hostname $mountpoint $chan_dict $network $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
-            puts stderr "Error running jail: $error_msg"
+            return -code error -errorcode {APPC JAIL EXEC} "Error running jail: $error_msg"
         }
 
         #Wait for the command to finish
