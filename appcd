@@ -82,7 +82,7 @@ namespace eval appcd::_ {
 
         set msg_generator_name ${channel}_msg_generator
         coroutine $msg_generator_name read_msgs_coro $channel $clientaddr $clientport [info coroutine]
-        defer::with [list channel] {
+        defer::with [list channel msg_generator_name] {
             close $channel
             rename $msg_generator_name {}
         }
@@ -112,9 +112,10 @@ namespace eval appcd::_ {
 
         set command [dict get $msg cli_options command]
         set args [dict get $msg cli_options args]
+        set request_tag ${clientaddr}.${clientport}.${command}
         switch -exact $command {
             build {
-                appc::build::build_command $args $channel
+                appc::build::build_command $args $request_tag $channel
             }
             pull {
                 appc::pull::pull_command $args $channel

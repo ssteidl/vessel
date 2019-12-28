@@ -265,6 +265,42 @@ namespace
             close(kqueue_fd);
         }
     }
+
+    struct appc_exec_tcl_raii
+    {
+        kqueue_state state;
+        Tcl_Interp* interp;
+
+    private:
+        appc_exec_tcl_raii(Tcl_Interp* interp)
+            : state(kqueue()),
+              interp(interp)
+        {
+            if(state.kqueue_fd != -1)
+            {
+                Tcl_CreateEventSource(KqueueEventSetupProc, KqueueEventCheckProc, this);
+            }
+        }
+    public:
+        ~appc_exec_tcl_raii()
+        {
+            /*Tcl ignores the case when the event source doesn't exist.*/
+            Tcl_DeleteEventSource(KqueueEventSetupProc, KqueueEventCheckProc, this);
+        }
+
+        static int create(Tcl_Interp* interp,
+                          std::unique_ptr<appc_exec_tcl_raii>& raii_ptr)
+        {
+            /*NOTE: Can't use make_unique with private constructor.*/
+            std::unique_ptr<appc_exec_tcl_raii> tmp_ptr(new appc_exec_tcl_raii(interp));
+            if(tmp_ptr->state.kqueue_fd == -1)
+            {
+                return appc::syserror_result(interp, "APPC EXEC KQUEUE");
+            }
+            raii_ptr = std::move(tmp_ptr);
+            return TCL_OK;
+        }
+    };
 }
 
 int Appc_ExecInit(Tcl_Interp* interp)
@@ -272,17 +308,12 @@ int Appc_ExecInit(Tcl_Interp* interp)
     /*TODO: We should probably make our own kqueue module
      * for appc::native extension
      */
-    int kqueue_fd = kqueue();
-    if(kqueue_fd == -1)
-    {
-        return appc::syserror_result(interp, "EXEC KQUEUE");
-    }
+    std::unique_ptr<appc_exec_tcl_raii> raii_ptr;
+    int tcl_error = appc_exec_tcl_raii::create(interp, raii_ptr);
+    if(tcl_error) return tcl_error;
 
-    std::unique_ptr<kqueue_state> state = std::make_unique<kqueue_state>(kqueue_fd);
-
-    (void)Tcl_CreateObjCommand(interp, "appc::exec", Appc_Exec, state.get(),
-                               appc::cpp_delete<kqueue_state>);
-    Tcl_CreateEventSource(KqueueEventSetupProc, KqueueEventCheckProc, state.release());
+    (void)Tcl_CreateObjCommand(interp, "appc::exec", Appc_Exec, raii_ptr.release(),
+                               appc::cpp_delete<appc_exec_tcl_raii>);
     return TCL_OK;
 }
 

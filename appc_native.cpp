@@ -531,14 +531,9 @@ namespace
 
     void init_dns(Tcl_Interp* interp)
     {
-        Tcl_Obj* query_handler = nullptr;
-        Tcl_SetAssocData(interp, "dns.query_handler", appc::tclobj_delete_proc,
-                         query_handler);
-
-
-            (void)Tcl_CreateObjCommand(interp, "appc::dns::parse_query", Appc_DNSParseQuery, nullptr, nullptr);
-            (void)Tcl_CreateObjCommand(interp, "appc::dns::generate_A_response", Appc_DNSGenerateAResponse,
-                                       nullptr, nullptr);
+        (void)Tcl_CreateObjCommand(interp, "appc::dns::parse_query", Appc_DNSParseQuery, nullptr, nullptr);
+        (void)Tcl_CreateObjCommand(interp, "appc::dns::generate_A_response", Appc_DNSGenerateAResponse,
+                                   nullptr, nullptr);
     }
 
     void init_url(Tcl_Interp* interp)

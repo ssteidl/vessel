@@ -99,6 +99,8 @@ namespace eval appcd::client {
 	    #Send the request
 	    puts $appcd_chan $appcd_msg
 
+	    fconfigure $appcd_chan -blocking 0 -buffering none -translation binary 
+	    
 	    #Response loop
 	    while {true} {
 		#Wait for a response or the connection to close
@@ -107,7 +109,7 @@ namespace eval appcd::client {
 		gets $appcd_chan msg
 
 		if {$msg ne {}} {
-		    puts stdout $msg
+		    puts stderr $msg
 		} else {
 		    if {[fblocked $appcd_chan]} {
 			continue

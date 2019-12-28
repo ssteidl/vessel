@@ -4,46 +4,11 @@ package require fileutil
 package require appc::definition_file
 package require appc::env
 package require appc::jail
+package require appc::zfs
 
 namespace eval appc::build {
 
     namespace eval _ {
-
-        variable cmdline_options [dict create]
-        variable from_called false
-        variable parent_image {}
-        variable current_dataset {}
-        variable cwd {/}
-        variable mountpoint {}
-        variable name {}
-        variable guid {}
-        variable definition_file [definition_file create container_def]
-        variable cmd {}
-
-        proc fetch_image {image_dataset name version} {
-
-            if {$name ne "FreeBSD" } {
-
-                return -code error -errorcode {BUILD IMAGE FETCH} \
-                    "Only FreeBSD images are currently allowed"
-            }
-
-            set mountpoint [appc::zfs::get_mountpoint $image_dataset]
-            
-            #TODO: Support a registry.  For now only support
-            #freebsd base.txz
-
-            #TODO: What should we do for a download directory? For now
-            #I'll just use tmp
-
-            #TODO: For now we require the image to be the same as the
-            #host architecture
-            set arch [appc::bsd::host_architecture]
-
-            #TODO: Test needs to be the mountpoint of the new dataset
-            set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-            exec curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
-        }
 
         proc create_layer {dataset guid status_channel} {
 
@@ -88,10 +53,8 @@ namespace eval appc::build {
             return $build_dir
         }
 
-        proc create_image {image_dir image_name image_tag status_channel} {
-            variable cmd
-            variable cwd
-            variable parent_image
+        proc create_image {image_dir image_name image_tag \
+                               image_cmd image_cwd parent_image status_channel} {
 
             #TODO: Let's not do this.  Let's just execute the
             #command provide on the command line or if one is not
@@ -99,8 +62,8 @@ namespace eval appc::build {
             set command [subst {
 #! /bin/sh
 
-cd $cwd
-$cmd
+cd $image_cwd
+$image_cmd
             }]
 
             #Write the command file
@@ -130,24 +93,74 @@ $cmd
             puts stderr "image_dir: $relative_image_dir"
             exec zip -v -r -m ${image_name}:${image_tag} $relative_image_dir >&@ $status_channel
         }
+
+        proc transfer_build_context_from_interp {build_context build_interp} {
+
+            dict set build_context current_dataset \
+                [$build_interp eval {set current_dataset}]
+
+            dict set build_context guid [$build_interp eval {set guid}]
+
+            dict set build_context cmd [$build_interp eval {set cmd}]
+
+            dict set build_context cwd [$build_interp eval {set cwd}]
+
+            dict set build_context parent_image [$build_interp eval {set parent_image}]
+
+            return $build_context
+        }
+
+        proc execute_appc_file {build_context appc_file status_channel} {
+
+            #Sourcing the appc file calls the functions like RUN
+            # and copy at a global level.  We definitely need to do
+            # that in a jail.
+            set request_tag [dict get $build_context request_tag]
+            set interp_name ${request_tag}.build_interp
+
+            #Create the interp and setup the necessary global options
+            interp create $interp_name
+            defer::with [list interp_name] {
+                interp delete $interp_name
+            }
+            interp share {} $status_channel $interp_name
+            $interp_name eval {
+                package require AppcFileCommands
+            }
+            $interp_name eval [list set ::status_channel $status_channel]
+            $interp_name eval [list set ::cmdline_options [dict get $build_context cmdline_options]]
+            $interp_name eval {source [dict get $::cmdline_options file]}
+            set build_context [transfer_build_context_from_interp $build_context $interp_name]
+
+            return [transfer_build_context_from_interp $build_context $interp_name]
+        }
     }
     
-    proc build_command {args_dict status_channel}  {
+    proc build_command {args_dict request_tag status_channel}  {
 
-        variable _::cmdline_options
-        variable _::current_dataset
-        variable _::guid
-        set cmdline_options $args_dict
-        puts stderr $cmdline_options
-        set appc_file [dict get $cmdline_options {file}]
+        #build_context maintains the state for this build.  All
+        #of the global variables set by sourcing the appc file
+        #are copied into this dict.
+        set build_context [dict create \
+                               cmdline_options $args_dict \
+                               from_called false \
+                               parent_image {} \
+                               current_dataset {} \
+                               cwd {/} \
+                               mountpoint {} \
+                               name {} \
+                               guid {} \
+                               definition_file [definition_file create ${request_tag}.container_def] \
+                               cmd {} \
+                               request_tag $request_tag \
+                               status_channel $status_channel]
+        
+        set appc_file [dict get $build_context cmdline_options {file}]
 
-        #Sourcing the appc file calls the functions like RUN
-        # and copy at a global level.  We definitely need to do
-        # that in a sub interpreter now since we are a long
-        # running service.
-        source $appc_file
-
+        set build_context [_::execute_appc_file $build_context $appc_file $status_channel]
+        
         #current_dataset is set by the FROM command
+        set current_dataset [dict get $build_context current_dataset]
         if {[appc::zfs::snapshot_exists ${current_dataset}@b]} {
             appc::zfs::destroy ${current_dataset}@b
         }
@@ -156,13 +169,14 @@ $cmd
         # and also used as the right hand side of zfs diff
         appc::zfs::create_snapshot $current_dataset b
 
-        #guid is set from the FROM command
-        set name $_::guid
-        if {[dict exists $cmdline_options name]} {
-            set name [dict get $cmdline_options name]
+        set guid [dict get $build_context guid]
+        set name $guid
+        if {[dict exists $build_context cmdline_options name]} {
+            set name [dict get $build_context cmdline_options name]
         }
 
         set build_dir [_::create_layer $current_dataset $guid $status_channel]
+
         #Create container definition file
         #zip up jail and definition file.
         #TODO: _::create_image
@@ -179,186 +193,16 @@ $cmd
         #        - <files.txt>
 
         set tag {latest}
-        if {[dict exists $cmdline_options tag]} {
-            set tag [dict get $cmdline_options tag]
+        if {[dict exists build_context cmdline_options tag]} {
+            set tag [dict get $build_context cmdline_options tag]
         }
 
-        _::create_image $build_dir $name $tag
+        set cmd [dict get $build_context cmd]
+        set cwd [dict get $build_context cwd]
+        set parent_image [dict get $build_context parent_image]
+        _::create_image $build_dir $name $tag \
+            $cmd $cwd $parent_image $status_channel
     }
-}
-
-proc FROM {image} {
-    variable appc::build::_::current_dataset
-    variable appc::build::_::cmdline_options
-    variable appc::build::_::mountpoint
-    variable appc::build::_::from_called
-    variable appc::build::_::name
-    variable appc::build::_::guid
-    variable appc::build::_::parent_image
-
-    global env
-
-    if {$from_called} {
-        return -code error -errorcode {BUILD INVALIDSTATE EFROMALRDY} \
-            "Multiple FROM commands is not supported"
-    }
-    
-    set parent_image $image
-    puts stderr "FROM: $image"
-
-    set pool "zroot"
-    if {[info exists env(APPC_POOL)]} {
-        set pool $env(APPC_POOL)
-    }
-
-    #TODO: change to use ${pool}/appc by default
-    set appc_parent_dataset "${pool}/jails"
-    
-    #Image is in the form <image name>:<version>
-    #So image name is the dataset and version is the snapshot name
-
-    set image_tuple [split $image ":"]
-    if {[llength $image_tuple] ne 2} {
-
-        return -code error -errorcode {BUILD IMAGE FORMAT} "Image must be in the format <name:version>"
-    }
-
-    set image_name [lindex $image_tuple 0]
-    set image_version [lindex $image_tuple 1]
-    set snapshot_name "${image_name}/${image_version}@${image_version}"
-    set snapshot_path "${appc_parent_dataset}/${snapshot_name}"
-
-    puts "[appc::zfs::get_snapshots]"
-    set snapshot_exists [appc::zfs::snapshot_exists $snapshot_path]
-    puts stderr "${snapshot_path}:${snapshot_exists}"
-
-    if {!$snapshot_exists} {
-
-        #TODO: We need to update the way images are handled.  The dataset should
-        # be /appc/<image_name>/<image_version>
-        # and the snapshot should be /appc/<image_name>/<image_version>@<guid>
-        # perhaps the snapshot should be a repeat of the image version.  Not sure.
-
-        set image_dataset "${appc_parent_dataset}/${image_name}/${image_version}"
-        appc::zfs::create_dataset $image_dataset
-        appc::build::_::fetch_image $image_dataset $image_name $image_version
-        appc::zfs::create_snapshot $image_dataset $image_version
-    }
-
-    # Clone base jail and name new dataset with guid
-    set name [dict get $cmdline_options {name}]
-    set guid [uuid::uuid generate]
-
-    if {$name eq {}} {
-        set name $guid
-    }
-    
-    set new_dataset "${appc_parent_dataset}/${name}"
-    if {![appc::zfs::dataset_exists $new_dataset]} {
-        appc::zfs::clone_snapshot $snapshot_path $new_dataset
-    }
-
-    if {![appc::zfs::snapshot_exists "${new_dataset}@a"]} {
-        #Snapshot with version a is used for zfs diff
-        appc::zfs::create_snapshot $new_dataset a
-    }
-        
-    set current_dataset $new_dataset
-
-    set mountpoint [appc::zfs::get_mountpoint $new_dataset]
-
-    #resolv_conf is needed here because RUN commands may need to
-    #access the internet.  Running a container should always update
-    #resolv conf.  In the future, maybe we just ignore it instead
-    #of leaving it in the image.
-    appc::env::copy_resolv_conf $mountpoint
-
-    set from_called true
-    return
-}
-
-proc CWD {path} {
-    variable appc::build::_::cwd
-    variable appc::build::_::from_called
-
-    if {!$from_called} {
-
-        return -code error -errorcode {BUILD CWD} \
-            "CWD called before FROM.  FROM must be the first command called."
-    }
-    
-    #Verify cwd exists in the dataset
-    #set cwd variable
-    puts stderr "CWD: $path"
-
-    set cwd $path
-}
-
-proc COPY {source dest} {
-    variable appc::build::_::cwd
-    variable appc::build::_::mountpoint
-    variable appc::build::_::from_called
-
-    if {!$from_called} {
-
-        return -code error -errorcode {BUILD COPY} \
-            "COPY called before FROM.  FROM must be the first command called."
-    }
-    
-    #dest is relative to cwd in the jail
-    #source is on the host system and is relative to current pwd
-    puts stderr "COPY: $source -> $dest"
-
-    set absolute_path [fileutil::jail $mountpoint [file join $cwd $dest]]
-
-    file copy $source $absolute_path
-}
-
-proc EXPOSE {port} {
-
-    #This will need to integrate with pf.
-    puts stderr "EXPOSE $port"
-}
-
-proc RUN {args} {
-    variable appc::build::_::mountpoint
-    variable appc::build::_::name
-    variable appc::build::_::from_called
-
-    if {!$from_called} {
-
-        return -code error -errorcode {BUILD CWD} \
-            "RUN called before FROM.  FROM must be the first command called."
-    }
-
-    if {[llength $args] == 0} {
-
-        return -code error -errorcode {BUILD RUN ARGS} \
-            "RUN invoked without arguments" 
-    }
-    
-    try {
-        puts stderr "RUN mountpoint: $mountpoint"
-        appc::jail::run_jail "${name}-buildcmd" $mountpoint {*}$args
-    } trap {CHILDSTATUS} {results options} {
-
-        puts stderr "Run failed: $results"
-        return -code error -errorcode {BUILD RUN}
-    }
-
-    puts "after"
-    return
-}
-
-proc CMD {args} {
-
-    variable cmd
-
-    if {$cmd ne {}} {
-        return -code error -errorcode {BUILD CMD EEXISTS} "Only one CMD is allowed"
-    }
-
-    set cmd $command
 }
 
 package provide appc::build 1.0.0

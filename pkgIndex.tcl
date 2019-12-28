@@ -1,7 +1,7 @@
 package ifneeded appc::bsd 1.0.0 [list source [file join $dir bsd.tcl]]
 package ifneeded appc::build 1.0.0 [list source [file join $dir build.tcl]]
 package ifneeded appcd::client 1.0.0 [list source [file join $dir appcd_client.tcl]]
-package ifneeded appc::definition_file 1.0.0 [list source [file join $dir build.tcl]]
+package ifneeded appc::definition_file 1.0.0 [list source [file join $dir definition_file.tcl]]
 package ifneeded appc::dns 1.0.0 [list source [file join $dir dns dns.tcl]]
 package ifneeded appc::env 1.0.0 [list source [file join $dir environment.tcl]]
 package ifneeded appc::jail 1.0.0 [list source [file join $dir jail.tcl]]
