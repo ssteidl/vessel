@@ -5,6 +5,7 @@ package require TclOO
 package require appc::build
 package require appc::env
 package require appc::network
+package require appc::publish
 package require appc::pull
 package require appc::run
 package require debug
@@ -116,6 +117,9 @@ namespace eval appcd::_ {
         switch -exact $command {
             build {
                 appc::build::build_command $args $request_tag $channel
+            }
+            publish {
+                appc::publish::publish_command $args $request_tag $channel
             }
             pull {
                 appc::pull::pull_command $args $channel

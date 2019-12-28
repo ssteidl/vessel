@@ -193,7 +193,7 @@ $image_cmd
         #        - <files.txt>
 
         set tag {latest}
-        if {[dict exists build_context cmdline_options tag]} {
+        if {[dict exists $build_context cmdline_options tag]} {
             set tag [dict get $build_context cmdline_options tag]
         }
 

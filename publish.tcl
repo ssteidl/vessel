@@ -15,7 +15,7 @@ namespace eval appc::publish {
         }
     }
     
-    proc publish_command {args_dict} {
+    proc publish_command {args_dict request_tag status_channel} {
 
         set tag [dict get $args_dict tag]
         if {$tag eq {}} {
@@ -41,7 +41,10 @@ namespace eval appc::publish {
                     return -code error -errorcode {PUBLISH ENOTDIR} "Path is not a directory: $path"
                 }
 
-                file copy [file join $workdir "${image_name}:${tag}.zip"] $path
+                #file copy [file join $workdir "${image_name}:${tag}.zip"] $path
+                set image_zip_name "${image_name}:${tag}.zip"
+                set image_path [file join $workdir $image_zip_name]
+                exec curl file://localhost/$image_path -o [file join $path $image_zip_name] >&@ $status_channel
             }
             s3 {
                 return -code error -errorcode {PUBLISH NYI S3} "S3 support is not yet implemented"
