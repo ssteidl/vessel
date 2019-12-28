@@ -1,0 +1,63 @@
+#! /usr/bin/env tclsh8.6
+# -*- mode: tcl; -*-
+package require cmdline
+package require appc::dns
+
+set options {
+    {network.arg "" "Name of the network to create"}
+    {ip.arg "" "Ip address to bind to"}
+    {dns.arg "" "dns mappings.  A space separated list of 
+                 <name:ip4> values"}
+}
+
+
+proc add_dns_mappings_from_cmdline {server dns_arg} {
+    # Example DNS cmdline option: --dns="internal.postgres.re.com:192.168.9.3 internal.rabbit.re.com:192.168.9.4"
+    foreach dns_mapping $dns_arg {
+
+	#Default value for ttl
+	set ttl 35
+	
+	lmap {name ip ttl} [split $dns_mapping ":"] {}
+	if {$name eq {}} {
+	    puts stderr "Missing name in dns arg: $dns_mapping"
+	    exit 1
+	}
+
+	if {$ip eq {}} {
+	    puts stderr "Missing ip in dns arg: $dns_mapping"
+	}
+
+	puts stderr "n: $name, ip: $ip, ttl: $ttl"
+	$server add_lookup_mapping $name $ip $ttl
+    }
+}
+
+proc main {} {
+    global argv
+    global options
+
+    set usage {}
+    try {
+	array set params [::cmdline::getoptions argv $options $usage]
+    } trap {CMDLINE USAGE} {msg o} {
+	# Trap the usage signal, print the message, and exit the application.
+	# Note: Other errors are not caught and passed through to higher levels!
+	puts stderr $msg
+	exit 1
+    }
+
+    set dns_arg $params(dns)
+    if {$dns_arg eq {}} {
+	puts stderr "--dns is required"
+	exit 1
+    }
+    set server [appc::dns::create_server 53 $params(ip)]
+    add_dns_mappings_from_cmdline $server $params(dns)
+
+    
+    set _forever_ {}
+    vwait _forever_
+}
+
+main
