@@ -44,7 +44,6 @@ namespace eval appcd::client {
 	    }
 	    
 	    puts $appcd_chan $appcd_msg
-	    #TODO: I'm sure there will need to be more communication here.
 
 	    if {$interactive} {
 
