@@ -4,6 +4,11 @@ namespace eval appc::network {
 
     namespace eval _ {
 
+	#Private variables for network ensemble
+	variable networks_dict [dict create]
+	variable main_bridge {}
+
+	
 	#Represents a jail that can join a network.
 	#Note this method does not create or destroy
 	#a jail.  It's just used to reference and operate
@@ -271,6 +276,21 @@ namespace eval appc::network {
 		}
 	    }
 	}
+    }
+
+    proc create  {name ip dns_dict} {
+	variable _::networks_dict
+
+	if {[dict exists $networks_dict $name]} {
+	    return -code error -errorcode {NETWRK EEXISTS} \
+		"The provided network already exists"
+	}
+    }
+
+    proc exists {name} {
+	variable _::networks_dict
+
+	return [dict exists $networks_dict $name]
     }
 }
 package provide appc::network 1.0.0
