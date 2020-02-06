@@ -1,0 +1,26 @@
+#! /usr/bin/env tclsh8.6
+# -*- mode: tcl; -*-
+
+package require appc::name-gen
+package require cmdline
+
+set options {
+    {suffix.arg "" "The suffix of the generated name"}
+    {prefix.arg "" "The prefix of the generated name"}
+    {separator.arg "-" "The separator for the name components"}
+    {components.arg 2 "Number of - separated components in the name"}
+}
+
+set usage {generate-name [--prefix=<prefix>] [--suffix=<suffix>] [--components=<num components>]}
+
+try {
+    array set params [::cmdline::getoptions argv $options $usage]
+} trap {CMDLINE USAGE} {msg o} {
+    # Trap the usage signal, print the message, and exit the application.
+    # Note: Other errors are not caught and passed through to higher levels!
+    puts stderr $msg
+    exit 1
+}
+
+puts [appc::name-gen::generate-name $params(components) $params(prefix) \
+	  $params(separator) $params(suffix)]
