@@ -1,5 +1,5 @@
 package require TclOO
-
+package require appc::name-gen
 namespace eval appc::network {
 
     namespace eval _ {
@@ -7,7 +7,6 @@ namespace eval appc::network {
 	#Private variables for network ensemble
 	variable networks_dict [dict create]
 	variable main_bridge {}
-
 	
 	#Represents a jail that can join a network.
 	#Note this method does not create or destroy
@@ -59,8 +58,6 @@ namespace eval appc::network {
 		exec ifconfig $name up
 		set _name $name
 	    }
-
-	    puts stderr "Bridge name: $_name"
 	}
 	
 	constructor {name} {
@@ -278,19 +275,52 @@ namespace eval appc::network {
 	}
     }
 
-    proc create  {name ip dns_dict} {
+    proc create  {network_name} {
 	variable _::networks_dict
+	variable _::main_bridge
 
-	if {[dict exists $networks_dict $name]} {
-	    return -code error -errorcode {NETWRK EEXISTS} \
-		"The provided network already exists"
+	if {[exists $network_name]} {
+	    return [dict get $networks_dict $network_name]
 	}
+
+	set bridge $main_bridge
+	if {$main_bridge eq {}} {
+	    set main_bridge [bridge new {appcbridge}]
+	}
+	
+	set network {}
+
+	#For now always use a class C network between 100 and 200
+	set subnet [expr int(rand() * 100) + 100]
+	set ip "192.168.${subnet}.1"
+	
+	set network [internal_network new $network_name $main_bridge $ip]
+
+	dict set networks_dict $network_name $network
+	
+	return $network
+	
     }
 
     proc exists {name} {
 	variable _::networks_dict
 
 	return [dict exists $networks_dict $name]
+    }
+
+    proc create_network_cmd {args_dict} {
+	#The top level command that is used to create networks
+	
+	variable _::networks_dict
+
+	set network_name {}
+	if {[dict exists $args_dict name]} {
+	    set network_name [dict get $args_dict name]
+	} else {
+	    set network_name [appc::name-gen::generate-name 2 {} {} {network}]
+	}
+
+	return [create $network_name]
     }
 }
 package provide appc::network 1.0.0

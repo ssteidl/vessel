@@ -141,8 +141,6 @@ namespace eval appcd::_ {
 }
 
 proc new_connection_coroutine {channel clientaddr clientport} {
-
-    
     
     #Initialization yield
     yield
