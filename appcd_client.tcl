@@ -155,7 +155,11 @@ namespace eval appcd::client {
 
     proc main {options} {
 	variable _::vwait_var
-	
+
+	if {[dict exists $options args help]} {
+	    puts stderr [dict get $options args help]
+	    exit 0
+	}
 	set command [dict get $options command]
 	switch -exact $command {
 	    build {

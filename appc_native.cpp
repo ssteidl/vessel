@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <iostream>
 #include <list>
+#include <sstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -31,12 +32,26 @@ namespace
         return argv;
     }
 
+    std::string build_options_help()
+    {
+        std::ostringstream msg;
+        /*Probably not great design to output help from the library but
+         * it's simple and good enough for now*/
+        msg << "appcd build <--file=appcd_file> <--name=image-name> <--tag=tag>" << std::endl
+            << "--file    Path to the appc file used to build the image" << std::endl
+            << "--name    Name of the image" << std::endl
+            << "--tag     Tag for the image.  Only one tag is accepted.  Default is 'latest'" << std::endl;
+
+        return msg.str();
+    }
+
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         assert(argc > 0);
 
         static const struct option long_opts[] = {
             {"file", required_argument, nullptr, 'f'},
+            {"help", no_argument, nullptr, 'h'},
             {"name", required_argument, nullptr, 'n'},
             {"tag", required_argument, nullptr, 't'},
             {nullptr, 0, nullptr, 0}
@@ -48,7 +63,7 @@ namespace
 
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:n:t:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:hn:t:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -58,6 +73,14 @@ namespace
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
+            case 'h':
+            {
+                std::string help_msg = build_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                break;
+            }
             case 'n':
                 tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                            Tcl_NewStringObj("name", -1),
@@ -141,6 +164,19 @@ namespace
         return tcl_error;
     }
 
+    std::string run_options_help()
+    {
+        std::ostringstream msg;
+        msg << "appc run <--name=img_name> {--interactive} <--tag=val> {--rm} {--volume=/path/to/dir}" << std::endl
+            << "--name        Image name to run" << std::endl
+            << "--interactive Start an interactive shell via pty" << std::endl
+            << "--tag         Tag of the image to run" << std::endl
+            << "--rm          Remove the image after it exits" << std::endl
+            << "--volume      Path to directory to nullfs mount into the container" << std::endl;
+
+        return msg.str();
+    }
+
     int parse_run_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         /*At some point we will have a server and need a -it flag*/
@@ -151,6 +187,7 @@ namespace
         static const struct option long_opts[] = {
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
+            {"help", no_argument, nullptr, 'h'},
             {"tag", required_argument, nullptr, 't'},
             {"interactive", no_argument, nullptr, 'i'},
             {"name", required_argument, nullptr, 'n'},
@@ -168,7 +205,7 @@ namespace
         int tcl_error = TCL_OK;
         bool interactive = false;
         std::string network("inherit");
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:t:n:u:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:ht:n:u:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -181,6 +218,22 @@ namespace
             case 'r':
                 remove_container = true;
                 break;
+            case 'h':
+            {
+                std::string help_msg = run_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                if(tcl_error) return tcl_error;
+
+                /*Short circuit for help flag*/
+                tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                           Tcl_NewStringObj("args", -1),
+                                           args_dict.release());
+                if(tcl_error) return tcl_error;
+
+                return TCL_OK;
+            }
             case 't':
                 tag = atoi(optarg);
                 break;

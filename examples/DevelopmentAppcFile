@@ -1,6 +1,6 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-FROM FreeBSD:12.0-RELEASE
+FROM FreeBSD:12.1-RELEASE
 
 RUN env ASSUME_ALWAYS_YES=yes pkg update
 RUN env ASSUME_ALWAYS_YES=yes pkg install tcllib curl bash cmake

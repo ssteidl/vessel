@@ -140,23 +140,15 @@ namespace eval appcd::_ {
     }
 }
 
-proc new_connection_coroutine {channel clientaddr clientport} {
-    
-    #Initialization yield
-    yield
-    
-    while {true} {
+proc new_connection {channel clientaddr clientport} {
+     
 
         debug.appcd "New connection found"
         set coro_name ${channel}.${clientaddr}.${clientport}-request_coro
         coroutine $coro_name appcd::_::request_coroutine $channel $clientaddr $clientport
 
-        defer::with [list coro_name] {
-            catch {rename $coro_name {}}
-        }
         #Start the coroutine outside of the context of this proc
-        yieldto $coro_name
-    }
+        after idle $coro_name
 }
 
 #Needed for the heartbeat module
@@ -179,12 +171,8 @@ proc init_zpool {} {
     }
 }
 
-
-#Every new connection gets handled by the main coroutine
-# and then dispatched into other coroutines
-coroutine main_coro new_connection_coroutine
 #TODO Unix socket so we can restrict connections based on
 #group permissions
-socket -server [list main_coro] -myaddr 127.0.0.1 6432
+socket -server [list new_connection] -myaddr 127.0.0.1 6432
 debug::heartbeat [expr 1000 * 60]
 vwait _forever_

@@ -32,6 +32,7 @@ install(FILES appc_file_commands.tcl
               definition_file.tcl
               environment.tcl
               jail.tcl
+	      name-gen.tcl
               pkgIndex.tcl
               pty_shell.tcl
               publish.tcl
