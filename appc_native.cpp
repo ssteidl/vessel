@@ -167,7 +167,7 @@ namespace
     std::string run_options_help()
     {
         std::ostringstream msg;
-        msg << "appc run <--name=img_name> {--interactive} <--tag=val> {--rm} {--volume=/path/to/dir}" << std::endl
+        msg << "appc run <--name=container_name> {--interactive} <--tag=val> {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} image <command...>" << std::endl
             << "--name        Image name to run" << std::endl
             << "--interactive Start an interactive shell via pty" << std::endl
             << "--tag         Tag of the image to run" << std::endl
@@ -287,7 +287,7 @@ namespace
 
         if(optind == argc)
         {
-            Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing container name in run command", -1));
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing image name in run command", -1));
             return TCL_ERROR;
         }
 
@@ -320,12 +320,22 @@ namespace
         return TCL_OK;
     }
 
+    std::string publish_pull_options_help()
+    {
+        std::ostringstream msg;
+        msg << "push|pull <--tag=val> image" << std::endl
+            << "--tag    The tag value" << std::endl
+            << "image    The image to pull or publish" << std::endl;
+        return msg.str();
+    }
+
     int parse_publish_pull_options(Tcl_Interp* interp, int argc,
                                    Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         assert(argc > 0);
 
         static const struct option long_opts[] = {
+            {"help", no_argument, nullptr, 'h'},
             {"tag", required_argument, nullptr, 't'},
             {nullptr, 0, nullptr, 0}
         };
@@ -344,10 +354,27 @@ namespace
         std::string tag{};
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "t:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "ht:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
+            case 'h':
+            {
+                std::string help_msg = publish_pull_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                if(tcl_error) return tcl_error;
+
+                /*Short circuit for help flag*/
+                tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                           Tcl_NewStringObj("args", -1),
+                                           args_dict.release());
+                if(tcl_error) return tcl_error;
+
+                return TCL_OK;
+
+            }
             case 't':
                 tag = optarg;
                 break;
