@@ -1,0 +1,36 @@
+#!/bin/sh
+#
+# PROVIDE: re
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable re:
+#
+
+. /etc/rc.subr
+
+name="appcd"
+rcvar=appcd_enable
+
+load_rc_config $name
+
+: ${appcd_enable="YES"}
+: ${appcd_pidfile="/var/run/${name}.pid"}
+: ${appcd_pool="zpool"}
+
+pidfile=${appcd_pidfile}
+command="/usr/sbin/daemon"
+appcd_chdir=/var/db/appcd
+command_args="-t ${name} -S -p ${pidfile} /usr/local/sbin/appcd"
+sig_stop="INT"
+command_interpreter=tclsh8.6
+procname="/usr/local/sbin/appcd"
+start_precmd=start_precmd
+appcd_env="APPC_POOL=${appcd_pool}"
+start_precmd()
+{
+    
+    mkdir -p $appcd_chdir
+}
+
+run_rc_command "$1"
