@@ -54,3 +54,14 @@ Application containers for FreeBSD.
 * **run -t -v <volume> --network=<name>**: Run a container in the foreground with a network on
   the provided bridge (creating the bridge if necessary).
 * **run**: Run a command in the background monitoring it as needed.  Potentially providing resource limits.
+
+## Thougths
+* It would be useful to integrate with uwsgi in emperor mode.
+    * uwsgi already supports managing daemons.
+    * uwsgi has async processors like mule, signals etc
+    * Building and publishing the daemons would be external to uwsgi
+    * Starting new containers is as simple as dropping new configuration files into a directory.  You could also do it from the command line.
+    * We can still run all the code via tcl, it's just a new plugin.
+    * I think we can still do interactive mode
+    * We'd need to teach uwsgi how to monitor when a jail dies (monitor all the processes in the jail)
+    * I think the development workflow is the same for appc.  Then there is just an appc plugin.

@@ -44,7 +44,6 @@ namespace eval appc::env {
         # copy resolve.conf
         set resolv_file {/etc/resolv.conf}
         file copy -force $resolv_file [fileutil::jail $mountpoint $resolv_file]
-
     }
 }
 package provide appc::env 1.0.0
