@@ -21,39 +21,36 @@ set command [dict get $options command]
 set pre_command_flags [dict get $options pre_command_flags]
 set run_local [dict get $pre_command_flags local]
 
-if {$run_local} {
 
-    #TODO: This belongs someplace common with appcd.  Perhaps
-    # an appc_init.tcl module
-    set pool [appc::env::get_pool]
-    if {![appc::zfs::is_mounted $pool]} {
-        puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
-        appc::zfs::mount $pool
+#TODO: This belongs someplace common with appcd.  Perhaps
+# an appc_init.tcl module
+set pool [appc::env::get_pool]
+if {![appc::zfs::is_mounted $pool]} {
+    puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+    appc::zfs::mount $pool
+}
+
+set pty stdout
+
+#Request tag is something that was used for running commands
+# in a daemon.  It's not really needed for single process
+# but it hasn't been removed yet.
+set request_tag {tag1}
+switch -exact $command {
+
+    build {
+        appc::build::build_command [dict get $options args] $request_tag stderr
     }
-
-    set pty stdout
-
-    switch -exact $command {
-
-        build {
-            appc::build::build_command [dict get $options args]
-        }
-        run {
-            appc::run::run_command $pty [dict get $options args]
-        }
-        publish {
-            appc::publish::publish_command [dict get $options args]
-        }
-        pull {
-            appc::pull::pull_command [dict get $options args]
-        }
-        default {
-            puts stderr "Unknown command: $command"
-        }
+    run {
+        appc::run::run_command $pty [dict get $options args]
     }
-} else {
-
-    package require appcd::client
-
-    appcd::client::main $options
+    publish {
+        appc::publish::publish_command [dict get $options args]
+    }
+    pull {
+        appc::pull::pull_command [dict get $options args]
+    }
+    default {
+        puts stderr "Unknown command: $command"
+    }
 }
