@@ -19,18 +19,22 @@ set command [dict get $options command]
 
 
 set pre_command_flags [dict get $options pre_command_flags]
+
+#TODO: Remove this
 set run_local [dict get $pre_command_flags local]
 
-
-#TODO: This belongs someplace common with appcd.  Perhaps
-# an appc_init.tcl module
 set pool [appc::env::get_pool]
 if {![appc::zfs::is_mounted $pool]} {
     puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
     appc::zfs::mount $pool
 }
 
-set pty stdout
+set run_done_flag [expr false]
+proc run_finished_cb {} {
+    global run_done_flag
+    set run_done_flag [expr true]
+}
+
 
 #Request tag is something that was used for running commands
 # in a daemon.  It's not really needed for single process
@@ -42,10 +46,20 @@ switch -exact $command {
         appc::build::build_command [dict get $options args] $request_tag stderr
     }
     run {
-        appc::run::run_command $pty [dict get $options args]
+        set args [dict get $options args]
+        set interactive [dict get $args interactive]
+        if {$interactive} {
+            set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
+        } else {
+            set devnull [open /dev/null w]
+            set chan_dict [dict create stdin $devnull stdout $devnull stderr $devnull]
+        }
+        coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] [list run_finished_cb]
+        after idle [list runcoro]
+        vwait run_done_flag
     }
     publish {
-        appc::publish::publish_command [dict get $options args]
+        appc::publish::publish_command [dict get $options args] $request_tag stderr
     }
     pull {
         appc::pull::pull_command [dict get $options args]

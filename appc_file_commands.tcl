@@ -43,7 +43,7 @@ namespace eval appc::file_commands::_ {
 	#TODO: Test needs to be the mountpoint of the new dataset
 	puts stderr "Invoking curl"
 	set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-	exec curl -L --output - $url | tar -C $mountpoint -xvf - >&@ $status_channel
+	exec -ignorestderr curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
     }
 }
 

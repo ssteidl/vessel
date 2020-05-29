@@ -40,7 +40,7 @@ namespace eval appc::run {
         }
     }
 
-    proc run_command {pty args_dict cb_coro} {
+    proc run_command {chan_dict args_dict cb_coro} {
 
         puts $args_dict
 
@@ -104,8 +104,6 @@ namespace eval appc::run {
 
         set coro_name [info coroutine]
         set error [catch {
-            set pty_chan [open $pty RDWR]
-            set chan_dict [dict create stdin $pty_chan stdout $pty_chan stderr $pty_chan]
             appc::jail::run_jail $hostname $mountpoint $chan_dict $network $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
