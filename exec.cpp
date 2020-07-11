@@ -163,6 +163,7 @@ namespace
         state->ready = true;
     }
 
+    /*Setup the kqueue event handler in the tcl event loop*/
     void KqueueEventSetupProc(void *clientData, int flags)
     {
         (void)flags;
@@ -191,13 +192,12 @@ namespace
 
         if(event.fflags & NOTE_CHILD)
         {
-            std::cerr << "NOTE_CHILD: " << event.ident << std::endl;
+//            std::cerr << "NOTE_CHILD: " << event.ident << std::endl;
             pge->mpg->add_descendant((pid_t)event.ident);
         }
         else if(event.fflags & NOTE_EXIT)
         {
-
-            std::cerr << "NOTE_EXIT: " << event.ident << std::endl;
+//            std::cerr << "NOTE_EXIT: " << event.ident << std::endl;
             bool is_process_group_empty = pge->mpg->exited(event.ident, event.data);
             if(is_process_group_empty)
             {
@@ -400,7 +400,7 @@ int Appc_Exec(void *clientData, Tcl_Interp *interp,
          * deletion callbacks*/
 
         pid_t process_grpid = 0;
-        /**/
+        /*Only start a new session if stdin is a pty and not stdin of the current process*/
         if(isatty(stdin_fd) && stdin_fd != 0)
         {
             process_grpid = setsid();

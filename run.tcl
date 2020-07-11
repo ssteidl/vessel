@@ -62,9 +62,14 @@ namespace eval appc::run {
         } elseif {[dict exists $args_dict tag]} {
             set tag [dict get $args_dict tag]
         }
-        
+
         set mountpoints_dict [appc::zfs::get_mountpoints]
 
+        if {$tag eq {local}} {
+            #If tag is the special name "local" then don't clone the dataset.  This can
+            #can be useful for development and testing.
+            set tag {}
+        }
         set image_dataset [appc::env::get_dataset_from_image_name $image_name $tag]
         debug.run "RUN COMMAND image dataset: $image_dataset"
 
@@ -74,7 +79,7 @@ namespace eval appc::run {
 
         set b_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@b"]
         debug.run "RUN COMMAND b snapshot exists: $b_snapshot_exists"
-        if {$b_snapshot_exists} {
+        if {$b_snapshot_exists && $tag ne {}} {
 
             set uuid [uuid::uuid generate]
             set container_dataset [appc::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
@@ -111,16 +116,12 @@ namespace eval appc::run {
         }
 
         #Wait for the command to finish
-        set pty_chan [yield]
+        yield
         debug.run "Container exited. Cleaning up"
-        catch {
-            debug.run "Closing pty channel: $pty_chan"
-            close $pty_chan
-        }
 
         debug.run "Unmounting jail mount paths"
         appc::bsd::umount $jailed_mount_path
-        appc::bsd::umount [file join $mountpoint dev]
+        catch {appc::bsd::umount [file join $mountpoint dev]}
 
         if {[dict get $args_dict "remove"]} {
             debug.run "Destroying container dataset: $container_dataset"

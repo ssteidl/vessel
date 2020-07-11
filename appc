@@ -10,6 +10,7 @@ package require appc::run
 package require appc::zfs
 
 package require debug
+package require defer
 
 debug define appc
 debug on appc 1 stderr
@@ -30,8 +31,28 @@ if {![appc::zfs::is_mounted $pool]} {
 }
 
 set run_done_flag [expr false]
-proc run_finished_cb {} {
+proc run_container_coro {options} {
     global run_done_flag
+
+    set interactive [dict get $options args interactive]
+    
+    #Initialization yield
+    yield
+    
+    if {$interactive} {
+        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
+    } else {
+        set devnull [open /dev/null w]
+        set chan_dict [dict create stdin $devnull stdout $devnull stderr $devnull]
+        defer::with [list devnull] {
+            close $devnull
+        }
+    }
+
+    #Setup and yieldto the run coroutine.  It will callback this coroutine after exiting
+    coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] [info coroutine]
+    yieldto runcoro
+
     set run_done_flag [expr true]
 }
 
@@ -48,14 +69,8 @@ switch -exact $command {
     run {
         set args [dict get $options args]
         set interactive [dict get $args interactive]
-        if {$interactive} {
-            set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
-        } else {
-            set devnull [open /dev/null w]
-            set chan_dict [dict create stdin $devnull stdout $devnull stderr $devnull]
-        }
-        coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] [list run_finished_cb]
-        after idle [list runcoro]
+        coroutine toplevel_run_coro run_container_coro $options
+        after idle toplevel_run_coro
         vwait run_done_flag
     }
     publish {

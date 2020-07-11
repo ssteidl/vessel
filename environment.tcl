@@ -21,7 +21,7 @@ namespace eval appc::env {
     }
 
     proc get_workdir {} {
-        return [get_from_env APPC_WORKDIR [file join [pwd] .workdir]]
+        return [get_from_env APPC_WORKDIR [file join [get_from_env HOME [pwd]] .workdir]]
     }
     
     proc get_repo_url {} {
