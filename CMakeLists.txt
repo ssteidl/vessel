@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(TCL)
 find_package(CURL)
-message("TCL ${TCL_LIBRARY}, ${TCL_INCLUDE_PATH}")
 include_directories(${TCL_INCLUDE_PATH} ${CURL_INCLUDE_DIRS})
 
 add_library(appctcl SHARED
