@@ -1,0 +1,43 @@
+package require appc::native
+package require appc::env
+package require tcltest
+
+namespace import tcltest::*
+
+proc test_s3cmd_init {} {
+
+    set s3_config_file [file join [appc::env::get_work_dir] s3cfg] 
+    if {[file exists $s3_config_file]} {
+	file rm $s3_config_file
+    }
+    set appc_chan [open "| appc publish s3://myfakespace"]
+
+    set expected_output_starts_with {Enter new values or accept defaults in brackets with Enter.}
+    
+    #TODO: We need to run this in the background, and run an after event to kill it (close the pipe).
+    # Then we can verify the initial output
+}
+
+test s3cmd-init-1 {Test s3cmd initialization} -setup {
+
+} -body {
+
+    set ::env(APPC_REPO_URL) s3://myfacespace
+    set s3_config_file [file join [appc::env::get_workdir] s3cfg] 
+    if {[file exists $s3_config_file]} {
+	file rm $s3_config_file
+    }
+    set appc_chan [open "| appc publish s3://myfakespace"]
+    after 1000
+    set output [read $appc_chan 4096]
+    close $appc_chan
+    return $output
+} -result "shane is awesome"
+
+
+
+#TODO: Test for publish/pull --reconfigure.  This is useful to force a reconfigure of s3cmd in case
+#an access control key or something else has changed.
+
+#TODO: Test publish
+#TODO: Test pull

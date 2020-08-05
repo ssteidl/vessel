@@ -17,7 +17,7 @@ namespace eval appc::env {
     
     proc get_pool {} {
 
-        return [get_from_env APPC_POOL "zpool"]
+        return [get_from_env APPC_POOL "zroot"]
     }
 
     proc get_workdir {} {

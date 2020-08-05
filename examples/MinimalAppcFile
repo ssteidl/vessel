@@ -1,9 +1,5 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-set jail_params {
-
-}
-
 FROM FreeBSD:12.1-RELEASE
 
 

@@ -1,0 +1,43 @@
+# -*- mode: tcl; -*-
+
+package require appc::pull
+package require appc::zfs
+package require tcltest
+
+namespace eval file_repo::test {
+
+    namespace import ::tcltest::*
+
+    variable test_image_dataset_name {test_minimal}
+
+    variable repo_dir_path [file join [pwd] test_repo]
+    
+    proc create_test_image_dataset {} {
+	variable test_image_dataset_name
+	set appc_file [file join .. examples MinimalAppcFile]
+	exec appc build --file=${appc_file} --tag=test --name=testimage >&@ stderr
+    }
+
+    #Create the image for testing
+    create_test_image_dataset
+
+    #Create the repository directory
+    file mkdir [file join [pwd] $repo_dir_path]
+
+    #Repository tests
+    
+    test publish-file-repo-1 {Test file repo publish} -setup {
+
+	set env(APPC_REPO_URL) "file://${repo_dir_path}"
+    } -body {
+
+	set ignore [exec appc publish --tag=test testimage]
+	return -code ok
+    } -errorCode NONE -match glob -result * -cleanup {
+	set env(APPC_REPO_URL) {}
+    } 
+
+    # TODO: hook into cleanup all tests to delete the image
+    
+    cleanupTests
+}

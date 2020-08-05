@@ -16,6 +16,7 @@ namespace eval appc::pull {
 
 	    variable full_url
 	    variable scheme
+	    variable path
 	    
 	    constructor {url} {
 		#Parse it to ensure it is valid
@@ -34,6 +35,11 @@ namespace eval appc::pull {
 		    "Subclass of repo must implement put_image"
 	    }
 
+	    method reconfigure {} {
+		return -code error errorcode {INTERFACECALL} \
+		    "Subclass of repo must implement reconfigure"
+	    }
+	    
 	    method get_url {} {
 
 		return $full_url
@@ -42,6 +48,10 @@ namespace eval appc::pull {
 	    method get_scheme {} {
 
 		return $scheme
+	    }
+
+	    method get_path {} {
+		return $path
 	    }
 	}
 
@@ -53,8 +63,6 @@ namespace eval appc::pull {
 
 	    #TODO: This should be a classmethod
 	    method check_directory {dir_path} {
-
-
 		return -code ok
 	    }
 
@@ -99,7 +107,24 @@ namespace eval appc::pull {
 	    }
 
 	    method put_image {image tag} {
-		#TODO
+
+		set workdir [appc::env::get_workdir]
+		set repo_url [appc::env::get_repo_url]
+
+		set path [dict get $repo_url_dict [my get_path]]
+		
+                if {![file exists $path]} {
+                    file mkdir $path
+                }
+                
+                if {![file isdirectory $path]} {
+                    return -code error -errorcode {PUBLISH ENOTDIR} "Path is not a directory: $path"
+                }
+
+                #file copy [file join $workdir "${image_name}:${tag}.zip"] $path
+                set image_zip_name "${image_name}:${tag}.zip"
+                set image_path [file join $workdir $image_zip_name]
+                exec curl file://localhost/$image_path -o [file join $path $image_zip_name] >&@ $status_channel
 	    }
 
 	    destructor {
