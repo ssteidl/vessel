@@ -39,6 +39,11 @@ namespace eval appc::pull {
 		return -code error errorcode {INTERFACECALL} \
 		    "Subclass of repo must implement reconfigure"
 	    }
+
+	    method delete_image {image tag} {
+		return -code error errorcode {INTERFACECALL} \
+		    "Subclass of repo must implement delete"
+	    }
 	    
 	    method get_url {} {
 
@@ -59,8 +64,6 @@ namespace eval appc::pull {
 	oo::class create file_repo {
 	    superclass repo
 
-	    variable path
-
 	    #TODO: This should be a classmethod
 	    method check_directory {dir_path} {
 		return -code ok
@@ -68,11 +71,6 @@ namespace eval appc::pull {
 
 	    constructor {url} {
 		next $url
-
-	        set url_parts [appc::url::parse $url]
-		set scheme [dict get $url_parts scheme]
-
-		set path [dict get $url_parts path]
 
 		if {$scheme ne {file}} {
 		    return -code error -errorcode {REPO SCHEME ENOTSUPPORTED} \
@@ -88,7 +86,7 @@ namespace eval appc::pull {
 
 	    method pull_image {image tag downloaddir} {
 
-		set image_path [file join $path "${image}:${tag}.zip"]
+		set image_path [file join [my get_path] "${image}:${tag}.zip"]
 		if {![file exists $image_path]} {
 		    return -code error -errorcode {REPO PULL ENOIMAGE} \
 			"Image path does not exist: $image_path"
@@ -107,7 +105,8 @@ namespace eval appc::pull {
 	    }
 
 	    method put_image {image tag} {
-
+		
+		set image_path [file join [my get_path] "${image}:${tag}.zip"]
 		set workdir [appc::env::get_workdir]
 		set repo_url [appc::env::get_repo_url]
 
