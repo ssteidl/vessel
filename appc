@@ -13,16 +13,17 @@ package require debug
 package require defer
 
 debug define appc
-debug on appc 1 stderr
+debug on appc 0 stderr
+
 set options [appc::parse_options $argv]
 debug.appc "Options: $options"
 set command [dict get $options command]
+set args [dict get $options args]
 
-
-set pre_command_flags [dict get $options pre_command_flags]
-
-#TODO: Remove this
-set run_local [dict get $pre_command_flags local]
+if {[dict exists $args help]} {
+    puts stderr [dict get $args help]
+    exit 0
+}
 
 set pool [appc::env::get_pool]
 if {![appc::zfs::is_mounted $pool]} {
@@ -64,7 +65,7 @@ set request_tag {tag1}
 switch -exact $command {
 
     build {
-        appc::build::build_command [dict get $options args] $request_tag stderr
+        appc::build::build_command [dict get $options args] stderr
     }
     run {
         set args [dict get $options args]
@@ -74,7 +75,7 @@ switch -exact $command {
         vwait run_done_flag
     }
     publish {
-        appc::publish::publish_command [dict get $options args] $request_tag stderr
+        appc::publish::publish_command [dict get $options args]
     }
     pull {
         appc::pull::pull_command [dict get $options args]
