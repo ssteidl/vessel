@@ -115,8 +115,7 @@ $image_cmd
             #Sourcing the appc file calls the functions like RUN
             # and copy at a global level.  We definitely need to do
             # that in a jail.
-            set request_tag [dict get $build_context request_tag]
-            set interp_name ${request_tag}.build_interp
+            set interp_name {build_interp}
 
             #Create the interp and setup the necessary global options
             interp create $interp_name
@@ -136,7 +135,7 @@ $image_cmd
         }
     }
     
-    proc build_command {args_dict request_tag status_channel}  {
+    proc build_command {args_dict status_channel}  {
 
         #build_context maintains the state for this build.  All
         #of the global variables set by sourcing the appc file
@@ -150,9 +149,7 @@ $image_cmd
                                mountpoint {} \
                                name {} \
                                guid {} \
-                               definition_file [definition_file create ${request_tag}.container_def] \
                                cmd {} \
-                               request_tag $request_tag \
                                status_channel $status_channel]
         
         set appc_file [dict get $build_context cmdline_options {file}]

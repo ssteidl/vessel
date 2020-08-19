@@ -1,40 +1,45 @@
+# -*- mode: tcl; -*-
 package require appc::native
 package require appc::env
 package require tcltest
 
 namespace import tcltest::*
 
-proc test_s3cmd_init {} {
+testConstraint aws $env(APPC_TEST_AWS)
 
-    set s3_config_file [file join [appc::env::get_work_dir] s3cfg] 
-    if {[file exists $s3_config_file]} {
-	file rm $s3_config_file
-    }
-    set appc_chan [open "| appc publish s3://myfakespace"]
-
-    set expected_output_starts_with {Enter new values or accept defaults in brackets with Enter.}
-    
-    #TODO: We need to run this in the background, and run an after event to kill it (close the pipe).
-    # Then we can verify the initial output
-}
-
-test s3cmd-init-1 {Test s3cmd initialization} -setup {
-
+test s3cmd-init-1 {Test s3cmd --configure is called when needed} -constraint aws -setup {
+    set ::env(APPC_REPO_URL) s3://appc-test-1
+    set ::env(APPC_S3CMD_CONFIG) [file join / tmp appc_s3cmd_config_test]
 } -body {
 
-    set ::env(APPC_REPO_URL) s3://myfacespace
-    set s3_config_file [file join [appc::env::get_workdir] s3cfg] 
+    set s3_config_file appc::env::s3cmd_config_file
+
     if {[file exists $s3_config_file]} {
 	file rm $s3_config_file
     }
-    set appc_chan [open "| appc publish s3://myfakespace"]
-    after 1000
-    set output [read $appc_chan 4096]
+    
+    set appc_chan [open "| appc publish "]
+    set output [gets $appc_chan]
+    puts stderr "First line: $output"
     close $appc_chan
     return $output
-} -result "shane is awesome"
+} -cleanup {
+    set ::env(APPC_REPO_URL) {}
+    set ::env(APPC_S3CMD_CONFIG) {}
+} -result "\nEnter new values or accept defaults in brackets with Enter.*"
 
+test appc-publish-s3-1 {Verify s3cmd put succeeds when publishing} -constraints aws -setup {
+    set ::env(APPC_REPO_URL) s3://appc-test-1
+} -body {
 
+    set minimal_appc_file [file join .. examples MinimalAppcFile]
+    exec --ignorestderr appc build --file=${minimal_appc_file} --tag=test-s3-1 --name={appc-publish-s3-1}
+    set appc_chan [open "| appc publish --tag=test-s3-1 appc-publish-s3-1"]
+    close $appc_chan
+    return -code ok
+} -cleanup {
+    set ::env(APPC_REPO_URL) {}
+} -returnCodes ok
 
 #TODO: Test for publish/pull --reconfigure.  This is useful to force a reconfigure of s3cmd in case
 #an access control key or something else has changed.

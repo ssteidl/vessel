@@ -4,8 +4,8 @@
 package require appc::env
 package require appc::native
 package require appc::build
-package require appc::publish
-package require appc::pull
+package require appc::import
+package require appc::repo
 package require appc::run
 package require appc::zfs
 
@@ -13,10 +13,11 @@ package require debug
 package require defer
 
 debug define appc
-debug on appc 0 stderr
+debug on appc 1 stderr
 
 set options [appc::parse_options $argv]
 debug.appc "Options: $options"
+
 set command [dict get $options command]
 set args [dict get $options args]
 
@@ -57,28 +58,56 @@ proc run_container_coro {options} {
     set run_done_flag [expr true]
 }
 
+proc handle_repo_cmd {cmd args_dict} {
 
-#Request tag is something that was used for running commands
-# in a daemon.  It's not really needed for single process
-# but it hasn't been removed yet.
-set request_tag {tag1}
-switch -exact $command {
+    debug.appc "repo args: $args_dict"
+    set image [dict get $args_dict image]
+
+    set tag [dict get $args_dict tag]
+    if {$tag eq {}} {
+        set tag {latest}
+    }
+
+    set repo [appc::repo::repo_factory [appc::env::get_repo_url]]
+    defer::with [list repo] {
+        $repo destroy
+    }
+
+    set downloaddir [appc::env::image_download_dir]
+    
+    switch -exact $cmd {
+
+        publish {
+            #Publish needs to package the image and publish.  Basically
+            #a package and put.
+            set package_file [appc::export::package $image $tag]
+            $repo put_image $image $tag
+        }
+        pull {
+            #Pulls the command.  Basically a GET and an import.
+            $repo pull_image $image $tag $downloaddir
+            appc::import::import $image $tag $downloaddir stderr
+        }
+    }
+}
+
+switch -regexp -matchvar parsed_cmd $command {
 
     build {
-        appc::build::build_command [dict get $options args] stderr
+        #Building creates the image as a tagged dataset.
+        #TODO: currently it doesn't tag the dataset
+        appc::build::build_command $args stderr
     }
     run {
-        set args [dict get $options args]
+        #Create a new container from a tagged dataset.
         set interactive [dict get $args interactive]
         coroutine toplevel_run_coro run_container_coro $options
         after idle toplevel_run_coro
         vwait run_done_flag
     }
-    publish {
-        appc::publish::publish_command [dict get $options args]
-    }
-    pull {
-        appc::pull::pull_command [dict get $options args]
+    publish|pull {
+        debug.appc "push pull args: $args"
+        handle_repo_cmd $parsed_cmd $args
     }
     default {
         puts stderr "Unknown command: $command"

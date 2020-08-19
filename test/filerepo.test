@@ -1,6 +1,6 @@
 # -*- mode: tcl; -*-
 
-package require appc::pull
+package require appc::repo
 package require appc::zfs
 package require tcltest
 
@@ -31,9 +31,9 @@ namespace eval file_repo::test {
 	set env(APPC_REPO_URL) "file://${repo_dir_path}"
     } -body {
 
-	set ignore [exec appc publish --tag=test testimage]
-	return -code ok
-    } -errorCode NONE -match glob -result * -cleanup {
+	exec -ignorestderr appc publish --tag=test testimage >&@ stderr
+	
+    } -returnCodes ok -cleanup {
 	set env(APPC_REPO_URL) {}
     } 
 

@@ -21,7 +21,8 @@ namespace eval appc::env {
     }
 
     proc get_workdir {} {
-        return [get_from_env APPC_WORKDIR [file join [get_from_env HOME [pwd]] .workdir]]
+        return [get_from_env APPC_WORKDIR \
+                    [file join [get_from_env HOME [pwd]] .appc-workdir]]
     }
     
     proc get_repo_url {} {
@@ -44,6 +45,16 @@ namespace eval appc::env {
         # copy resolve.conf
         set resolv_file {/etc/resolv.conf}
         file copy -force $resolv_file [fileutil::jail $mountpoint $resolv_file]
+    }
+
+    proc s3cmd_config_file {} {
+
+        return [get_from_env APPC_S3CMD_CONFIG [file normalize ~/.s3cfg]]
+    }
+
+    proc image_download_dir {} {
+        set workdir [get_workdir]
+        return [get_from_env APPC_DOWNLOAD_DIR [file join $workdir {downloaded_images}]]
     }
 }
 package provide appc::env 1.0.0
