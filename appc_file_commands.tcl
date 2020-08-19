@@ -23,7 +23,7 @@ namespace eval appc::file_commands::_ {
     proc fetch_image {image_dataset name version status_channel} {
 
 	if {$name ne "FreeBSD" } {
-
+	    
 	    return -code error -errorcode {BUILD IMAGE FETCH} \
 		"Only FreeBSD images are currently allowed"
 	}
@@ -67,10 +67,7 @@ proc FROM {image} {
     set parent_image $image
     puts stderr "FROM: $image"
 
-    set pool "zroot"
-    if {[info exists env(APPC_POOL)]} {
-	set pool $env(APPC_POOL)
-    }
+    set pool [appc::env::get_pool]
 
     #TODO: change to use ${pool}/appc by default
     set appc_parent_dataset "${pool}/jails"
@@ -114,26 +111,34 @@ proc FROM {image} {
     if {$name eq {}} {
 	set name $guid
     }
+
+    set tag [dict get $cmdline_options {tag}]
+
+    #TODO: This default tag to latest is scattered around.  I should put it in
+    #a common place.  Probably an image class.
+    if {$tag eq {}} {
+	set tag latest
+    }
     
-    set new_dataset "${appc_parent_dataset}/${name}"
+    #This needs to have the name:tag instead of a cloned dataset of
+    #name/tag.  I don't think the latter makes sense because having a parent
+    #dataset with different versions doesn't really make sense as the data in
+    #the parent is not necessarily relevant to the data in all children. One could be
+    #FBSD 11 and the other FBSD 12.  Anyway, handle the tag here.
+    set new_dataset "${appc_parent_dataset}/${name}:${tag}"
     if {![appc::zfs::dataset_exists $new_dataset]} {
 	appc::zfs::clone_snapshot $snapshot_path $new_dataset
     }
-
+    
     if {![appc::zfs::snapshot_exists "${new_dataset}@a"]} {
 	#Snapshot with version a is used for zfs diff
 	appc::zfs::create_snapshot $new_dataset a
     }
-    
+
+    #Set the current_dataset global var
     set current_dataset $new_dataset
 
     set mountpoint [appc::zfs::get_mountpoint $new_dataset]
-
-    #resolv_conf is needed here because RUN commands may need to
-    #access the internet.  Running a container should always update
-    #resolv conf.  In the future, maybe we just ignore it instead
-    #of leaving it in the image.
-    appc::env::copy_resolv_conf $mountpoint
 
     set from_called true
     return
@@ -200,19 +205,28 @@ proc RUN {args} {
         return -code error -errorcode {BUILD RUN ARGS} \
             "RUN invoked without arguments" 
     }
+
+    puts $status_channel "RUN mountpoint: $mountpoint"
+    set channel_dict [dict create stdin stdin stdout $status_channel stderr $status_channel]
+    set network "inherit"
+
     
     try {
-        puts $status_channel "RUN mountpoint: $mountpoint"
-	set channel_dict [dict create stdin stdin stdout $status_channel stderr $status_channel]
-	set network "inherit"
 
+	#Copy resolv conf so we can access the internet
+	appc::env::copy_resolv_conf $mountpoint
+	
 	#Empty callback signifies blocking mode
 	set callback {}
+	#TODO: Copy in resolv.conf here instead of in the BUILD command.  then remove it when we are done.
         appc::jail::run_jail "${name}-buildcmd" $mountpoint $channel_dict $network $callback {*}$args
     } trap {CHILDSTATUS} {results options} {
 
         puts stderr "Run failed: $results"
         return -code error -errorcode {BUILD RUN}
+    } finally {
+	
+	appc::env::remove_resolv_conf $mountpoint
     }
 
     return
@@ -226,6 +240,7 @@ proc CMD {args} {
         return -code error -errorcode {BUILD CMD EEXISTS} "Only one CMD is allowed"
     }
 
+    #Set the global cmd output var.
     set cmd $command
 }
 

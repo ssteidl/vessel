@@ -32,7 +32,11 @@ namespace eval appc::build {
                 }
             }
 
-            set files [list {*}[dict get $diff_dict {M}] {*}[dict get $diff_dict {+}]]
+            set files [list]
+            if {[dict exists $diff_dict {M}]} {
+                set files [list {*}[dict get $diff_dict {M}] {*}[dict get $diff_dict {+}]]
+            }
+            
             set tar_list_file [open {files.txt} {w}]
 
             #If the first line of the file is a '-C' then tar will chdir to the directory

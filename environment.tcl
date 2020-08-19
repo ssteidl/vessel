@@ -47,6 +47,11 @@ namespace eval appc::env {
         file copy -force $resolv_file [fileutil::jail $mountpoint $resolv_file]
     }
 
+    proc remove_resolv_conf {mountpoint} {
+        set resolve_file {/etc/resolv.conf}
+        file rm $reolv_file [fileutil::jail $mountpoint $resolv_file]
+    }
+
     proc s3cmd_config_file {} {
 
         return [get_from_env APPC_S3CMD_CONFIG [file normalize ~/.s3cfg]]
