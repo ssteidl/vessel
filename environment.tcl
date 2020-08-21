@@ -20,6 +20,15 @@ namespace eval appc::env {
         return [get_from_env APPC_POOL "zroot"]
     }
 
+    proc get_dataset {} {
+        #Get the zfs path including pool
+        
+        set pool [get_pool]
+        set dataset [get_from_env APPC_DATASET "jails"]
+
+        return "${pool}/${dataset}"
+    }
+    
     proc get_workdir {} {
         return [get_from_env APPC_WORKDIR \
                     [file join [get_from_env HOME [pwd]] .appc-workdir]]
@@ -33,8 +42,8 @@ namespace eval appc::env {
     
     proc get_dataset_from_image_name {image_name {tag {}}} {
 
-        set pool [get_pool]
-        set container_path "${pool}/jails/${image_name}"
+        set dataset [get_dataset]
+        set container_path "${dataset}/${image_name}"
         if {$tag ne {}} {
             set container_path "${container_path}/${tag}"
         }
@@ -42,7 +51,7 @@ namespace eval appc::env {
     }
 
     proc copy_resolv_conf {mountpoint} {
-        # copy resolve.conf
+        # copy resolv.conf
         set resolv_file {/etc/resolv.conf}
         file copy -force $resolv_file [fileutil::jail $mountpoint $resolv_file]
     }

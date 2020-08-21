@@ -69,8 +69,7 @@ proc FROM {image} {
 
     set pool [appc::env::get_pool]
 
-    #TODO: change to use ${pool}/appc by default
-    set appc_parent_dataset "${pool}/jails"
+    set appc_parent_dataset [appc::env::get_dataset]
     
     #Image is in the form <image name>:<version>
     #So image name is the dataset and version is the snapshot name

@@ -1,0 +1,75 @@
+# -*- mode: tcl; -*-
+
+package require appc::env
+package require appc::zfs
+package require tcltest
+
+namespace eval metadata_db::test {
+    namespace import ::tcltest::*
+    
+    #Use a specific dataset for testing
+    set env(APPC_DATASET) appc-test
+    
+    proc clean_dataset {} {
+
+	set mountpoints [appc::zfs::get_mountpoints]
+	puts "$mountpoints"
+
+	set appc_dataset [appc::env::get_dataset]
+
+	set appc_children [list]
+	#Destroy all child datasets except for the base FBSD dataset 
+	dict for {dataset properties} $mountpoints {
+
+	    set appc_dataset_index [string first $appc_dataset $dataset 0]
+	    if {$appc_dataset_index != 0} {
+		continue
+	    }
+	    
+	    set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset 0]
+	    if {$freebsd_index == 0 || $dataset eq $appc_dataset} {
+		#Skip FreeBSD dataset and toplevel appc dataset.  We can't delete appc dataset without
+		#deleting freebasd dataset
+		continue
+	    }
+
+	    lappend appc_children $dataset
+	}
+
+	set sorted_appc_children [lsort -dictionary -unique -decreasing $appc_children]
+
+	puts "sorted: $sorted_appc_children"
+	foreach ds $sorted_appc_children {
+	    
+	    #It's an appc dataset but not the FreeBSD dataset.
+	    puts stderr "Destroying: $ds"
+	    appc::zfs::destroy $ds
+	}
+    }
+    
+    #Build an image
+    proc build_image {image tag} {
+	set test_image_appc_file {FROM FreeBSD:12.1-RELEASE}
+	set test_image_chan [file tempfile appc_file /tmp/TestAppcFile]
+	puts $test_image_chan $test_image_appc_file
+	close $test_image_chan
+
+	exec appc build --file $appc_file --name $image --tag $tag >&@ stderr
+    }
+
+
+    clean_dataset
+    
+    #Create a background container
+    test list-images-1 {List all available images and their metadata} -setup {
+	build_image list-images-test 1
+
+    } -body {
+
+	exec appc image --list >&@ stderr
+	#ID    PARENT    CMD
+    } -match glob -result * -cleanup {
+	
+    }
+
+}

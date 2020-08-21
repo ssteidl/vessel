@@ -163,6 +163,10 @@ namespace eval appc::zfs {
         exec zfs destroy $dataset
     }
 
+    proc destroy_recursive {dataset} {
+        exec zfs destroy -R $dataset
+    }
+    
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]
 }
