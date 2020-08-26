@@ -5,6 +5,7 @@ package require appc::env
 package require appc::native
 package require appc::build
 package require appc::import
+package require appc::metadata_db
 package require appc::repo
 package require appc::run
 package require appc::zfs
@@ -52,7 +53,8 @@ proc run_container_coro {options} {
     }
 
     #Setup and yieldto the run coroutine.  It will callback this coroutine after exiting
-    coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] [info coroutine]
+    coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] \
+        [info coroutine]
     yieldto runcoro
 
     set run_done_flag [expr true]
@@ -109,7 +111,13 @@ switch -regexp -matchvar parsed_cmd $command {
         debug.appc "push pull args: $args"
         handle_repo_cmd $parsed_cmd $args
     }
+    image {
+        appc::metadata_db::image_command $args
+    }
     default {
         puts stderr "Unknown command: $command"
+        exit 1
     }
+
+    exit 0
 }

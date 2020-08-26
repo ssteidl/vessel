@@ -325,6 +325,7 @@ namespace
         std::ostringstream msg;
         msg << "push|pull <--tag=val> image" << std::endl
             << "--tag    The tag value" << std::endl
+            << "--help   Print this help message"
             << "image    The image to pull or publish" << std::endl;
         return msg.str();
     }
@@ -407,6 +408,89 @@ namespace
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                        Tcl_NewStringObj("image", -1),
                        Tcl_NewStringObj(image.c_str(), image.size()));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,
+                       Tcl_NewStringObj("args", -1),
+                       args_dict.release());
+        if(tcl_error) return tcl_error;
+
+        return TCL_OK;
+    }
+
+    std::string image_options_help()
+    {
+        std::ostringstream msg;
+        msg << "appcd image <options>" << std::endl
+            << "--list    List all images available in the appc dataset" << std::endl
+            << "--help    Print this help message" << std::endl;
+
+        return msg.str();
+    }
+
+    int parse_image_options(Tcl_Interp* interp, int argc,
+                            Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"list", no_argument, nullptr, 'l'},
+            {"help", no_argument, nullptr, 'h'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        if(argc < 2)
+        {
+            Tcl_WrongNumArgs(interp, argc, args, "image <options>");
+            return TCL_ERROR;
+        }
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        bool list = false;
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "hl", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'h':
+            {
+                std::string help_msg = image_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                if(tcl_error) return tcl_error;
+
+                /*Short circuit for help flag*/
+                tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                           Tcl_NewStringObj("args", -1),
+                                           args_dict.release());
+                if(tcl_error) return tcl_error;
+
+                return TCL_OK;
+
+            }
+            case 'l':
+                list = true;
+                break;
+            case ':':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
+                return TCL_ERROR;
+            case '?':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown argument for optind: %d", optind));
+                return TCL_ERROR;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown error for optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("list", -1),
+                       Tcl_NewBooleanObj(list));
         if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, options_dict,
@@ -510,6 +594,11 @@ namespace
         {
             tcl_error = parse_create_network_options(interp, arg_count,
                                                      argument_objs, command_options.get());
+            if(tcl_error) return tcl_error;
+        }
+        else if(command == "image")
+        {
+            tcl_error = parse_image_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else

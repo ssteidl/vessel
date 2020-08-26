@@ -166,6 +166,29 @@ namespace eval appc::zfs {
     proc destroy_recursive {dataset} {
         exec zfs destroy -R $dataset
     }
+
+    proc dataset_children {parent_dataset} {
+
+        #Return a list of dicts that describe the datasets.  The first element in the
+        #list is the parent_dataset
+        
+        set output [exec zfs list -H -r $parent_dataset]
+        puts stderr "output: $output"
+        set dataset_dict_list [list]
+        foreach dataset_line [split $output \n] {
+            puts "dsline: $dataset_line"
+            set dataset_dict [dict create \
+                                  name [lindex $dataset_line 0] \
+                                  used [lindex $dataset_line 1] \
+                                  avail [lindex $dataset_line 2] \
+                                  refer [lindex $dataset_line 3] \
+                                  mountpoint [lindex $dataset_line 4]]
+
+            set dataset_dict_list [lappend dataset_dict_list $dataset_dict]
+        }
+
+        return $dataset_dict_list
+    }
     
     variable snapshots_dict [get_snapshots]
     variable mountpoints_dict [get_mountpoints]

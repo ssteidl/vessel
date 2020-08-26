@@ -1,5 +1,6 @@
 package require debug
 package require appc::env
+package require appc::metadata_db
 package require appc::native
 package require defer
 package require fileutil
@@ -82,14 +83,23 @@ namespace eval appc::import {
 	}
     }
 
+    proc import_image_metadata {name tag cwd cmd parent_image} {
+	#Used when the image already exists (maybe it was built) and
+	# we just need to store the metadata.
+
+        appc::metadata_db::write_metadata_file $name $tag $cwd $cmd $parent_image
+    }
+    
     proc import {image tag image_dir status_channel} {
 	debug.import "import{}: ${image},${tag}"
 
-k	set extracted_path [file join $image_dir "${image}:${tag}"]
+	set extracted_path [file join $image_dir "${image}:${tag}"]
 
 	#Extract files into extracted_path overriding files that already exist.
 	exec unzip -o -d $extracted_path [file join $image_dir "${image}:${tag}.zip"] >&@ $status_channel
 	_::create_layer $image $tag $extracted_path $status_channel
+
+	#TODO: Store metadata file.
     }
 }
 

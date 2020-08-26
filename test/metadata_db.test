@@ -1,17 +1,34 @@
 # -*- mode: tcl; -*-
 
 package require appc::env
+package require appc::metadata_db
 package require appc::zfs
+package require json
+package require json::write
 package require tcltest
+
+#NOTE: It would be nice to not need an sqlite database and just use
+# jail.conf files.  However, the parser may be a pain in the ass.  I
+# could steal the lex/yacc parser from the jail util but then I'd have
+# to keep it up with any releases.  I think since we are creating the
+# jail definitions from the appc files.  I think I can probably just
+# use a json file and generate a temporary jail file to execute the
+# jail.
+
+
+#TODO: This is a random side note here but the FreeBSD/<Version>
+# dataset should actually be FreeBSD:<Version>.  That would make it
+# align with the rest of the datasets.
 
 namespace eval metadata_db::test {
     namespace import ::tcltest::*
     
     #Use a specific dataset for testing
     set env(APPC_DATASET) appc-test
-    
+    #set env(APPC_METADATA_DB_DIR) {/tmp/appc-test/metadata_db}
     proc clean_dataset {} {
 
+	#TODO: this should get the children of the appc_dataset
 	set mountpoints [appc::zfs::get_mountpoints]
 	puts "$mountpoints"
 
@@ -29,7 +46,7 @@ namespace eval metadata_db::test {
 	    set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset 0]
 	    if {$freebsd_index == 0 || $dataset eq $appc_dataset} {
 		#Skip FreeBSD dataset and toplevel appc dataset.  We can't delete appc dataset without
-		#deleting freebasd dataset
+		#deleting freebsd dataset
 		continue
 	    }
 
@@ -38,7 +55,6 @@ namespace eval metadata_db::test {
 
 	set sorted_appc_children [lsort -dictionary -unique -decreasing $appc_children]
 
-	puts "sorted: $sorted_appc_children"
 	foreach ds $sorted_appc_children {
 	    
 	    #It's an appc dataset but not the FreeBSD dataset.
@@ -47,7 +63,6 @@ namespace eval metadata_db::test {
 	}
     }
     
-    #Build an image
     proc build_image {image tag} {
 	set test_image_appc_file {FROM FreeBSD:12.1-RELEASE}
 	set test_image_chan [file tempfile appc_file /tmp/TestAppcFile]
@@ -57,19 +72,68 @@ namespace eval metadata_db::test {
 	exec appc build --file $appc_file --name $image --tag $tag >&@ stderr
     }
 
+    proc init_runtime_environment {} {
+	# Initialize runtime environment based on environment variables.  This should
+	# probably be a standalone module.
 
-    clean_dataset
+	file mkdir [appc::env::image_download_dir]
+	file mkdir [appc::env::metadata_db_dir]
+    }
+    
+
+    #configure -skip {image-list-output-1}
+
+    init_runtime_environment
+    test image-list-1 {Verify output from the image iteration proc} {
+
+    } 
     
     #Create a background container
-    test list-images-1 {List all available images and their metadata} -setup {
+    test image-list-output-1 {List all available images and their metadata} -setup {
+	clean_dataset
 	build_image list-images-test 1
-
     } -body {
 
 	exec appc image --list >&@ stderr
+	
 	#ID    PARENT    CMD
-    } -match glob -result * -cleanup {
+    } -result {ID    PARENT    CMD} -cleanup {
 	
     }
 
+    test metadata_db-json-1 {Verify json format} -setup {
+	json::write indented false
+    } -body {
+	appc::metadata_db::_::create_metadata_json \
+	    [dict create \
+		 "name" "test-image" \
+		 "tag" "1.0" \
+		 "command" "bash" \
+		 "cwd" "/home/joe" \
+		 "parent_images" [list FreeBSD:11.1]]
+		 
+    } -result {{"name":"test-image","tag":"1.0","command":"bash","cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
+	json::write indented true
+    }
+
+    test metadata_db-json-2 {Verify valid json is written to the metadata file} -body {
+	set metadata_file [appc::metadata_db::write_metadata_file \
+			       test_image test {/} {/etc/rc} {}]
+
+	
+	set d [json::json2dict [fileutil::cat $metadata_file]]
+	expr [dict size $d] > 0
+    } -result [expr 1]
+    
+    test metadata_db-json-2 {Verify json is read correctly} -setup {
+	clean_dataset
+	build_image list-images-test 1	
+    } -body {
+
+	appc::metadata_db::_::list_images stdout
+    } -result ok -cleanup {
+
+    }
+
+    cleanupTests
 }

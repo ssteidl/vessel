@@ -3,6 +3,7 @@ package require uuid
 package require fileutil
 package require appc::definition_file
 package require appc::env
+package require appc::import
 package require appc::jail
 package require appc::zfs
 
@@ -203,6 +204,8 @@ $image_cmd
         set parent_image [dict get $build_context parent_image]
         _::create_image $build_dir $name $tag \
             $cmd $cwd $parent_image $status_channel
+
+        appc::import::import_image_metadata $name $tag $cwd $cmd $parent_image
     }
 }
 

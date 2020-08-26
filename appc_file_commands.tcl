@@ -2,6 +2,7 @@ package require appc::native
 package require appc::bsd
 package require appc::env
 package require appc::jail
+package require appc::metadata_db
 package require appc::zfs
 package require fileutil
 package require uuid
@@ -22,6 +23,10 @@ set command_queue [list]
 namespace eval appc::file_commands::_ {
     proc fetch_image {image_dataset name version status_channel} {
 
+	#Download an image.  Ideally we just pull from a repo like
+	#any other image.  For now we have a special function because
+	#it's not an actual appc image.  Just a tarball
+	
 	if {$name ne "FreeBSD" } {
 	    
 	    return -code error -errorcode {BUILD IMAGE FETCH} \
@@ -33,17 +38,23 @@ namespace eval appc::file_commands::_ {
 	#TODO: Support a registry.  For now only support
 	#freebsd base.txz
 
-	#TODO: What should we do for a download directory? For now
-	#I'll just use tmp
-
-	#TODO: For now we require the image to be the same as the
+	#We require the image to be the same as the
 	#host architecture
 	set arch [appc::bsd::host_architecture]
 
-	#TODO: Test needs to be the mountpoint of the new dataset
-	puts stderr "Invoking curl"
 	set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-	exec -ignorestderr curl -L --output - $url | tar -C $mountpoint -xvf - >&@ stderr
+
+	set old_pwd [pwd]
+	set download_dir [appc::env::image_download_dir]
+	try {
+	    #We used to pipe these two command together but that would cause issues
+	    #with slower internet.
+	    cd $download_dir
+	    exec -ignorestderr curl -L -O $url
+	    exec tar -C $mountpoint -xvf base.txz >&@ stderr
+	} finally {
+	    cd $old_pwd
+	}
     }
 }
 
@@ -83,7 +94,7 @@ proc FROM {image} {
 
     set image_name [lindex $image_tuple 0]
     set image_version [lindex $image_tuple 1]
-    set snapshot_name "${image_name}/${image_version}@${image_version}"
+    set snapshot_name "${image_name}:${image_version}@${image_version}"
     set snapshot_path "${appc_parent_dataset}/${snapshot_name}"
 
     puts "[appc::zfs::get_snapshots]"
@@ -92,14 +103,14 @@ proc FROM {image} {
 
     if {!$snapshot_exists} {
 
-	#TODO: We need to update the way images are handled.  The dataset should
-	# be /appc/<image_name>/<image_version>
-	# and the snapshot should be /appc/<image_name>/<image_version>@<guid>
-	# perhaps the snapshot should be a repeat of the image version.  Not sure.
-
-	set image_dataset "${appc_parent_dataset}/${image_name}/${image_version}"
+	set image_dataset "${appc_parent_dataset}/${image_name}:${image_version}"
 	appc::zfs::create_dataset $image_dataset
+
+	#TODO: This fetch_image should really be just another image.  For now it's a
+	#special case.
 	appc::file_commands::_::fetch_image $image_dataset $image_name $image_version $status_channel
+	appc::metadata_db::write_metadata_file $image_name $image_version {/} {/etc/rc} \
+	    [list]
 	appc::zfs::create_snapshot $image_dataset $image_version
     }
 

@@ -70,5 +70,11 @@ namespace eval appc::env {
         set workdir [get_workdir]
         return [get_from_env APPC_DOWNLOAD_DIR [file join $workdir {downloaded_images}]]
     }
+
+    proc metadata_db_dir {} {
+
+        set workdir [get_workdir]
+        return [get_from_env APPC_METADATA_DB_DIR [file join $workdir {db}]]
+    }
 }
 package provide appc::env 1.0.0
