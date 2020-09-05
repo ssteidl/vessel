@@ -99,6 +99,15 @@ namespace eval appc::metadata_db {
 	    foreach child_dict $children_list {
 		set dataset_name [dict get $child_dict {name}]
 
+		#We don't want to list container images here. So we only use
+		#images with 3 parts when we split on /.  An example
+		#container image is:
+		#zroot/jails/minimal:hackathon/0bdefddd-a753-48a8-bd85-750d5031464d
+		set component_count [llength [split $dataset_name /]]
+		if {$component_count == 4} {
+		    continue
+		}
+		
 		set dataset_metadata [read_metadata_json $dataset_name]
 
 		set command [dict get $dataset_metadata command]
