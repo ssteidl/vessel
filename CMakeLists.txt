@@ -24,18 +24,19 @@ target_link_libraries(url_test ${CURL_LIBRARIES})
 install(TARGETS appctcl
         LIBRARY
         DESTINATION lib/tclappc)
-install(FILES appc_file_commands.tcl
-              appcd_client.tcl
+install(FILES appc
+              appc_file_commands.tcl
               bsd.tcl
               build.tcl
               definition_file.tcl
               environment.tcl
+              export.tcl
+              import.tcl
               jail.tcl
+              metadata_db.tcl
 	      name-gen.tcl
               pkgIndex.tcl
-              pty_shell.tcl
-              publish.tcl
-              pull.tcl
+              repos.tcl
               run.tcl
               zfs.tcl
         DESTINATION lib/tclappc)
@@ -44,5 +45,4 @@ install(DIRECTORY network
         DESTINATION lib/tclappc
         PATTERN *.md EXCLUDE)
 
-install(PROGRAMS appcd DESTINATION sbin)
 install(PROGRAMS appc DESTINATION bin)

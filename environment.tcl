@@ -45,7 +45,7 @@ namespace eval appc::env {
         set dataset [get_dataset]
         set container_path "${dataset}/${image_name}"
         if {$tag ne {}} {
-            set container_path "${container_path}/${tag}"
+            set container_path "${container_path}:${tag}"
         }
         return $container_path
     }
