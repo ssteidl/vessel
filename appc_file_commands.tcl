@@ -251,7 +251,7 @@ proc CMD {args} {
     }
 
     #Set the global cmd output var.
-    set cmd $command
+    set cmd $args
 }
 
 package provide AppcFileCommands 1.0.0

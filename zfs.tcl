@@ -164,7 +164,7 @@ namespace eval appc::zfs {
     }
 
     proc destroy_recursive {dataset} {
-        exec zfs destroy -R $dataset
+        exec zfs destroy -r $dataset
     }
 
     proc dataset_children {parent_dataset} {
@@ -173,10 +173,8 @@ namespace eval appc::zfs {
         #list is the parent_dataset
         
         set output [exec zfs list -H -r $parent_dataset]
-        puts stderr "output: $output"
         set dataset_dict_list [list]
         foreach dataset_line [split $output \n] {
-            puts "dsline: $dataset_line"
             set dataset_dict [dict create \
                                   name [lindex $dataset_line 0] \
                                   used [lindex $dataset_line 1] \

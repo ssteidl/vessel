@@ -71,6 +71,8 @@ cd $image_cwd
 $image_cmd
             }]
 
+            #TODO: This needs to be the metadata_db file.
+            
             #Write the command file
             set command_file_path [file join $image_dir command.sh]
             set command_file [open $command_file_path w+ 0755]

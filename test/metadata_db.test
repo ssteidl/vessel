@@ -28,29 +28,23 @@ namespace eval metadata_db::test {
     #set env(APPC_METADATA_DB_DIR) {/tmp/appc-test/metadata_db}
     proc clean_dataset {} {
 
-	#TODO: this should get the children of the appc_dataset
-	set mountpoints [appc::zfs::get_mountpoints]
-	puts "$mountpoints"
-
 	set appc_dataset [appc::env::get_dataset]
+
+	set dataset_children [appc::zfs::dataset_children $appc_dataset]
+
+	set child_datasets_list [lrange $dataset_children 1 end]
 
 	set appc_children [list]
 	#Destroy all child datasets except for the base FBSD dataset 
-	dict for {dataset properties} $mountpoints {
-
-	    set appc_dataset_index [string first $appc_dataset $dataset 0]
-	    if {$appc_dataset_index != 0} {
-		continue
-	    }
-	    
-	    set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset 0]
-	    if {$freebsd_index == 0 || $dataset eq $appc_dataset} {
-		#Skip FreeBSD dataset and toplevel appc dataset.  We can't delete appc dataset without
-		#deleting freebsd dataset
+	foreach dataset_props $child_datasets_list {
+	    set dataset_name [dict get $dataset_props name]
+	    set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset_name 0]
+	    if {$freebsd_index == 0} {
+		#Skip FreeBSD dataset 
 		continue
 	    }
 
-	    lappend appc_children $dataset
+	    lappend appc_children $dataset_name
 	}
 
 	set sorted_appc_children [lsort -dictionary -unique -decreasing $appc_children]
@@ -58,13 +52,13 @@ namespace eval metadata_db::test {
 	foreach ds $sorted_appc_children {
 	    
 	    #It's an appc dataset but not the FreeBSD dataset.
-	    puts stderr "Destroying: $ds"
-	    appc::zfs::destroy $ds
+	    appc::zfs::destroy_recursive $ds
 	}
     }
     
     proc build_image {image tag} {
-	set test_image_appc_file {FROM FreeBSD:12.1-RELEASE}
+	set test_image_appc_file {FROM FreeBSD:12.1-RELEASE
+	    CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
 	set test_image_chan [file tempfile appc_file /tmp/TestAppcFile]
 	puts $test_image_chan $test_image_appc_file
 	close $test_image_chan
@@ -112,13 +106,13 @@ namespace eval metadata_db::test {
 		 "cwd" "/home/joe" \
 		 "parent_images" [list FreeBSD:11.1]]
 		 
-    } -result {{"name":"test-image","tag":"1.0","command":"bash","cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
+    } -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
 	json::write indented true
     }
 
     test metadata_db-json-2 {Verify valid json is written to the metadata file} -body {
 	set metadata_file [appc::metadata_db::write_metadata_file \
-			       test_image test {/} {/etc/rc} {}]
+			       test_image test {/} {/etc/rc} [list]]
 
 	
 	set d [json::json2dict [fileutil::cat $metadata_file]]
@@ -130,8 +124,9 @@ namespace eval metadata_db::test {
 	build_image list-images-test 1	
     } -body {
 
+	#NOTE: Working on getting command output right.
 	appc::metadata_db::_::list_images stdout
-    } -result ok -cleanup {
+    } -output {} -cleanup {
 
     }
 
