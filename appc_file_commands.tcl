@@ -97,9 +97,7 @@ proc FROM {image} {
     set snapshot_name "${image_name}:${image_version}@${image_version}"
     set snapshot_path "${appc_parent_dataset}/${snapshot_name}"
 
-    puts "[appc::zfs::get_snapshots]"
     set snapshot_exists [appc::zfs::snapshot_exists $snapshot_path]
-    puts stderr "${snapshot_path}:${snapshot_exists}"
 
     if {!$snapshot_exists} {
 

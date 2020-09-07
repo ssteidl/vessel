@@ -58,7 +58,7 @@ namespace eval appc::env {
 
     proc remove_resolv_conf {mountpoint} {
         set resolve_file {/etc/resolv.conf}
-        file rm $reolv_file [fileutil::jail $mountpoint $resolv_file]
+        #file delete $resolve_file [fileutil::jail $mountpoint $resolve_file]
     }
 
     proc s3cmd_config_file {} {
