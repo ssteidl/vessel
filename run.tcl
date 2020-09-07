@@ -68,18 +68,20 @@ namespace eval appc::run {
         if {$tag eq {local}} {
             #If tag is the special name "local" then don't clone the dataset.  This can
             #can be useful for development and testing.
-            set tag {}
+            set tag {local}
         }
         set image_dataset [appc::env::get_dataset_from_image_name $image_name $tag]
         debug.run "RUN COMMAND image dataset: $image_dataset"
 
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
+            return -code error -errorcode {APPC RUN NYI} \
+                "Automatically pulling images is NYI"
         }
 
         set b_snapshot_exists [appc::zfs::snapshot_exists "${image_dataset}@b"]
         debug.run "RUN COMMAND b snapshot exists: $b_snapshot_exists"
-        if {$b_snapshot_exists && $tag ne {}} {
+        if {$b_snapshot_exists && $tag ne {local}} {
 
             set uuid [uuid::uuid generate]
             set container_dataset [appc::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
@@ -89,7 +91,7 @@ namespace eval appc::run {
         } else {
 
             #Support manually created or pulled datasets
-            set container_dataset $image_dataset
+            set container_dataset "${image_dataset}"
         }
         
         set mountpoint [appc::zfs::get_mountpoint $container_dataset]

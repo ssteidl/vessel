@@ -156,7 +156,7 @@ $image_cmd
                                mountpoint {} \
                                name {} \
                                guid {} \
-                               cmd {} \
+                               cmd {sh /etc/rc} \
                                status_channel $status_channel]
         
         set appc_file [dict get $build_context cmdline_options {file}]
