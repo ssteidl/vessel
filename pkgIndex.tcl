@@ -4,6 +4,7 @@ package ifneeded appcd::client 1.0.0 [list source [file join $dir appcd_client.t
 package ifneeded appc::definition_file 1.0.0 [list source [file join $dir definition_file.tcl]]
 package ifneeded appc::dns 1.0.0 [list source [file join $dir dns dns.tcl]]
 package ifneeded appc::env 1.0.0 [list source [file join $dir environment.tcl]]
+package ifneeded appc::export 1.0.0 [list source [file join $dir export.tcl]]
 package ifneeded appc::import 1.0.0 [list source [file join $dir import.tcl]]
 package ifneeded appc::jail 1.0.0 [list source [file join $dir jail.tcl]]
 package ifneeded appc::metadata_db 1.0.0 [list source [file join $dir metadata_db.tcl]]

@@ -136,6 +136,12 @@ namespace eval appc::metadata_db {
 	}
     }
 
+    proc metadata_file_path {image_name tag} {
+	set metadata_dir [appc::env::metadata_db_dir]
+	set metadata_file [file join $metadata_dir "${image_name}:${tag}.json"]
+	return $metadata_file
+    }
+    
     proc write_metadata_file {image_name tag cwd cmd parent_images} {
 
 	#params:
@@ -146,7 +152,7 @@ namespace eval appc::metadata_db {
 	# cmd: Command to run by default
 	# parent_image: The one parent image
 	
-	set metadata_dir [appc::env::metadata_db_dir]
+
 	set json_content [_::create_metadata_json [dict create name $image_name \
 						       tag $tag \
 						       command $cmd \
@@ -159,9 +165,9 @@ namespace eval appc::metadata_db {
 	    set tmp_file_chan [file tempfile file_path "${image_name}.json"]
 	    puts $tmp_file_chan $json_content
 	    flush $tmp_file_chan
-	    set metadata_file [file join $metadata_dir "${image_name}:${tag}.json"]
+	    set metadata_file [metadata_file_path $image_name $tag]
 	    file rename -force $file_path $metadata_file
-		
+	    
 	} finally {
 
 	    catch {close $file_chan}

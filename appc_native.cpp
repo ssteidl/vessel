@@ -5,8 +5,9 @@
 #include <list>
 #include <sstream>
 #include <string>
-#include <sys/types.h>
+#include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <tcl.h>
 #include <unistd.h>
 #include <vector>
@@ -391,7 +392,6 @@ namespace
             }
         }
 
-        std::cerr << "optind: " << optind << "," << argc << std::endl;
         if((argc - optind) <= 0)
         {
             Tcl_SetObjResult(interp, Tcl_ObjPrintf("image name not provided"));
@@ -501,12 +501,111 @@ namespace
         return TCL_OK;
     }
 
+    std::string export_options_help()
+    {
+        std::ostringstream msg;
+        msg << "appc export {--dir} image:tag" << std::endl
+            << "--dir     Directory to output the image" << std::endl
+            << "--help    Print this help message" << std::endl;
+
+        return msg.str();
+    }
+
+    int parse_export_options(Tcl_Interp* interp, int argc,
+                            Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"dir", required_argument, nullptr, 'd'},
+            {"help", no_argument, nullptr, 'h'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        if(argc < 2)
+        {
+            Tcl_WrongNumArgs(interp, argc, args, "image <options>");
+            return TCL_ERROR;
+        }
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        char pwd_buf[MAXPATHLEN+1];
+        memset(pwd_buf, 0, sizeof(pwd_buf));
+        appc::tclobj_ptr pwd_obj(Tcl_NewStringObj(getwd(pwd_buf), -1), appc::unref_tclobj);
+        appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:h", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'd':
+                pwd_obj = appc::tclobj_ptr(Tcl_NewStringObj(optarg, -1), appc::unref_tclobj);
+                break;
+            case 'h':
+            {
+                std::string help_msg = export_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                if(tcl_error) return tcl_error;
+
+                /*Short circuit for help flag*/
+                tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                           Tcl_NewStringObj("args", -1),
+                                           args_dict.release());
+                if(tcl_error) return tcl_error;
+
+                return TCL_OK;
+
+            }
+            case ':':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
+                return TCL_ERROR;
+            case '?':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown argument for optind: %d", optind));
+                return TCL_ERROR;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown error for optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+
+        if(optind == argc)
+        {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Missing <image:tag> in export command", -1));
+            return TCL_ERROR;
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("dir", -1),
+                       pwd_obj.release());
+        if(tcl_error) return tcl_error;
+
+        appc::tclobj_ptr image_obj(Tcl_NewStringObj(argv[optind], -1), appc::unref_tclobj);
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("image", -1),
+                       image_obj.release());
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,
+                       Tcl_NewStringObj("args", -1),
+                       args_dict.release());
+        if(tcl_error) return tcl_error;
+
+        return TCL_OK;
+    }
+
     /**
      * appc::parse_options $argc $argv
      */
     int Appc_ParseOptions(void *clientData, Tcl_Interp *interp,
                           int objc, struct Tcl_Obj *const *objv)
     {
+        (void)clientData;
         if(objc < 2)
         {
             Tcl_WrongNumArgs(interp, objc, objv, "Only one arg expected. <argv>");
@@ -599,6 +698,11 @@ namespace
         else if(command == "image")
         {
             tcl_error = parse_image_options(interp, arg_count, argument_objs, command_options.get());
+            if(tcl_error) return tcl_error;
+        }
+        else if(command == "export")
+        {
+            tcl_error = parse_export_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else

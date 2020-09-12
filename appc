@@ -2,6 +2,7 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require appc::env
+package require appc::export
 package require appc::native
 package require appc::build
 package require appc::import
@@ -113,6 +114,9 @@ switch -regexp -matchvar parsed_cmd $command {
     }
     image {
         appc::metadata_db::image_command $args
+    }
+    export {
+        appc::export::export_command $args
     }
     default {
         puts stderr "Unknown command: $command"
