@@ -86,21 +86,15 @@ namespace eval appc::export {
             trace add variable workdir unset [list apply {{old_pwd _1 _2 _3} {
                 cd $old_pwd
             } } [pwd]]
-            cd $workdir
-            set relative_image_dir [file join . [fileutil::stripPwd $image_dir]]
-            puts stderr "image_dir: $relative_image_dir"
-            exec zip -v -r -m [file join $output_dir ${image_name}:${image_tag}] $relative_image_dir >&@ $status_channel
+	    cd $image_dir
+	    set output_image_path [file join $output_dir "${image_name}:${image_tag}.zip"]
+            exec zip -v -r -m $output_image_path . >&@ $status_channel
+	    return $output_image_path
         }
     }
     
     proc export_image {image tag output_dir} {
-	#TODO: Export tagged dataset to a file.
 
-	#I'm currently trying to decide how to create the layer image.
-	#I need to find how to get the parent image and current
-	#working directory.  Perhaps we just skip this for now until
-	#we can get a database going which can hold those fields. eh,
-	#we are going to need the parent image though.
 	return [_::create_image $image $tag $output_dir stderr]
     }
 
@@ -118,6 +112,9 @@ namespace eval appc::export {
 
 	set output_dir [dict get $args_dict dir]
 	return [export_image $image_name $image_tag $output_dir]
+
+	#TODO: We should get rid of the export command.  It should just be part of
+	#the publish command with a file:// scheme
     }
 }
 

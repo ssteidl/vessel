@@ -58,6 +58,8 @@ namespace eval appc::env {
 
     proc remove_resolv_conf {mountpoint} {
         set resolve_file {/etc/resolv.conf}
+        #TODO: Commented this out because it was getting deleted multiple times
+        #due to multiple run commands.  Need to fix the appc_file_command
         #file delete $resolve_file [fileutil::jail $mountpoint $resolve_file]
     }
 

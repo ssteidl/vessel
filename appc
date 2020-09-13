@@ -35,6 +35,20 @@ if {![appc::zfs::is_mounted $pool]} {
 }
 
 set run_done_flag [expr false]
+
+#TODO: This probably belongs in environment as "init_environment" or
+#something like that.
+proc create_workdir {} {
+
+    set workdir [appc::env::get_workdir]
+    if {![file exists $workdir]} {
+        file mkdir $workdir
+        file mkdir [file join $workdir local_repo]
+        file mkdir [file join $workdir db]
+        file mkdir [file join $workdir downloaded_images]
+    }
+}
+
 proc run_container_coro {options} {
     global run_done_flag
 
@@ -81,10 +95,12 @@ proc handle_repo_cmd {cmd args_dict} {
     switch -exact $cmd {
 
         publish {
-            #Publish needs to package the image and publish.  Basically
-            #a package and put.
-            set package_file [appc::export::package $image $tag]
-            $repo put_image $image $tag
+            #NOTE: We may want to make export directories something separate
+            #from download directories.  For now, we'll keep it separate.
+            #
+            #appc publish --tag=local kafka
+            set image_file [appc::export::export_image $image $tag $downloaddir]
+            $repo put_image $image_file
         }
         pull {
             #Pulls the command.  Basically a GET and an import.
@@ -93,6 +109,8 @@ proc handle_repo_cmd {cmd args_dict} {
         }
     }
 }
+
+create_workdir
 
 switch -regexp -matchvar parsed_cmd $command {
 

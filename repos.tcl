@@ -33,7 +33,7 @@ namespace eval appc::repo {
 		"Subclass of repo must implement pull_image"
 	}
 
-	method put_image {image tag} {
+	method put_image {image_path} {
 	    return -code error errorcode {INTERFACECALL} \
 		"Subclass of repo must implement put_image"
 	}
@@ -82,7 +82,7 @@ namespace eval appc::repo {
 	    set path [my get_path]
 	    if {![file exists $path] || ![file isdirectory $path]} {
 		return -code error -errorcode {REPO PATH EEXISTS} \
-		    "Path either doesn't exist or is not a directory: $_path"
+		    "Path either doesn't exist or is not a directory: $path"
 	    }
 	}
 
@@ -106,16 +106,23 @@ namespace eval appc::repo {
 	    }
 	}
 
-	method put_image {image tag} {
-	    set path [my get_path]
+	method put_image {image_path} {
+	    set output_path [my get_path]
 
-	    set image_zip_name "${image}:${tag}.zip"
-	    set image_path [file join $path $image_zip_name]
-	    set workdir [appc::env::get_workdir]
+	    #TODO: Parse out image name from image path
 	    set repo_url [appc::env::get_repo_url]
 
-	    set image_path [file join $workdir $image_zip_name]
-	    exec curl file://localhost/$image_path -o [file join $path $image_zip_name] \
+	    set image_path_components [file split $image_path]
+	    set image_zip_name [lrange $image_path_components end end]
+	    puts "$image_path_components,$image_zip_name"
+	    set extension [file extension $image_zip_name]
+	    if {$extension ne ".zip"} {
+		return -code error -errorcode {REPO PUT EFORMAT} \
+		    "Unexpected image extension: $extension"
+	    }
+	    
+	    exec curl file://localhost/$image_path -o \
+		[file join $output_path $image_zip_name] \
 		>&@ [my get_status_channel]
 	}
 
