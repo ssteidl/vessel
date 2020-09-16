@@ -18,7 +18,7 @@ namespace eval appc::repo {
 	variable _path
 	
 	constructor {url} {
-	    set full_url ${url}
+	    set _full_url ${url}
 	    
 	    #Parse it to ensure it is valid
 	    set url_dict [appc::url::parse ${url}]
@@ -28,7 +28,7 @@ namespace eval appc::repo {
 	    set _path [dict get $url_dict path]
 	}
 	
-	method pull_image {image tag} {
+	method pull_image {image tag downloaddir} {
 	    return -code error errorcode {INTERFACECALL} \
 		"Subclass of repo must implement pull_image"
 	}
@@ -47,10 +47,15 @@ namespace eval appc::repo {
 	    return -code error errorcode {INTERFACECALL} \
 		"Subclass of repo must implement delete"
 	}
+
+	method image_exists {image tag} {
+	    return -code error errorcode {INTERFACECALL} \
+		"Subclass of repo must implement image_exists"
+	}
 	
 	method get_url {} {
 
-	    return $_full_url
+	    return ${_full_url}
 	}
 
 	method get_scheme {} {
@@ -89,7 +94,7 @@ namespace eval appc::repo {
 	method pull_image {image tag downloaddir} {
 
 	    set image_path [file join [my get_path] "${image}:${tag}.zip"]
-	    if {![file exists $image_path]} {
+	    if {![my image_exists $image $tag]} {
 		return -code error -errorcode {REPO PULL ENOIMAGE} \
 		    "Image path does not exist: $image_path"
 	    }
@@ -126,11 +131,64 @@ namespace eval appc::repo {
 		>&@ [my get_status_channel]
 	}
 
+	method image_exists {image tag} {
+	    
+	    set image_path [file join [my get_path] "${image}:${tag}.zip"]
+	    return [file exists $image_path]
+	}
+	
 	destructor {
 	    debug.repo "destroying repo"
 	}
     }
 
+    oo::class create s3repo {
+	superclass repo
+	
+	constructor {url} {
+	    next $url
+
+	    if {[my get_scheme] ne {s3}} {
+		return -code error -errorcode {REPO SCHEME ENOTSUPPORTED} \
+		    "Scheme: $scheme is not supported by s3repo"
+	    }
+	}
+
+	method _get_s3_image_url {image tag} {
+	    #TODO: this is everywhere
+	    set image_name "${image}:${tag}.zip"
+
+	    set image_url [join [list [my get_url] $image_name] /]	    
+	}
+	
+	method pull_image {image tag downloaddir} {
+
+	    set image_url [my _get_s3_image_url $image $tag]
+	    puts stderr "$image_url,$downloaddir"
+	    exec s3cmd get $image_url $downloaddir >&@ stderr
+	}
+
+	method put_image {image_path} {
+	    exec s3cmd put $image_path [my get_url] >&@stderr
+	}
+
+	method reconfigure {} {
+	    return -code error errorcode {INTERFACECALL} \
+		"Subclass of repo must implement reconfigure"
+	}
+
+	method delete_image {image tag} {
+	    return -code error errorcode {INTERFACECALL} \
+		"Subclass of repo must implement delete"
+	}
+
+	method image_exists {image tag} {
+	    set image_url [my _get_s3_image_url $image $tag]
+	    set ls_data [exec s3cmd ls $image_url]
+	    return [expr [string length $ls_data] > 0]
+	}
+    }
+    
     proc repo_factory {repo_url} {
 	set repo_url_dict [appc::url::parse $repo_url]
 
@@ -145,7 +203,7 @@ namespace eval appc::repo {
 		return [appc::repo::file_repo new $repo_url]
 	    }
 	    s3 {
-		return -code error -errorcode {PUBLISH NYI S3} "S3 support is not yet implemented"
+		return [appc::repo::s3repo new $repo_url]
 	    }
 	    default {
 		return -code error -errorcode {PUBLISH SCHEME ENOTSUPPORTED } \

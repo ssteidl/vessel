@@ -71,7 +71,12 @@ namespace eval appc::export {
 
 	    #Create the image metadata and zip it with the layer.  An image
 	    # is the layer with the metadata zipped together.
-
+	    
+	    set output_image_path [file join $output_dir "${image_name}:${image_tag}.zip"]
+	    if {[file exists $output_image_path]} {
+		#Short circuit if the image already exists.
+		return $output_image_path
+	    }
 	    #Create the image layer.
 	    set dataset [appc::env::get_dataset_from_image_name $image_name $image_tag]
 	    set guid [uuid::uuid generate]
@@ -87,7 +92,7 @@ namespace eval appc::export {
                 cd $old_pwd
             } } [pwd]]
 	    cd $image_dir
-	    set output_image_path [file join $output_dir "${image_name}:${image_tag}.zip"]
+	    
             exec zip -v -r -m $output_image_path . >&@ $status_channel
 	    return $output_image_path
         }

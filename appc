@@ -100,7 +100,9 @@ proc handle_repo_cmd {cmd args_dict} {
             #
             #appc publish --tag=local kafka
             set image_file [appc::export::export_image $image $tag $downloaddir]
-            $repo put_image $image_file
+            if {![$repo image_exists $image $tag]} {
+                $repo put_image $image_file
+            }
         }
         pull {
             #Pulls the command.  Basically a GET and an import.
