@@ -24,8 +24,7 @@ target_link_libraries(url_test ${CURL_LIBRARIES})
 install(TARGETS appctcl
         LIBRARY
         DESTINATION lib/tclappc)
-install(FILES appc
-              appc_file_commands.tcl
+install(FILES appc_file_commands.tcl
               bsd.tcl
               build.tcl
               definition_file.tcl

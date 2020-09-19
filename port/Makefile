@@ -12,7 +12,7 @@ USES=		cmake:noninja
 USE_GITHUB=	yes
 GH_ACCOUNT=	ssteidl
 GH_PROJECT=	FBSDAppContainers
-GH_TAGNAME=	97c3f849303eb643ddb47759fa98e9c9ee021097
+GH_TAGNAME=	s3-support
 
 LIB_DEPENDS+=	libcurl.so:ftp/curl libtcl86.so:lang/tcl86 
 RUN_DEPENDS+=   zip:archivers/zip tcllib>=1.2:devel/tcllib s3cmd:net/py-s3cmd
