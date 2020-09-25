@@ -20,7 +20,7 @@ namespace eval appc::jail {
         }
         
         #Build the jail command which can be exec'd
-        proc build_jail_conf {name mountpoint network args} {
+        proc build_jail_conf {name mountpoint volume_datasets network args} {
 
             set network_params_dict [build_network_parameters $network]
             set network_params_mustache_ctx [list]
@@ -28,22 +28,30 @@ namespace eval appc::jail {
                 lappend network_params_mustache_ctx [dict create parameter $key value $value]
             }
 
+            set volume_datasets_ctx [list]
+            foreach volume_dataset $volume_datasets {
+                lappend volume_datasets_ctx [dict create volume_dataset $volume_dataset]
+            }
+            
             set jail_cmd "jail -c path=$mountpoint"
             foreach {param value} [array get jail_parameters] {
-
                 set jail_cmd [string cat $jail_cmd " " "${param}=${value}"]
             }
 
             #Add single quotes around any multi-word parts of the command
             set quoted_cmd [join [lmap word $args {expr {[llength $word] > 1 ?  "\'[join $word]\'" : $word }}]]
 
-            set mustache_ctx [dict create name $name mountpoint $mountpoint network_params $network_params_mustache_ctx command $quoted_cmd]
+            set mustache_ctx [dict create name $name mountpoint $mountpoint network_params $network_params_mustache_ctx command $quoted_cmd \
+                                 volume_datasets $volume_datasets_ctx]
             
 
             #TODO: Run mustache in a safe interpreter
             #TODO: Host and hostname should be different.
             #TODO: Allow setting any jail parameter
             #can contain different values then name
+            #NOTE: Everything in the jailconf jail lifecycle after exec.start is pretty much
+            #useless because there is no guarantee the jail command is still running.  Most
+            #of the cleanup needs to be reimplemented.
             set jail_file_template {
                 
                 #change the open and close tags so emacs doesn't get confused with braces
@@ -61,7 +69,12 @@ namespace eval appc::jail {
                     <%#network_params%>
                     <%parameter%>=<%value%>;
                     <%/network_params%>
-                    exec.start="<%&command%>";
+
+                    <%#volume_datasets%>
+                    exec.created="zfs jail <%name%> <%volume_dataset%>";
+                    exec.start+="zfs mount <%volume_dataset%>";
+                    <%/volume_datasets%>
+                    exec.start+="<%&command%>";
                 }
             }
                     
@@ -71,10 +84,10 @@ namespace eval appc::jail {
         }
     }
 
-    proc run_jail {name mountpoint chan_dict network callback args} {
+    proc run_jail {name mountpoint volume_datasets chan_dict network callback args} {
 
         #Create the conf file
-        set jail_conf [_::build_jail_conf $name $mountpoint $network {*}$args]
+        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network {*}$args]
         set jail_conf_file {}
         set jail_conf_file_chan [file tempfile jail_conf_file]
 

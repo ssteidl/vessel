@@ -167,6 +167,14 @@ namespace eval appc::zfs {
         exec zfs destroy -r $dataset
     }
 
+    proc set_jailed_attr {dataset} {
+        exec zfs set jailed=on $dataset
+    }
+
+    proc set_mountpoint_attr {dataset mountpoint} {
+        exec zfs set mountpoint=$mountpoint $dataset
+    }
+    
     proc dataset_children {parent_dataset} {
 
         #Return a list of dicts that describe the datasets.  The first element in the

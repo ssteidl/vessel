@@ -16,15 +16,32 @@ namespace eval appc::run {
     
     namespace eval _ {
 
-        proc handle_dataset_name_arguments {dataset_args} {
+        proc handle_dataset_argument {dataset_arg} {
 
+            set arg_list [split $dataset_arg ":"]
+            if {[llength $arg_list] != 2} {
+                return -code error -errorcode {DATASET ARGS} "dataset requires a value in the format <source>:<dest>"
+            }
+
+            set dataset [lindex $arg_list 0]
+            set jail_mntpoint [lindex $arg_list 1]
+
+            if {![appc::zfs::dataset_exists $dataset]} {
+                appc::zfs::create_dataset $dataset
+            }
+
+            if {[catch {appc::zfs::set_mountpoint_attr $dataset $jail_mntpoint} error_msg]} {
+                debug.run "Failed to set mountpoint attribute on $dataset.  Ignoring: $error_msg"
+            }
+            appc::zfs::set_jailed_attr $dataset
+
+            return $dataset
         }
         
         proc handle_volume_argument {mountpoint volume_arg} {
 
             set arg_list [split $volume_arg ":"]
             if {[llength $arg_list] != 2} {
-
                 return -code error -errorcode {MOUNT ARGS} "volume requires a value in the format <source>:<dest>"
             }
 
@@ -98,41 +115,50 @@ namespace eval appc::run {
         
         set mountpoint [appc::zfs::get_mountpoint $container_dataset]
 
+        #nullfs volume mounts
         set jailed_mount_paths [list]
         foreach volume [dict get $args_dict volumes] {
             lappend jailed_mount_paths [_::handle_volume_argument $mountpoint $volume]
         }
 
+        set volume_datasets [list]
+        foreach volume_dataset_arg [dict get $args_dict datasets] {
+            set dataset [_::handle_dataset_argument $volume_dataset_arg]
+            lappend volume_datasets $dataset
+        }
+
         appc::env::copy_resolv_conf $mountpoint
         
         set command [dict get $args_dict "command"]
-        set jail_name "appc-container"
+        set jail_name [uuid::uuid generate]
         if {[dict exists $args_dict "name" ]} {
             set jail_name [dict get $args_dict "name"]
         }
 
         set coro_name [info coroutine]
         set error [catch {
-            appc::jail::run_jail $jail_name $mountpoint $chan_dict $network $coro_name {*}$command
+            appc::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict $network $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {APPC JAIL EXEC} "Error running jail: $error_msg"
         }
         
         #Wait for the command to finish
-        set tmp_filename [yield]
-        debug.run "Container exited. Cleaning up: $tmp_filename"
-        
+        set tmp_jail_conf [yield]
+        debug.run "Container exited. Cleaning up..."
+        file delete $tmp_jail_conf
+
+        debug.run "Removing jail: $jail_name"
         if {[catch {exec jail -r $jail_name >&@ stderr} error_msg]} {
             puts stderr "Unable to remove jail.  Attempting to cleanup filesystem: $error_msg"
         }
 
-        file delete $tmp_filename
-
-        debug.run "Unmounting jail mount paths"
+        debug.run "Unmounting jail dev filesystem"
         if {[catch {appc::bsd::umount "${mountpoint}/dev"} error_msg]} {
             puts stderr "Unable to umount dev filesystem, continuing on...: $error_msg"
         }
+
+        debug.run "Unmounting nullfs volumes"
         foreach volume_mount $jailed_mount_paths {
             set error [catch {appc::bsd::umount $volume_mount} error_msg]
             if {$error} {
@@ -140,6 +166,12 @@ namespace eval appc::run {
             }
         }
 
+        debug.run "Unjailing jailed datasets"
+        foreach volume_dataset $volume_datasets {
+            catch {exec zfs set jailed=off $volume_dataset >&@ stderr}
+            catch {exec zfs umount $volume_dataset >&@ stderr}
+        }
+        
         if {[dict get $args_dict "remove"]} {
             debug.run "Destroying container dataset: $container_dataset"
             appc::zfs::destroy $container_dataset
