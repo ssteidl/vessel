@@ -16,9 +16,13 @@ namespace eval appc::run {
     
     namespace eval _ {
 
-        proc handle_volume_argument {mountpoint volume_argument} {
+        proc handle_dataset_name_arguments {dataset_args} {
 
-            set arg_list [split $volume_argument ":"]
+        }
+        
+        proc handle_volume_argument {mountpoint volume_arg} {
+
+            set arg_list [split $volume_arg ":"]
             if {[llength $arg_list] != 2} {
 
                 return -code error -errorcode {MOUNT ARGS} "volume requires a value in the format <source>:<dest>"
@@ -41,8 +45,6 @@ namespace eval appc::run {
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
-
-        puts $args_dict
 
         defer::with [list cb_coro] {
             after idle $cb_coro
@@ -96,41 +98,54 @@ namespace eval appc::run {
         
         set mountpoint [appc::zfs::get_mountpoint $container_dataset]
 
-        set jailed_mount_path {}
-        if {[dict exists $args_dict "volume"]} {
-            set jailed_mount_path [_::handle_volume_argument $mountpoint [dict get $args_dict "volume"]]
+        set jailed_mount_paths [list]
+        foreach volume [dict get $args_dict volumes] {
+            lappend jailed_mount_paths [_::handle_volume_argument $mountpoint $volume]
         }
 
         appc::env::copy_resolv_conf $mountpoint
         
         set command [dict get $args_dict "command"]
-        set hostname "appc-container"
+        set jail_name "appc-container"
         if {[dict exists $args_dict "name" ]} {
-            set hostname [dict get $args_dict "name"]
+            set jail_name [dict get $args_dict "name"]
         }
 
         set coro_name [info coroutine]
         set error [catch {
-            appc::jail::run_jail $hostname $mountpoint $chan_dict $network $coro_name {*}$command
+            appc::jail::run_jail $jail_name $mountpoint $chan_dict $network $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {APPC JAIL EXEC} "Error running jail: $error_msg"
         }
-
+        
         #Wait for the command to finish
-        yield
-        debug.run "Container exited. Cleaning up"
+        set tmp_filename [yield]
+        debug.run "Container exited. Cleaning up: $tmp_filename"
+        
+        if {[catch {exec jail -r $jail_name >&@ stderr} error_msg]} {
+            puts stderr "Unable to remove jail.  Attempting to cleanup filesystem: $error_msg"
+        }
+
+        file delete $tmp_filename
 
         debug.run "Unmounting jail mount paths"
-        appc::bsd::umount $jailed_mount_path
-        catch {appc::bsd::umount [file join $mountpoint dev]}
+        if {[catch {appc::bsd::umount "${mountpoint}/dev"} error_msg]} {
+            puts stderr "Unable to umount dev filesystem, continuing on...: $error_msg"
+        }
+        foreach volume_mount $jailed_mount_paths {
+            set error [catch {appc::bsd::umount $volume_mount} error_msg]
+            if {$error} {
+                puts stderr "Error unmounting $volume_mount: $error_msg"
+            }
+        }
 
         if {[dict get $args_dict "remove"]} {
             debug.run "Destroying container dataset: $container_dataset"
             appc::zfs::destroy $container_dataset
         }
 
-        debug.run "Finished running container: $container_dataset"
+        debug.run "Finished running container: $jail_name"
     }
 }
 

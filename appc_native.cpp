@@ -168,11 +168,11 @@ namespace
     std::string run_options_help()
     {
         std::ostringstream msg;
-        msg << "appc run <--name=container_name> {--interactive} <--tag=val> {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} image <command...>" << std::endl
-            << "--name        Image name to run" << std::endl
+        msg << "appc run <--name=container_name> {--interactive} {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} \n{--dataset=zfs/dataset:container_mountpoint} image{:tag} {command...}" << std::endl << std::endl
+            << "--name        Name of the new container" << std::endl
             << "--interactive Start an interactive shell via pty" << std::endl
-            << "--tag         Tag of the image to run" << std::endl
             << "--rm          Remove the image after it exits" << std::endl
+            << "--dataset     Use the specified zfs dataset at the mountpoint.  Creates the dataset if needed." << std::endl
             << "--volume      Path to directory to nullfs mount into the container" << std::endl;
 
         return msg.str();
@@ -189,9 +189,9 @@ namespace
             {"volume", required_argument, nullptr, 'v'},
             {"rm", no_argument, nullptr, 'r'},
             {"help", no_argument, nullptr, 'h'},
-            {"tag", required_argument, nullptr, 't'},
             {"interactive", no_argument, nullptr, 'i'},
             {"name", required_argument, nullptr, 'n'},
+            {"dataset", required_argument, nullptr, 'd'},
             {"network", required_argument, nullptr, 'u'},
             {nullptr, 0, nullptr, 0}
         };
@@ -201,19 +201,22 @@ namespace
         int ch = -1;
 
         bool remove_container = false;
-        int tag = -1;
         appc::tclobj_ptr args_dict(Tcl_NewDictObj(), appc::unref_tclobj);
         int tcl_error = TCL_OK;
         bool interactive = false;
         std::string network("inherit");
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "iv:ht:n:u:", long_opts, nullptr)) != -1)
+        appc::tclobj_ptr dataset_list(Tcl_NewListObj(0, nullptr), appc::unref_tclobj);
+        appc::tclobj_ptr volume_list(Tcl_NewListObj(0, nullptr), appc::unref_tclobj);
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
+            case 'd':
+                tcl_error = Tcl_ListObjAppendElement(interp, dataset_list.get(), Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
             case 'v':
-                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                           Tcl_NewStringObj("volume", -1),
-                                           Tcl_NewStringObj(optarg, -1));
+                tcl_error = Tcl_ListObjAppendElement(interp, volume_list.get(), Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
             case 'r':
@@ -235,9 +238,6 @@ namespace
 
                 return TCL_OK;
             }
-            case 't':
-                tag = atoi(optarg);
-                break;
             case 'i':
                 interactive = true;
                 break;
@@ -262,19 +262,20 @@ namespace
             }
         }
 
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("datasets", -1),
+                                   dataset_list.release());
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("volumes", -1),
+                                   volume_list.release());
+        if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("remove", -1),
                                    Tcl_NewBooleanObj(remove_container));
         if(tcl_error) return tcl_error;
-
-        if(tag > -1)
-        {
-            tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                       Tcl_NewStringObj("tag", -1),
-                                       Tcl_NewIntObj(tag));
-            if(tcl_error) return tcl_error;
-        }
 
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("interactive", -1),

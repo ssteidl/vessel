@@ -36,8 +36,8 @@ if {![appc::zfs::is_mounted $pool]} {
 
 set run_done_flag [expr false]
 
-#TODO: This probably belongs in environment as "init_environment" or
-#something like that.
+#TODO: This belongs in the 'appc init' command whenever
+# we decide to implement that..
 proc create_workdir {} {
 
     set workdir [appc::env::get_workdir]
@@ -71,7 +71,6 @@ proc run_container_coro {options} {
     coroutine runcoro appc::run::run_command $chan_dict [dict get $options args] \
         [info coroutine]
     yieldto runcoro
-
     set run_done_flag [expr true]
 }
 
