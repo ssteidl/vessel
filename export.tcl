@@ -17,7 +17,6 @@ namespace eval appc::export {
 	    # changes from the '@a' snapshot.  A layer is a zip archive of
 	    # the differences in the snapshots.
 
-
 	    set bsnapshot "${dataset}@b"
 	    if {[appc::zfs::snapshot_exists $bsnapshot]} {
 		appc::zfs::destroy $bsnapshot

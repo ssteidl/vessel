@@ -226,8 +226,9 @@ proc RUN {args} {
 	
 	#Empty callback signifies blocking mode
 	set callback {}
-	#TODO: Copy in resolv.conf here instead of in the BUILD command.  then remove it when we are done.
-        appc::jail::run_jail "${name}-buildcmd" $mountpoint $channel_dict $network $callback {*}$args
+
+	set volumes [list]
+        appc::jail::run_jail "${name}-buildcmd" $mountpoint $volumes $channel_dict $network $callback {*}$args
     } trap {CHILDSTATUS} {results options} {
 
         puts stderr "Run failed: $results"

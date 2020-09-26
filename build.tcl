@@ -87,6 +87,13 @@ namespace eval appc::build {
         #current_dataset is set by the FROM command
         set current_dataset [dict get $build_context current_dataset]
 
+        #Create the b snapshot that will be used to clone children containers
+	    set bsnapshot "${current_dataset}@b"
+	    if {[appc::zfs::snapshot_exists $bsnapshot]} {
+            appc::zfs::destroy $bsnapshot
+	    }
+	    appc::zfs::create_snapshot $current_dataset {b}
+        
         set guid [dict get $build_context guid]
         set name $guid
         if {[dict exists $build_context cmdline_options name]} {
