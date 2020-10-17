@@ -14,7 +14,7 @@
 
 #include <getopt.h>
 
-#include "dns/embdns.h"
+#include "../../dns/embdns.h"
 #include "exec.h"
 #include "tcl_util.h"
 #include "url_cmd.h"

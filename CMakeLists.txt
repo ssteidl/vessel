@@ -8,40 +8,40 @@ find_package(CURL)
 include_directories(${TCL_INCLUDE_PATH} ${CURL_INCLUDE_DIRS})
 
 add_library(appctcl SHARED
-    appc_native.cpp
-    dns/embdns.cpp
-    tcl_util.cpp
-    url_cmd.cpp
-    pty.cpp
-    exec.cpp
-    udp_tcl.c)
+    src/lib/native/appc_native.cpp
+    src/dns/embdns.cpp
+    src/lib/native/tcl_util.cpp
+    src/lib/native/url_cmd.cpp
+    src/lib/native/pty.cpp
+    src/lib/native/exec.cpp
+    src/lib/native/udp_tcl.c)
 
 target_link_libraries(appctcl ${CURL_LIBRARIES})
 
-add_executable(url_test url_test.cpp)
+add_executable(url_test util/native/url_test.cpp)
 target_link_libraries(url_test ${CURL_LIBRARIES})
 
 install(TARGETS appctcl
         LIBRARY
         DESTINATION lib/tclappc)
-install(FILES appc_file_commands.tcl
-              bsd.tcl
-              build.tcl
-              definition_file.tcl
-              environment.tcl
-              export.tcl
-              import.tcl
-              jail.tcl
-              metadata_db.tcl
-	      name-gen.tcl
-              pkgIndex.tcl
-              repos.tcl
-              run.tcl
-              zfs.tcl
+install(FILES src/lib/tcl/appc_file_commands.tcl
+              src/lib/tcl/bsd.tcl
+              src/lib/tcl/build.tcl
+              src/lib/tcl/definition_file.tcl
+              src/lib/tcl/environment.tcl
+              src/lib/tcl/export.tcl
+              src/lib/tcl/import.tcl
+              src/lib/tcl/jail.tcl
+              src/lib/tcl/metadata_db.tcl
+              src/lib/tcl/name-gen.tcl
+              src/lib/tcl/pkgIndex.tcl
+              src/lib/tcl/repos.tcl
+              src/lib/tcl/run.tcl
+              src/lib/tcl/zfs.tcl
         DESTINATION lib/tclappc)
 
-install(DIRECTORY network
+install(DIRECTORY src/network
         DESTINATION lib/tclappc
         PATTERN *.md EXCLUDE)
 
-install(PROGRAMS appc DESTINATION bin)
+install(PROGRAMS src/app/appc DESTINATION bin)

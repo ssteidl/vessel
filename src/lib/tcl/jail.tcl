@@ -82,7 +82,7 @@ namespace eval appc::jail {
     }
 
     proc shutdown {jid {output_chan stderr}} {
-        
+        return [exec -ignorestderr jail -r $jid >&@ $output_chan]
     }
 
     proc remove {jid {output_chan stderr}} {
