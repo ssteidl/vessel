@@ -5,7 +5,7 @@ set jail_params {
 
 }
 
-FROM FreeBSD:12.0-RELEASE
+FROM FreeBSD:12.1-RELEASE
 
 CWD /
 
@@ -15,4 +15,5 @@ COPY . /app
 
 #Run in a jail when building
 RUN env ASSUME_ALWAYS_YES=yes pkg install bash uwsgi curl
+RUN env ASSUME_ALWAYS_YES=yes pkg install python
 RUN bash

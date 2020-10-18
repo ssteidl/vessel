@@ -44,4 +44,4 @@ install(DIRECTORY src/network
         DESTINATION lib/tclappc
         PATTERN *.md EXCLUDE)
 
-install(PROGRAMS src/app/appc DESTINATION bin)
+install(PROGRAMS src/apps/appc DESTINATION bin)

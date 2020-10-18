@@ -187,7 +187,7 @@ proc COPY {source dest} {
 
     set absolute_path [fileutil::jail $mountpoint [file join $cwd $dest]]
 
-    file copy $source $absolute_path
+    file copy -force $source $absolute_path
 }
 
 proc EXPOSE {port} {

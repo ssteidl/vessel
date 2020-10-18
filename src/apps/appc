@@ -33,7 +33,9 @@ if {[dict exists $args help]} {
 set pool [appc::env::get_pool]
 if {![appc::zfs::is_mounted $pool]} {
     puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
-    appc::zfs::mount $pool
+    if {[catch {appc::zfs::mount $pool} msg]} {
+        puts stderr "Failed to mount pool: ${msg}.  Moving on..."
+    }
 }
 
 #TODO: Check if proc filesystem is mounted.  If not, mount it
