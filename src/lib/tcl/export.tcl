@@ -13,19 +13,12 @@ namespace eval appc::export {
 
 	proc create_layer {dataset guid status_channel} {
 
-	    #Create the layer by generating a '@b' snapshot and diff'ing the
-	    # changes from the '@a' snapshot.  A layer is a zip archive of
+	    #Create the layer by zfs diff'ing the 'a' snapshot with the
+	    # dataset filesystem.  A layer is a zip archive of
 	    # the differences in the snapshots.
 
-	    set bsnapshot "${dataset}@b"
-	    if {[appc::zfs::snapshot_exists $bsnapshot]} {
-		appc::zfs::destroy $bsnapshot
-	    }
-
-	    appc::zfs::create_snapshot $dataset {b}
-	    
             set mountpoint [appc::zfs::get_mountpoint $dataset]
-            set diff_dict [appc::zfs::diff ${dataset}@a ${dataset}@b]
+            set diff_dict [appc::zfs::diff ${dataset}@a ${dataset}]
 
             set workdir [appc::env::get_workdir]
             set build_dir [file join $workdir $guid]
@@ -41,10 +34,7 @@ namespace eval appc::export {
                 }
             }
 
-            set files [list]
-            if {[dict exists $diff_dict {M}]} {
-                set files [list {*}[dict get $diff_dict {M}] {*}[dict get $diff_dict {+}]]
-            }
+	    set modified_links_dict [appc::zfs::diff_hardlinks $diff_dict $mountpoint]
             
             set tar_list_file [open {files.txt} {w}]
 
@@ -53,12 +43,17 @@ namespace eval appc::export {
             puts $tar_list_file {-C}
             puts $tar_list_file "$mountpoint"
 
-            foreach path $files {
-                puts $tar_list_file [fileutil::stripPath "${mountpoint}" $path]
+            dict for {inode paths} $modified_links_dict {
+
+		#Put all the paths in the file to be tar'd up.
+		foreach path $paths {
+		    puts $tar_list_file [fileutil::stripPath "${mountpoint}" $path]
+		}
             }
+	    
             flush $tar_list_file
             close $tar_list_file
-            exec tar -cavf ${guid}-layer.tgz -n -T {files.txt} >&@ $status_channel
+            exec -ignorestderr tar -cavf ${guid}-layer.tgz -n -T {files.txt} >&@ $status_channel
 
             #TODO: Use a trace to return to the old directory. Or better
             # yet, don't change directory

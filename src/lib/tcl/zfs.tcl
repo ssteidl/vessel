@@ -97,7 +97,9 @@ namespace eval appc::zfs {
     }
 
     proc get_mountpoint {dataset} {
-
+        # NOTE: It's probably better to just get the mountpoint
+        # attribute.
+        
         variable mountpoints_dict
         set mountpoints_dict [get_mountpoints]
         if {![dict exists $mountpoints_dict $dataset value]} {
@@ -140,7 +142,20 @@ namespace eval appc::zfs {
     }
 
     proc diff {snapshot dataset} {
+        #NOTE: 'zfs diff' sucks.  It only shows a single file path per inode.  So
+        # a directory will show modified but if two paths in the directory share
+        # an inode.  Only one will show up.  This means we have to do tons
+        # of extra processing.
+        #
+        # It's probably not the most efficient thing but the solution I'm taking
+        # is to:
+        #
+        # 1. Create a dict of lists where key is inode and paths are a value list.
+        # 2. Get the inode for each path returned by zfs diff
+        # 3. Use the inode as the key into the inode,paths dict
+        # 4. Output each path to the tar file.
 
+        
         set diff_output [exec -keepnewline zfs diff -H $snapshot $dataset]
         
         set diff_dict [dict create]
@@ -153,12 +168,55 @@ namespace eval appc::zfs {
             
             set change_type [lindex $line 0]
             set path [lindex $line 1]
+
             dict lappend diff_dict $change_type $path
         }
 
         return $diff_dict
     }
 
+    proc diff_hardlinks {diff_dict dataset_mountpoint} {
+        # Creates a dict with inodes as keys and a list of
+        # paths for those inodes.  This is necessary because zfs diff doesn't
+        # work with hardlinks.
+        #
+        # diff_dict: A dictionary as returned from the zfs::diff proc
+        #
+        # dataset_mountpoint: is the mountpoint for the dataset used to generate
+        # diff_dict
+        #
+        # NOTE: This operation is super expensive.
+
+        #Create a line delimited set of inode path pairs for all inodes under
+        #the dataset_mountpoint
+        set inode_path_pairs [exec find $dataset_mountpoint -exec stat -f "%i%t%N" \{\} \;]
+
+        set inode_dict [dict create]
+        foreach {inode_path_pair} [split $inode_path_pairs \n] {
+
+            foreach {inode path}  [split $inode_path_pair \t] {
+                dict lappend inode_dict $inode $path
+            }
+        }
+
+        set modified_file_list [list {*}[dict get $diff_dict {M}] \
+                                    {*}[dict get $diff_dict {+}]]
+
+        set output_dict [dict create]
+        foreach path $modified_file_list {
+
+            array set stat_buf {}
+            file lstat $path stat_buf
+
+            #Add the path to the output_dict with inode as key
+            foreach inode_path [dict get $inode_dict $stat_buf(ino)] {
+                dict lappend output_dict $stat_buf(ino) $inode_path
+            }
+        }
+
+        return $output_dict
+    }
+    
     proc destroy {dataset} {
         # Force destroy. We assume that if we are
         # destroying a dataset, we really want to destroy it.
