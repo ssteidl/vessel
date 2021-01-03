@@ -3,4 +3,4 @@
 FROM FreeBSD:12.1-RELEASE
 
 RUN env ASSUME_ALWAYS_YES=yes pkg update
-RUN env ASSUME_ALWAYS_YES=yes pkg install tcllib curl bash cmake
+RUN env ASSUME_ALWAYS_YES=yes pkg install tcllib curl bash cmake py37-sphinx_rtd_theme

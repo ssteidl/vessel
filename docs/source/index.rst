@@ -49,9 +49,11 @@ Finally, let's run a *sh* in the new container.
 
 .. code-block:: shell
 
-    sudoe -E vessel run --interactive vesseldev:local sh
+    sudo -E vessel run --interactive vesseldev:local sh
 
-
+There you have it, you have built and are running a persistent application container.
+This is really the simplest use case, see the rest of the documentation for more
+advanced use cases.
 
 .. toctree::
    :maxdepth: 2
