@@ -1,10 +1,10 @@
-#ifndef APPC_TCL_H
-#define APPC_TCL_H
+#ifndef VESSEL_TCL_H
+#define VESSEL_TCL_H
 
 #include <tcl.h>
 #include <memory>
 
-namespace appc
+namespace vessel
 {
 
 void delete_interp(Tcl_Interp* interp);
@@ -25,4 +25,4 @@ struct tcl_obj_raii
 };
 
 }
-#endif // APPC_TCL_H
+#endif // VESSEL_TCL_H

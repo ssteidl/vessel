@@ -1,12 +1,12 @@
-#ifndef APPC_FS_H
-#define APPC_FS_H
+#ifndef VESSEL_FS_H
+#define VESSEL_FS_H
 
-#include "appc_tcl.h"
+#include "vessel_tcl.h"
 #include <list>
 #include <string>
 #include <sys/stat.h>
 
-namespace appc
+namespace vessel
 {
 
 struct path_stat
@@ -95,4 +95,4 @@ public:
 void validate_directory(const fs_path& path);
 
 }
-#endif // APPC_FS_H
+#endif // VESSEL_FS_H
