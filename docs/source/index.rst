@@ -3,30 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to FBSDAppContainers's documentation!
+FBSDAppContainers (vessel)
 =============================================
-FBSDAppContainers is a project that aims to unleash all of the amazing features
-of the FreeBSD operating system to application developers.  FreeBSD has many amazing
-features that go unused because there is no great way of exposing them to application
-developers.
+Application containers for FreeBSD
 
-In my opinion, FBSD is completely underutilized in the application space and generally
-is used in the more classic operations space where custom applications are not being used.
-Ignoring the fact that FBSD also has a niche in appliances.  There is This makes
-sense as Linux has mostly won battle of developer focus.
-
-In the last 5 years or so, Linux development has mostly meant working with Docker.
-FBSDAppContainers is definitely influenced by Docker.  However, there are many things
-that I disagree with with Docker and this project diverges from dockers influence.
-
-.. note::
-   The program name for FBSDAppContainers is *vessel*.  This project started as a prototype
-   and has continued to grow.  The initial name of the program was *appc* but that
-   has been used by a similar project.  So if you still see references to appc in the
-   source code, that's why.
+Project Goals
+^^^^^^^^^^^^^
+Unleash all of the features of the FreeBSD operating system to application developers.
 
 Quickstart
-^^^^^^^^^^^^^^^^^^^^
+===========
 Let's get started.  FBSDAppContainers uses a file to define and build a container
 image.  The file is similar to a DockerFile.  A very simple VesselFile is shown below
 
@@ -55,10 +41,67 @@ There you have it, you have built and are running a persistent application conta
 This is really the simplest use case, see the rest of the documentation for more
 advanced use cases.
 
+.. note::
+   The program name for FBSDAppContainers is *vessel*.  This project started as a prototype
+   and has continued to grow.  The initial name of the program was *appc* but that
+   has been used by a similar project.  So if you still see references to appc in the
+   source code, that's why.
+
+
+Features
+=============
+
+.. list-table:: List of current and future features
+    :widths: 10 5
+    :header-rows: 1
+    :stub-columns: 1
+
+    * - Feature
+      - Implemented
+    * - Image Description File
+      - yes
+    * - Volume Management
+      - yes
+    * - Image Import/Export
+      - yes
+    * - Image Push/Pull Repositories (s3)
+      - yes
+    * - Jail monitoring and auto cleanup
+      - yes
+    * - DNS Service Discovery
+      - Not yet
+    * - Internal (Bridged) Networking
+      - Not yet
+    * - Resource control
+      - Not yet
+
+Image Definition Files
+^^^^^^^^^^^^^^^^^^^^^^
+Similar to a DockerFile, a VesselFile allows for defining how a container image should be built.  A realworld example:
+
+.. code-block::
+   :linenos:
+
+   FROM "FreeBSD:12.1-RELEASE"
+
+   RUN env ASSUME_ALWAYS_YES=yes pkg update
+   RUN env ASSUME_ALWAYS_YES=yes pkg install postgresql11-server
+   RUN sysrc postgresql_enable="YES"
+
+
+Volume Management
+^^^^^^^^^^^^^^^^^
+Tere are two types of volume parameters that you can use via the `appc run` command:
+
+#. `vessel run -v <host directory>:<container directory>`
+#. `vessel run --dataset=?`
+
+-v <host directory>:<container directory> --volume=<host directory>:<container directory>
+   null mount a directory from the host filesystem to the container filesystem at the given paths
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-
 
 
 Indices and tables
