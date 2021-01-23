@@ -1,0 +1,80 @@
+#! /usr/bin/env tclsh8.6
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+package require cmdline
+package require inifile
+
+namespace eval vessel::supervisor {
+
+    #dictionary of statbuf arrays
+    variable deploy_files_dict
+    if {deploy_files_stats eq {}} { set deploy_files_stats [dict create]}
+
+    proc start_container_coro {deploy_file} {
+
+        set ini_handle [ini::open $deploy_file]
+        defer::defer ini_handle {
+            ini::close $ini_handle
+        }
+        yield
+    }
+
+    proc shutdown_container_coro {} {
+
+        yield        
+    }
+    
+	proc poll_deploy_dir {deploy_dir} {
+        variable deploy_files_dict
+
+        foreach f [glob [file join $deploy_dir]/*] {
+
+            set deploy_file [file normalize $f]
+            set statbuf [file stat $deploy_file]
+
+            if {$statbuf(type) eq {file}} {
+
+                if {[dict exists $deploy_file]} {
+                    
+                } else {
+                    # new file, let's spin up the container
+                    #TODO: parse the ini and generate the container
+
+                    dict set deploy_files_dict $deploy_files_dict $statbuf
+                    after -idle [list coroutine ${deploy_file}-coro $deploy_file]
+                }
+            }
+        }
+
+        #Make a second loop to check if any files have been deleted.  There's
+        # probably something clever for a diff'ing algo but a second loop seems
+        # simple, unless i'm missing some edge case.
+
+        foreach 
+    }
+}
+
+
+set options {
+    {d.arg "/usr/local/etc/vessel/configs"   "deployment file directory to monitor"}
+}
+set usage ":  \[options] filename ...\noptions:"
+
+try {
+    array set params [::cmdline::getoptions argv $options $usage]
+} trap {CMDLINE USAGE} {msg o} {
+    
+    # Trap the usage signal, print the message, and exit the application.
+    # Note: Other errors are not caught and passed through to higher levels!
+    puts $msg
+    exit 1
+}
+
+parray params
+
+set deploy_dir $params(d)
+
+after 5000 [list poll_deploy_dir $deploy_dir]
+
+set running true
+vwait  running
