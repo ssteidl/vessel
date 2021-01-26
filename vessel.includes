@@ -1,0 +1,5 @@
+src/dns
+src/lib/native
+src/native_deprecated/src/app
+src/native_deprecated/src/lib
+/usr/local/include/tcl8.6

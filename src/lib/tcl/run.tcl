@@ -1,11 +1,13 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require debug
+package require dicttool
 package require fileutil
 package require uuid
 
 package require vessel::bsd
 package require vessel::env
+package require vessel::deploy
 package require vessel::jail
 package require vessel::zfs
 
@@ -59,6 +61,56 @@ namespace eval vessel::run {
 
             return $jailed_dest_path
         }
+
+        proc create_run_dict {args_dict} {
+
+            # Merge the commandline (args_dict) and sections from the ini file
+            # (if an ini file was given).
+
+            set ini_file [dict get $args_dict ini_file]
+            
+            if {$ini_file eq {}} {
+                return
+            }
+
+            if {![file exists $ini_file]} {
+                return -code error -errorcode {VESSEL RUN INI EEXISTS} \
+                    "ini file does not exist: $ini_file"
+            }
+            set ini_params_dict [vessel::deploy::ini::get_deployment_dict ${ini_file}]
+
+            set run_dict $args_dict
+            dict set run_dict jail [dict create]
+            #Add volumes and datasets to the run_dict.
+            # NOTE: We add them in the same format as they come in from
+            # the command line <hostpath:jailpath>.  This is just easier for now
+            # we should probably create an actual structure and update the processing
+            # code instead of shoehorning in the same format.
+            dict for {section section_value_dict} $ini_params_dict {
+                if {[string first {dataset:} $section] eq 0} {
+
+                    set dataset_name [dict get $section_value_dict dataset]
+                    set dataset_mount [dict get $section_value_dict mount]
+
+                    dict lappend run_dict datasets "${dataset_name}:${dataset_mount}"
+                }
+
+                if {[string first {nullfs:} $section] eq 0} {
+                    set volume_directory [dict get $section_value_dict directory]
+                    set volume_mount [dict get $section_value_dict mount]
+
+                    dict lappend run_dict volumes "${volume_directory}:${volume_mount}"
+                }
+
+                if {$section eq {jail}} {
+                    dict for {param value} $section_value_dict {
+                        dict set run_dict jail $param $value
+                    }
+                }
+            }
+            
+            return $run_dict
+        }
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
@@ -67,13 +119,16 @@ namespace eval vessel::run {
             after idle $cb_coro
         }
 
+        set args_dict [_::create_run_dict $args_dict]
+        set jail_options_dict [dict get $args_dict jail]
+        
         #Initialization yield
         yield
 
         #TODO: All parameters should be validated before any cloning is done so proper
         # cleanup can be done.  right now we clone and then fail on poorly formatted
         # parameters.
-        
+
         #TODO: IMAGE should be it's own class
         set image [dict get $args_dict "image"]
         set image_components [split $image :]
@@ -141,7 +196,8 @@ namespace eval vessel::run {
 
         set coro_name [info coroutine]
         set error [catch {
-            vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict $network $coro_name {*}$command
+            vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
+                $network $jail_options_dict $coro_name {*}$command
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {VESSEL JAIL EXEC} "Error running jail: $error_msg"

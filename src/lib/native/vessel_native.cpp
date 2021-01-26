@@ -173,7 +173,8 @@ namespace
             << "--interactive Start an interactive shell via pty" << std::endl
             << "--rm          Remove the image after it exits" << std::endl
             << "--dataset     Use the specified zfs dataset at the mountpoint.  Creates the dataset if needed." << std::endl
-            << "--volume      Path to directory to nullfs mount into the container" << std::endl;
+            << "--volume      Path to directory to nullfs mount into the container" << std::endl
+            << "--ini=<path>  Path to the ini file which specifies how the jail should be run" << std::endl;
 
         return msg.str();
     }
@@ -193,6 +194,7 @@ namespace
             {"name", required_argument, nullptr, 'n'},
             {"dataset", required_argument, nullptr, 'd'},
             {"network", required_argument, nullptr, 'u'},
+            {"ini", required_argument, nullptr, 'f'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -207,7 +209,8 @@ namespace
         std::string network("inherit");
         vessel::tclobj_ptr dataset_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         vessel::tclobj_ptr volume_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:", long_opts, nullptr)) != -1)
+        std::string ini_file;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:f:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -250,6 +253,9 @@ namespace
             case 'u':
                 network = optarg;
                 break;
+            case 'f':
+                ini_file = optarg;
+                break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -285,6 +291,11 @@ namespace
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("network", -1),
                                    Tcl_NewStringObj(network.c_str(), network.size()));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("ini_file", -1),
+                                   Tcl_NewStringObj(ini_file.c_str(), ini_file.size()));
         if(tcl_error) return tcl_error;
 
         if(optind == argc)

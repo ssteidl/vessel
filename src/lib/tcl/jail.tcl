@@ -21,7 +21,7 @@ namespace eval vessel::jail {
         }
         
         #Build the jail command which can be exec'd
-        proc build_jail_conf {name mountpoint volume_datasets network args} {
+        proc build_jail_conf {name mountpoint volume_datasets network jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
             
@@ -43,7 +43,6 @@ namespace eval vessel::jail {
             set jail_conf [jail_file_expander expand {
                 [set name] {
                     path="[set mountpoint]";
-                    host.hostname="[set name]";
                     sysvshm=new;
                     allow.mount;
                     allow.mount.devfs;
@@ -65,7 +64,15 @@ namespace eval vessel::jail {
                          append volume_string $mount_string
                      }
                      set volume_string]
+                    
+                    [set jail_options_string {}
+                     dict for {option value} $jail_options {
+                         set option_string [subst {${option}=${value};\n}]
+                         append jail_options_string $option_string
+                     }
+                     set jail_options_string]
                     exec.start+="[set quoted_cmd]";
+                    
                 }}]
             } finally {
                 rename jail_file_expander {}
@@ -90,10 +97,12 @@ namespace eval vessel::jail {
         return [exec -ignorestderr jail -r $jid >&@ $output_chan]
     }
     
-    proc run_jail {name mountpoint volume_datasets chan_dict network callback args} {
+    proc run_jail {name mountpoint volume_datasets chan_dict network jail_options_dict \
+                       callback args} {
 
         #Create the conf file
-        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network {*}$args]
+        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network \
+                           $jail_options_dict {*}$args]
         set jail_conf_file {}
         set jail_conf_file_chan [file tempfile jail_conf_file]
 
