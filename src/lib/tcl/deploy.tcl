@@ -26,7 +26,7 @@ namespace eval vessel::deploy {
 	
 	proc get_deployment_dict {ini_file} {
 	    set fh [ini::open $ini_file]
-	    defer::defer fh {
+	    defer::with [list fh] {
 		ini::close $fh
 	    }
 	    set sections [ini::sections $fh]
