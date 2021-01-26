@@ -58,7 +58,7 @@ namespace eval vessel::jail {
                     
                     [set volume_string {}
                      foreach volume $volume_datasets {
-                         set jail_string [subst {exec.created="zfs jail $name $volume";\n}]
+                         set jail_string [subst {exec.created+="zfs jail $name $volume";\n}]
                          append volume_string $jail_string
                          set mount_string [subst {exec.start+="zfs mount $volume";\n}]
                          append volume_string $mount_string
