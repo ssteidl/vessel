@@ -43,7 +43,10 @@ namespace eval vessel::supervisor {
         #info is needed.  We can create a new pipe for that with an environment
         #variable to specify the descriptor maybe.
         set command [dict get $deploy_dict vessel-supervisor command]
-        set vessel_cmd "vessel run --ini=${deploy_file} --rm ${image}:${tag}"
+
+        #TODO: Name should be mandatory
+        set jail_name [dict get $deploy_dict vessel-supervisor name]
+        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} --rm ${image}:${tag}"
         lappend vessel_cmd {*}$command
         puts "$vessel_cmd"
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
@@ -58,6 +61,8 @@ namespace eval vessel::supervisor {
         #TODO: The jail 'name' should be read and set from the supervisor.  then
         # it has a good way of finding and managing the jails
         puts "Container finished executing.  Cleaning up..."
+
+        #TODO: Handle restart
     }
 
     proc shutdown_container_coro {} {
