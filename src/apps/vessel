@@ -20,7 +20,6 @@ debug define vessel
 debug on vessel 1 stderr
 
 set options [vessel::parse_options $argv]
-debug.vessel "Options: $options"
 
 set command [dict get $options command]
 set args [dict get $options args]

@@ -62,22 +62,6 @@ namespace eval vessel::import {
 		vessel::zfs::create_snapshot ${new_dataset} a
 	    }
 	    
-	    #Now clone the new dataset into a version dataset.  This means
-	    #that the 'new_dataset' will always be the same as its parent
-	    #dataset.  We have to do this because we can't have a dataset
-	    #without a parent.  So for example, the vesseldevel image (named
-	    #devel) can't have a dataset called <vessel_pool>/jails/devel/0
-	    #without first having <vessel_pool>/jails/devel
-	    #NOTE: I think all of this can be deleted.
-	    # set versioned_new_dataset [vessel::env::get_dataset_from_image_name $image_name $version]
-	    # if {![vessel::zfs::dataset_exists $versioned_new_dataset]} {
-	    # 	vessel::zfs::clone_snapshot ${new_dataset}@a $versioned_new_dataset
-	    # }
-
-	    # if {![vessel::zfs::snapshot_exists ${versioned_new_dataset}@a]} {
-	    # 	vessel::zfs::create_snapshot $versioned_new_dataset a
-	    # }
-	    
 	    #Untar layer on top of parent file system
 	    set mountpoint [vessel::zfs::get_mountpoint $new_dataset]
 	    exec tar -C $mountpoint -xvf $layer_file >&@ $status_channel
