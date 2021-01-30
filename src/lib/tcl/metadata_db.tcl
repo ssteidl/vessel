@@ -175,6 +175,12 @@ namespace eval vessel::metadata_db {
 
 	return $metadata_file
     }
+
+    proc image_exists {image tag} {
+
+	set metadata_file [metadata_file_path $image $tag]
+	return [file exists $metadata_file]
+    }
     
     proc image_command {args_dict} {
 

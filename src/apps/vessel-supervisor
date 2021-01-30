@@ -4,19 +4,60 @@
 package require cmdline
 package require inifile
 
+package require vessel::native
+package require vessel::deploy
+package require vessel::metadata_db
+
+proc bgerror {message} {
+    puts "bgerror: $message"
+}
+
 namespace eval vessel::supervisor {
 
-    #dictionary of statbuf arrays
-    variable deploy_files_dict
-    if {deploy_files_stats eq {}} { set deploy_files_stats [dict create]}
+    #dictionary of statbuf arrays of deployment files
+    variable deploy_files_dict [dict create]
 
+    #Dictionary of containers that we are monitoring
+    variable monitored_containers_dict [dict create]
+    
     proc start_container_coro {deploy_file} {
 
-        set ini_handle [ini::open $deploy_file]
-        defer::defer ini_handle {
-            ini::close $ini_handle
-        }
+        puts "starting container"
+        set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
+
+        puts $deploy_dict
+        set image [dict get $deploy_dict vessel-supervisor image]
+        set tag [dict get $deploy_dict vessel-supervisor tag]
+
+        #initialization yield
         yield
+        
+
+        if {![vessel::metadata_db::image_exists $image $tag]} {
+
+            #Image doesn't exist.  We need to pull it from the repository
+            return -code error -errorcode {SUPERVISOR PULL NYI} "Supervisor pull NYI"
+        }
+
+        #TODO: We should make vessel communicate with the supervisor with whatever
+        #info is needed.  We can create a new pipe for that with an environment
+        #variable to specify the descriptor maybe.
+        set command [dict get $deploy_dict vessel-supervisor command]
+        set vessel_cmd "vessel run --ini=${deploy_file} --rm ${image}:${tag}"
+        lappend vessel_cmd {*}$command
+        puts "$vessel_cmd"
+        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
+
+        # Execute the vessel command which calls back this coroutine when it is done
+        vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}
+
+        #Yield until the command finishes
+        # NOTE: We should return the exit code as well
+        yield
+
+        #TODO: The jail 'name' should be read and set from the supervisor.  then
+        # it has a good way of finding and managing the jails
+        puts "Container finished executing.  Cleaning up..."
     }
 
     proc shutdown_container_coro {} {
@@ -27,21 +68,30 @@ namespace eval vessel::supervisor {
 	proc poll_deploy_dir {deploy_dir} {
         variable deploy_files_dict
 
-        foreach f [glob [file join $deploy_dir]/*] {
+        set ini_files [glob -nocomplain [file join $deploy_dir]/*.ini]
+        puts stderr "Polling ini files: ${ini_files}"
+
+        foreach f $ini_files {
 
             set deploy_file [file normalize $f]
-            set statbuf [file stat $deploy_file]
+            file stat $deploy_file statbuf
 
             if {$statbuf(type) eq {file}} {
 
-                if {[dict exists $deploy_file]} {
+                if {[dict exists $deploy_files_dict $deploy_file]} {
+
+                    #TODO: Check if modification time has changed
                     
                 } else {
                     # new file, let's spin up the container
                     #TODO: parse the ini and generate the container
 
-                    dict set deploy_files_dict $deploy_files_dict $statbuf
-                    after -idle [list coroutine ${deploy_file}-coro $deploy_file]
+                    #save the deploy file to the deploy_files_dict so we
+                    # can check if files are already available or not.
+                    dict set deploy_files_dict $deploy_file [array get statbuf]
+                    set container_coro_name [file tail [file rootname ${deploy_file}]]
+                    coroutine  $container_coro_name start_container_coro $deploy_file
+                    after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
                 }
             }
         }
@@ -50,7 +100,6 @@ namespace eval vessel::supervisor {
         # probably something clever for a diff'ing algo but a second loop seems
         # simple, unless i'm missing some edge case.
 
-        foreach 
     }
 }
 
@@ -74,7 +123,7 @@ parray params
 
 set deploy_dir $params(d)
 
-after 5000 [list poll_deploy_dir $deploy_dir]
+after 5000 [list vessel::supervisor::poll_deploy_dir $deploy_dir]
 
 set running true
 vwait  running

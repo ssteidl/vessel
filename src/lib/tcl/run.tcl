@@ -20,6 +20,7 @@ namespace eval vessel::run {
 
         proc handle_dataset_argument {dataset_arg} {
 
+            puts "dataset_arg: $dataset_arg"
             set arg_list [split $dataset_arg ":"]
             if {[llength $arg_list] != 2} {
                 return -code error -errorcode {DATASET ARGS} "dataset requires a value in the format <source>:<dest>"
@@ -90,6 +91,7 @@ namespace eval vessel::run {
                 if {[string first {dataset:} $section] eq 0} {
 
                     set dataset_name [dict get $section_value_dict dataset]
+                    set dataset_name "[vessel::env::get_dataset]/${dataset_name}"
                     set dataset_mount [dict get $section_value_dict mount]
 
                     dict lappend run_dict datasets "${dataset_name}:${dataset_mount}"
