@@ -101,6 +101,8 @@ src/apps/vessel-supervisor
 src/dns/dns.tcl
 src/dns/embdns.cpp
 src/dns/embdns.h
+src/lib/native/devctl_channel.cpp
+src/lib/native/devctl_channel.h
 src/lib/native/exec.cpp
 src/lib/native/exec.h
 src/lib/native/pty.cpp

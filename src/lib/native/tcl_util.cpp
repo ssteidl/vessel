@@ -1,4 +1,5 @@
 #include "tcl_util.h"
+#include <unistd.h>
 
 using namespace vessel;
 
@@ -43,3 +44,24 @@ int vessel::get_handle_from_channel(Tcl_Interp* interp, Tcl_Obj* chan_name, long
     return TCL_OK;
 }
 
+
+fd_guard::fd_guard(int fd)
+    : fd(fd)
+{
+
+}
+
+int fd_guard::release()
+{
+    int tmp_fd = fd;
+    fd = -1;
+    return tmp_fd;
+}
+
+fd_guard::~fd_guard()
+{
+    if(fd >= 0)
+    {
+        ::close(fd);
+    }
+}

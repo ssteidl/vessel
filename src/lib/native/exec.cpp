@@ -169,7 +169,7 @@ namespace
             std::unique_ptr<vessel_exec_interp_state> tmp_ptr(new vessel_exec_interp_state(interp));
             if(tmp_ptr->state.kqueue_fd == -1)
             {
-                return vessel::syserror_result(interp, "VESSEL EXEC KQUEUE");
+                return vessel::syserror_result(interp, "VESSEL", "EXEC", "KQUEUE");
             }
             interp_state = std::move(tmp_ptr);
             return TCL_OK;
@@ -576,8 +576,6 @@ int Vessel_Exec_SetSignalHandler(void *clientData, Tcl_Interp *interp,
 
 
     vessel_exec_interp_state* interp_state = reinterpret_cast<vessel_exec_interp_state*>(Tcl_GetAssocData(interp, "VesselExec", nullptr));
-
-    signal(SIGHUP, SIG_IGN);
 
     struct kevent ev;
     std::vector<int> sigs = {SIGINT, SIGTERM, SIGHUP};
