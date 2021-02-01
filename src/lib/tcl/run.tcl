@@ -68,10 +68,13 @@ namespace eval vessel::run {
             # Merge the commandline (args_dict) and sections from the ini file
             # (if an ini file was given).
 
+            set run_dict $args_dict
+            dict set run_dict jail [dict create]
+            
             set ini_file [dict get $args_dict ini_file]
             
             if {$ini_file eq {}} {
-                return
+                return $run_dict
             }
 
             if {![file exists $ini_file]} {
@@ -80,8 +83,7 @@ namespace eval vessel::run {
             }
             set ini_params_dict [vessel::deploy::ini::get_deployment_dict ${ini_file}]
 
-            set run_dict $args_dict
-            dict set run_dict jail [dict create]
+            
             #Add volumes and datasets to the run_dict.
             # NOTE: We add them in the same format as they come in from
             # the command line <hostpath:jailpath>.  This is just easier for now
