@@ -195,6 +195,7 @@ namespace
             {"dataset", required_argument, nullptr, 'd'},
             {"network", required_argument, nullptr, 'u'},
             {"ini", required_argument, nullptr, 'f'},
+            {"resource", required_argument, nullptr, 'c'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -209,8 +210,9 @@ namespace
         std::string network("inherit");
         vessel::tclobj_ptr dataset_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         vessel::tclobj_ptr volume_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
+        vessel::tclobj_ptr resource_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         std::string ini_file;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:f:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:f:c:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -256,6 +258,10 @@ namespace
             case 'f':
                 ini_file = optarg;
                 break;
+            case 'c':
+                tcl_error = Tcl_ListObjAppendElement(interp, resource_list.get(), Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -277,6 +283,12 @@ namespace
                                    Tcl_NewStringObj("volumes", -1),
                                    volume_list.release());
         if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("resources", -1),
+                                   resource_list.release());
+        if(tcl_error) return tcl_error;
+
 
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("remove", -1),

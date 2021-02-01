@@ -39,5 +39,14 @@ void cpp_delete_with_interp(void* client_data, Tcl_Interp* interp)
 {
     delete((T*)client_data);
 }
+
+struct fd_guard
+{
+    int fd;
+
+    fd_guard(int fd);
+    int release();
+    ~fd_guard();
+};
 }
 #endif // TCL_UTIL_H
