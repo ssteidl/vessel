@@ -106,6 +106,8 @@ src/lib/native/devctl_channel.h
 src/lib/native/exec.cpp
 src/lib/native/exec.h
 src/lib/native/pty.cpp
+src/lib/native/tcl_kqueue.cpp
+src/lib/native/tcl_kqueue.h
 src/lib/native/tcl_util.cpp
 src/lib/native/tcl_util.h
 src/lib/native/udp_tcl.c
