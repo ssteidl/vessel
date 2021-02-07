@@ -38,6 +38,8 @@ namespace vessel
      * @return
      */
     int Kqueue_Add_Event(Tcl_Interp* interp, struct kevent& event, tcl_event_factory& event_factory);
+
+    int Kqueue_Remove_Event(Tcl_Interp* interp, struct kevent& event);
 }
 
 template <class T, class...Ts>
