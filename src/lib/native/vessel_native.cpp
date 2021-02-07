@@ -16,6 +16,7 @@
 
 #include "../../dns/embdns.h"
 #include "exec.h"
+#include "tcl_kqueue.h"
 #include "tcl_util.h"
 #include "url_cmd.h"
 
@@ -867,6 +868,7 @@ extern int Vesseltcl_Init(Tcl_Interp* interp)
     init_exec(interp);
     Pty_Init(interp);
     Udp_Init(interp);
+    vessel::Kqueue_Init(interp);
     Tcl_PkgProvide(interp, "vessel::native", "1.0.0");
 
     return TCL_OK;

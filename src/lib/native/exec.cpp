@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <list>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -14,7 +15,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include "tcl_kqueue.h"
 #include "tcl_util.h"
+
+using namespace vessel;
 
 /*TODO: Consistent naming conventions*/
 /*TODO: Better logging support.  There is too much logging to cerr for an extension*/
@@ -24,28 +28,6 @@
  * module anymore.  It's now pretty specialized for the running a jail use case.*/
 namespace
 {
-    /**
-     * @brief The kqueue_state struct simply manages if there is an event ready to be
-     * processed in the kqueue.
-     */
-    struct kqueue_state
-    {
-        int kqueue_fd;
-        bool ready;
-
-        kqueue_state(int kqueue_fd)
-            : kqueue_fd(kqueue_fd),
-              ready(false)
-        {}
-
-        ~kqueue_state()
-        {
-            if(kqueue_fd != -1)
-            {
-                close(kqueue_fd);
-            }
-        }
-    };
 
     /**
      * Class for monitoring a heirarchy of processes.  This class provides the interface
@@ -128,58 +110,161 @@ namespace
         }
     };
 
+
     using monitored_process_group_list = std::list<std::shared_ptr<monitored_process_group>>;
-    void KqueueEventCheckProc(void *clientData, int flags);
-    void KqueueEventSetupProc(void *clientData, int flags);
 
     /**
-     * @brief The vessel_exec_interp_state struct Contains the necessary per-interpreter state.  Basically
-     * all of the data that is needed at the global level but hang it off of an interp for good practice.
+     * @brief The VesselExecSignalEvent class Encapsulates the event handling of signal events.
      */
-    struct vessel_exec_interp_state
+    class vessel_exec_signal_event : public Tcl_Event
     {
-        kqueue_state state;
-        Tcl_Interp* interp;
-        monitored_process_group_list mpgs;
-        vessel::tclobj_ptr signal_callback;
+        Tcl_Interp* m_interp;
+        monitored_process_group_list& m_mpgs;
+        Tcl_Obj* m_signal_callback;
+        struct kevent m_event;
 
-    private:
-        vessel_exec_interp_state(Tcl_Interp* interp)
-            : state(kqueue()),
-              interp(interp),
-              mpgs(),
-              signal_callback(nullptr, vessel::unref_tclobj)
+        static int event_proc(Tcl_Event *evPtr, int flags)
         {
-            if(state.kqueue_fd != -1)
+            (void)flags;
+            vessel_exec_signal_event* _this = reinterpret_cast<vessel_exec_signal_event*>(evPtr);
+
+            /*The list of mpg dicts that will be returned.*/
+            vessel::tclobj_ptr top_level_list = vessel::create_tclobj_ptr(Tcl_NewListObj(0, nullptr));
+            for(auto mpg : _this->m_mpgs)
             {
-                Tcl_CreateEventSource(KqueueEventSetupProc, KqueueEventCheckProc, this);
+                /*Each mpg is represented by a dict:
+                 * "main_pid": empty if main pid has exited.  Pid if it is still active.
+                 * "active_pids": List of active pids*/
+
+                /*Create the mpg dict and add it to the top level list to be returned.*/
+                Tcl_Obj* mpg_dict = Tcl_NewDictObj();
+                int error = Tcl_ListObjAppendElement(_this->m_interp, top_level_list.get(), mpg_dict);
+                if(error)
+                {
+                    Tcl_BackgroundError(_this->m_interp);
+                    return 1;
+                }
+
+                /*Add the value of the main pid.  Empty object if the main process has exited.*/
+                vessel::tclobj_ptr main_pid_val = vessel::create_tclobj_ptr(Tcl_NewObj());
+                if(!mpg->has_first_child_exited())
+                {
+                    main_pid_val = vessel::create_tclobj_ptr(Tcl_NewWideIntObj(mpg->first_child_pid()));
+                }
+                error = Tcl_DictObjPut(_this->m_interp, mpg_dict, Tcl_NewStringObj("main_pid", -1), main_pid_val.release());
+                if(error)
+                {
+                    Tcl_BackgroundError(_this->m_interp);
+                    break;
+                }
+
+                /*Create the active pids list and add it to the mpg dict.*/
+                Tcl_Obj* mpg_list = Tcl_NewListObj(0, nullptr);
+                error = Tcl_DictObjPut(_this->m_interp, mpg_dict, Tcl_NewStringObj("active_pids", -1), mpg_list);
+                if(error)
+                {
+                    Tcl_BackgroundError(_this->m_interp);
+                    return 1;
+                }
+
+                /*The signal handler should take a list of lists each of which contain all active pids
+                 * for a process group.  The tcl code can search for jails and shut them down as necessary*/
+                for(pid_t pid : mpg->active_pids())
+                {
+                    error = Tcl_ListObjAppendElement(_this->m_interp, mpg_list, Tcl_NewWideIntObj(pid));
+                    if(error)
+                    {
+                        Tcl_BackgroundError(_this->m_interp);
+                        return 1;
+                    }
+                }
             }
+
+            /*Create an object with the callback elements provided as well as the top level list of mpgs*/
+
+            int callback_length = 0;
+            Tcl_Obj **callback_elements = nullptr;
+            int error = Tcl_ListObjGetElements(_this->m_interp, _this->m_signal_callback, &callback_length, &callback_elements);
+            if(error)
+            {
+                Tcl_BackgroundError(_this->m_interp);
+                return 1;
+            }
+
+            vessel::tclobj_ptr eval_params = vessel::create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
+            error = Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), Tcl_NewStringObj(sys_signame[_this->m_event.ident], -1));
+            error = error || Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), top_level_list.release());
+            if(error)
+            {
+                Tcl_BackgroundError(_this->m_interp);
+                return 1;
+            }
+
+            error = Tcl_EvalObjEx(_this->m_interp, eval_params.get(), TCL_EVAL_GLOBAL);
+
+            /*Memory will be deleted by the tcl event loop.*/
+            _this->~vessel_exec_signal_event();
+
+            if(error)
+            {
+                Tcl_BackgroundError(_this->m_interp);
+            }
+
+            return 1; /*Handled event.  */
         }
+
+
+
     public:
-        ~vessel_exec_interp_state()
+        vessel_exec_signal_event(Tcl_Interp* interp, monitored_process_group_list& mpgs, Tcl_Obj* signal_callback, struct kevent& event)
+            : Tcl_Event(),
+              m_interp(interp),
+              m_mpgs(mpgs),
+              m_signal_callback(signal_callback),
+              m_event(event)
         {
-            /*Tcl ignores the case when the event source doesn't exist.*/
-            Tcl_DeleteEventSource(KqueueEventSetupProc, KqueueEventCheckProc, this);
+
+            this->proc = event_proc;
+            this->nextPtr = nullptr;
+            Tcl_IncrRefCount(m_signal_callback);
         }
 
-        static int create(Tcl_Interp* interp,
-                          std::unique_ptr<vessel_exec_interp_state>& interp_state)
+        ~vessel_exec_signal_event()
         {
-            /*NOTE: Can't use make_unique with private constructor.*/
-            std::unique_ptr<vessel_exec_interp_state> tmp_ptr(new vessel_exec_interp_state(interp));
-            if(tmp_ptr->state.kqueue_fd == -1)
+            Tcl_DecrRefCount(m_signal_callback);
+        }
+    };
+
+    class signal_event_factory : public tcl_event_factory
+    {
+        Tcl_Interp* m_interp;
+        monitored_process_group_list& m_mpgs;
+        tclobj_ptr m_signal_callback;
+
+    public:
+
+        signal_event_factory(Tcl_Interp* interp, monitored_process_group_list& mpgs)
+            : m_interp(interp),
+              m_mpgs(mpgs),
+              m_signal_callback(create_tclobj_ptr(nullptr))
+        {}
+
+        tcl_event_ptr create_tcl_event(const struct kevent& event) override
+        {
+            if(!m_signal_callback)
             {
-                return vessel::syserror_result(interp, "VESSEL", "EXEC", "KQUEUE");
+                throw std::logic_error("Signal callback has not yet been set");
             }
-            interp_state = std::move(tmp_ptr);
-            return TCL_OK;
+            return alloc_tcl_event<vessel_exec_signal_event>(m_interp, m_mpgs, m_signal_callback.get(), event);
         }
 
-        void set_signal_callback(Tcl_Obj* callback)
+        void set_signal_callback(tclobj_ptr callback)
         {
-            Tcl_IncrRefCount(callback);
-            signal_callback = vessel::create_tclobj_ptr(callback);
+            m_signal_callback = std::move(callback);
         }
+
+        ~signal_event_factory()
+        {}
     };
 
     /**
@@ -192,11 +277,35 @@ namespace
         Tcl_Interp* interp;
         Tcl_Obj* callback_script;
         std::shared_ptr<monitored_process_group> mpg;
+        struct kevent event;
 
         static int event_proc(Tcl_Event *ev, int flags)
         {
             (void)flags;
             process_group_tcl_event* _this = reinterpret_cast<process_group_tcl_event*>(ev);
+
+            if(_this->event.fflags & NOTE_TRACKERR)
+            {
+                Tcl_SetObjResult(_this->interp,
+                                 Tcl_ObjPrintf("Error tracking child process of %lu", _this->event.ident));
+                Tcl_BackgroundError(_this->interp);
+                return 1;
+            }
+
+            if(_this->event.fflags & NOTE_CHILD)
+            {
+                _this->mpg->add_descendant((pid_t)_this->event.ident);
+                return 1;
+            }
+            else if(_this->event.fflags & NOTE_EXIT)
+            {
+                bool is_process_group_empty = _this->mpg->exited(_this->event.ident, _this->event.data);
+                if(!is_process_group_empty)
+                {
+                    /*All processes in group have not yet exited so mark this event as handled*/
+                    return 1;
+                }
+            }
 
             /*TODO: Add a "reason" parameter to the callback script.  In this case the reason would be
              * 'exit' but in other cases it might be 'signal' and have a jail id.*/
@@ -215,10 +324,12 @@ namespace
         }
 
         process_group_tcl_event(Tcl_Interp* interp, Tcl_Obj* callback_script,
-                                std::shared_ptr<monitored_process_group>& mpg)
+                                std::shared_ptr<monitored_process_group>& mpg,
+                                struct kevent& ev)
             : interp(interp),
               callback_script(callback_script),
-              mpg(mpg)
+              mpg(mpg),
+              event(ev)
         {
             this->proc = event_proc;
             this->nextPtr = nullptr;
@@ -255,292 +366,79 @@ namespace
         return 0;
     }
 
-    /**
-     * @brief KqueueEventReady The callback for the tcl file handler (fd notifier).
-     * @param clientData
-     * @param flags
-     */
-    void KqueueEventReady(void *clientData, int flags)
+    class process_group_event_factory : public tcl_event_factory
     {
-        kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
-        state->ready = true;
-    }
-
-    /**
-     * @brief KqueueEventSetupProc The setup proc for the tcl event loop integration.
-     * @param clientData
-     * @param flags
-     */
-    void KqueueEventSetupProc(void *clientData, int flags)
-    {
-        (void)flags;
-
-        kqueue_state* state = (kqueue_state*)clientData;
-        if(state == nullptr || state->kqueue_fd == -1)
-        {
-            return;
-        }
-
-        Tcl_CreateFileHandler(state->kqueue_fd, TCL_READABLE, KqueueEventReady, state);
-    }
-
-    /**
-     * @brief handle_kqueue_proc_event Handles a kqueue EVFILT_PROC event.  It is responsible
-     * for queuing the tcl event when the monitored process group has allof the processes exited.
-     * @param event
-     */
-    void handle_kqueue_proc_event(struct kevent& event)
-    {
-        assert(event.udata);
-        process_group_tcl_event* pge = reinterpret_cast<process_group_tcl_event*>(event.udata);
-
-        if(event.fflags & NOTE_TRACKERR)
-        {
-            Tcl_SetObjResult(pge->interp,
-                             Tcl_ObjPrintf("Error tracking child process of %lu", event.ident));
-            Tcl_BackgroundError(pge->interp);
-            return;
-        }
-
-        if(event.fflags & NOTE_CHILD)
-        {
-            pge->mpg->add_descendant((pid_t)event.ident);
-        }
-        else if(event.fflags & NOTE_EXIT)
-        {
-            bool is_process_group_empty = pge->mpg->exited(event.ident, event.data);
-            if(is_process_group_empty)
-            {
-                /*Queues the process done callback.*/
-                Tcl_QueueEvent(pge, TCL_QUEUE_TAIL);
-            }
-        }
-    }
-
-    /**
-     * @brief The VesselExecSignalEvent class Encapsulates the event handling of signal events.
-     */
-    class vessel_exec_signal_event : public Tcl_Event
-    {
-        Tcl_Obj* m_eval_params;
         Tcl_Interp* m_interp;
+        tclobj_ptr m_callback_script;
+        std::shared_ptr<monitored_process_group> m_mpg;
 
-        static int event_proc(Tcl_Event *evPtr, int flags)
-        {
-            vessel_exec_signal_event* _this = reinterpret_cast<vessel_exec_signal_event*>(evPtr);
-
-            int error = Tcl_EvalObjEx(_this->m_interp, _this->m_eval_params, TCL_EVAL_GLOBAL);
-
-            /*Memory will be deleted by the tcl event loop.*/
-            _this->~vessel_exec_signal_event();
-
-            if(error)
-            {
-                Tcl_BackgroundError(_this->m_interp);
-            }
-
-            return 1; /*Handled event.  */
-        }
-
-        vessel_exec_signal_event(Tcl_Obj* eval_params, Tcl_Interp* interp)
-            : Tcl_Event(),
-              m_eval_params(eval_params),
-              m_interp(interp)
-        {
-
-            this->proc = event_proc;
-            this->nextPtr = nullptr;
-            Tcl_IncrRefCount(eval_params);
-        }
-
-        ~vessel_exec_signal_event()
-        {
-            Tcl_DecrRefCount(m_eval_params);
-        }
     public:
 
-        /**
-         * @brief enqueue_signal_event Enqueue the signal callback into the event queue.
-         * NOTE: This could/should probably be generalized.
-         * @param interp
-         * @param callback_eval_params
-         */
-        static void enqueue_signal_event(Tcl_Interp* interp, Tcl_Obj* callback_eval_params)
+        process_group_event_factory(Tcl_Interp* interp, Tcl_Obj* callback_script, std::shared_ptr<monitored_process_group> mpg)
+            : tcl_event_factory(),
+              m_callback_script(create_tclobj_ptr(callback_script)),
+              m_mpg(mpg)
         {
-            /*New placement because tcl event queue frees the memory*/
-            vessel_exec_signal_event* event_buffer = reinterpret_cast<vessel_exec_signal_event*>(Tcl_Alloc(sizeof(vessel_exec_signal_event)));
-            assert(event_buffer);
-            new(event_buffer) vessel_exec_signal_event(callback_eval_params, interp);
+            Tcl_IncrRefCount(callback_script);
+        }
 
-            Tcl_QueueEvent(event_buffer, TCL_QUEUE_TAIL);
+        tcl_event_ptr create_tcl_event(const struct kevent &event) override
+        {
+            return alloc_tcl_event<process_group_tcl_event>(m_interp, m_callback_script.get(), m_mpg, event);
         }
     };
 
     /**
-     * @brief handle_kqueue_signal_event Responsible for handling the signal event from kqueue and creating
-     * the necessary tcl objects and tcl event so the tcl script signal callback will be invoked.
-     * @param event
+     * @brief The vessel_exec_interp_state struct Contains the necessary per-interpreter state.  Basically
+     * all of the data that is needed at the global level but hang it off of an interp for good practice.
      */
-    void handle_kqueue_signal_event(struct kevent& event)
+    struct vessel_exec_interp_state
     {
-        assert(event.udata);
-        vessel_exec_interp_state* interp_state = reinterpret_cast<vessel_exec_interp_state*>(event.udata);
-        if(!interp_state->signal_callback)
+
+        Tcl_Interp* interp;
+        std::map<pid_t, std::shared_ptr<process_group_event_factory>> mpg_event_factory;
+        monitored_process_group_list mpgs;
+        signal_event_factory signal_factory;
+
+        /*TODO: Add proc event factories*/
+    private:
+        vessel_exec_interp_state(Tcl_Interp* interp)
+            : interp(interp),
+              mpgs(),
+              signal_factory(interp, mpgs)
+        {}
+    public:
+        ~vessel_exec_interp_state()
+        {}
+
+        static int create(Tcl_Interp* interp,
+                          std::unique_ptr<vessel_exec_interp_state>& interp_state)
         {
-            return;
+            /*NOTE: Can't use make_unique with private constructor.*/
+            std::unique_ptr<vessel_exec_interp_state> tmp_ptr(new vessel_exec_interp_state(interp));
+            interp_state = std::move(tmp_ptr);
+            return TCL_OK;
         }
 
-        /*The list of mpg dicts that will be returned.*/
-        vessel::tclobj_ptr top_level_list = vessel::create_tclobj_ptr(Tcl_NewListObj(0, nullptr));
-        for(auto mpg : interp_state->mpgs)
+        void set_signal_callback(Tcl_Obj* callback)
         {
-            /*Each mpg is represented by a dict:
-             * "main_pid": empty if main pid has exited.  Pid if it is still active.
-             * "active_pids": List of active pids*/
-
-            /*Create the mpg dict and add it to the top level list to be returned.*/
-            Tcl_Obj* mpg_dict = Tcl_NewDictObj();
-            int error = Tcl_ListObjAppendElement(interp_state->interp, top_level_list.get(), mpg_dict);
-            if(error)
-            {
-                Tcl_BackgroundError(interp_state->interp);
-                return;
-            }
-
-            /*Add the value of the main pid.  Empty object if the main process has exited.*/
-            vessel::tclobj_ptr main_pid_val = vessel::create_tclobj_ptr(Tcl_NewObj());
-            if(!mpg->has_first_child_exited())
-            {
-                main_pid_val = vessel::create_tclobj_ptr(Tcl_NewWideIntObj(mpg->first_child_pid()));
-            }
-            error = Tcl_DictObjPut(interp_state->interp, mpg_dict, Tcl_NewStringObj("main_pid", -1), main_pid_val.release());
-            if(error)
-            {
-                Tcl_BackgroundError(interp_state->interp);
-                break;
-            }
-
-            /*Create the active pids list and add it to the mpg dict.*/
-            Tcl_Obj* mpg_list = Tcl_NewListObj(0, nullptr);
-            error = Tcl_DictObjPut(interp_state->interp, mpg_dict, Tcl_NewStringObj("active_pids", -1), mpg_list);
-            if(error)
-            {
-                Tcl_BackgroundError(interp_state->interp);
-                return;
-            }
-
-            /*The signal handler should take a list of lists each of which contain all active pids
-             * for a process group.  The tcl code can search for jails and shut them down as necessary*/
-            for(pid_t pid : mpg->active_pids())
-            {
-                error = Tcl_ListObjAppendElement(interp_state->interp, mpg_list, Tcl_NewWideIntObj(pid));
-                if(error)
-                {
-                    Tcl_BackgroundError(interp_state->interp);
-                    return;
-                }
-            }
+            Tcl_IncrRefCount(callback);
+            signal_factory.set_signal_callback(create_tclobj_ptr(callback));
         }
 
-        /*Create an object with the callback elements provided as well as the top level list of mpgs*/
-
-        int callback_length = 0;
-        Tcl_Obj **callback_elements = nullptr;
-        int error = Tcl_ListObjGetElements(interp_state->interp, interp_state->signal_callback.get(), &callback_length, &callback_elements);
-        if(error)
+        std::shared_ptr<process_group_event_factory>
+        add_mpg(std::shared_ptr<monitored_process_group>& mpg, Tcl_Obj* callback)
         {
-            Tcl_BackgroundError(interp_state->interp);
-            return;
+            mpgs.push_back(mpg);
+            auto factory = std::make_shared<process_group_event_factory>(interp, callback, mpg);
+            mpg_event_factory.insert({mpg->first_child_pid(), factory});
+            return factory;
         }
-
-        vessel::tclobj_ptr eval_params = vessel::create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
-        error = Tcl_ListObjAppendElement(interp_state->interp, eval_params.get(), Tcl_NewStringObj(sys_signame[event.ident], -1));
-        error = error || Tcl_ListObjAppendElement(interp_state->interp, eval_params.get(), top_level_list.release());
-        if(error)
-        {
-            Tcl_BackgroundError(interp_state->interp);
-            return;
-        }
-
-        vessel_exec_signal_event::enqueue_signal_event(interp_state->interp, eval_params.release());
-    }
-
-    /**
-     * @brief KqueueEventCheckProc Handles available kqueue events.  We know if
-     * an event is ready based on the kqueue_state which is set by the file event
-     * handler.
-     * @param clientData
-     * @param flags
-     */
-    void KqueueEventCheckProc(void *clientData, int flags)
-    {
-        (void)flags;
-
-        kqueue_state* state = reinterpret_cast<kqueue_state*>(clientData);
-        assert(state);
-
-        if(!state->ready)
-        {
-            return;
-        }
-        state->ready = false;
-
-        /*Kqueue is ready.  Get the available events and process them.*/
-        std::array<struct kevent, 16> events = {};
-
-        /*Use timespec instead of nullptr so kevent doesn't block*/
-        timespec spec;
-        spec.tv_sec = 0;
-        spec.tv_nsec = 0;
-        ssize_t event_count = kevent(state->kqueue_fd, nullptr, 0,
-                                     events.data(), events.size(),
-                                     &spec);
-
-        if(event_count == -1)
-        {
-            /*TODO: We should use tcl background errors instead of c++ exceptions*/
-            std::ostringstream msg;
-            msg << "Error occurred while retrieving kevents: " << strerror(errno);
-            std::cerr << msg.str() << std::endl;
-            throw std::runtime_error(msg.str());
-        }
-
-        for(int i = 0; i < event_count; ++i)
-        {
-            switch(events[i].filter)
-            {
-            case EVFILT_PROC:
-                handle_kqueue_proc_event(events[i]);
-                break;
-            case EVFILT_SIGNAL:
-                handle_kqueue_signal_event(events[i]);
-                break;
-            default:
-                throw std::runtime_error("Unexexpected filter type: " + std::to_string(events[i].filter));
-                break;
-            }
-        }
-    }
-
-    void KqueueDeleteProc(void *clientData, Tcl_Interp *interp)
-    {
-        int kqueue_fd = -1;
-        Tcl_Obj* fd_obj = (Tcl_Obj*)clientData;
-        int tcl_error = Tcl_GetIntFromObj(interp, fd_obj, &kqueue_fd);
-
-        if(!tcl_error)
-        {
-            Tcl_DecrRefCount(fd_obj);
-            close(kqueue_fd);
-        }
-    }
+    };
 }
 
 int Vessel_ExecInit(Tcl_Interp* interp)
 {
-    /*TODO: We should probably make our own kqueue module
-     * for vessel::native extension
-     */
     std::unique_ptr<vessel_exec_interp_state> interp_state;
     int tcl_error = vessel_exec_interp_state::create(interp, interp_state);
     if(tcl_error) return tcl_error;
@@ -576,21 +474,16 @@ int Vessel_Exec_SetSignalHandler(void *clientData, Tcl_Interp *interp,
 
 
     vessel_exec_interp_state* interp_state = reinterpret_cast<vessel_exec_interp_state*>(Tcl_GetAssocData(interp, "VesselExec", nullptr));
+    interp_state->set_signal_callback(objv[1]);
 
     struct kevent ev;
     std::vector<int> sigs = {SIGINT, SIGTERM, SIGHUP};
     for(int sig : sigs)
     {
         signal(sig, SIG_IGN);
-        EV_SET(&ev, sig, EVFILT_SIGNAL, EV_ADD, 0, 0, (void*)interp_state);
-        int error = kevent(interp_state->state.kqueue_fd, &ev, 1, nullptr, 0, nullptr);
-        if(error)
-        {
-            return vessel::syserror_result(interp, "KQUEUE", "SIGNAL");
-        }
+        EV_SET(&ev, sig, EVFILT_SIGNAL, EV_ADD, 0, 0, nullptr);
+        Kqueue_Add_Event(interp, ev, interp_state->signal_factory);
     }
-
-    interp_state->set_signal_callback(objv[1]);
 
     return TCL_OK;
 }
@@ -601,7 +494,6 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
     (void)objv;
     vessel_exec_interp_state* vessel_exec = reinterpret_cast<vessel_exec_interp_state*>(Tcl_GetAssocData(interp, "VesselExec", nullptr));
     assert(vessel_exec);
-    kqueue_state* state = &vessel_exec->state;
 
     if(objc < 4)
     {
@@ -758,19 +650,11 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         if(async)
         {
             std::shared_ptr<monitored_process_group> mpg = std::make_shared<monitored_process_group>(pid);
-            vessel_exec->mpgs.push_back(mpg);
-
-            void* pge_buffer = Tcl_Alloc(sizeof(process_group_tcl_event));
-            new(pge_buffer) process_group_tcl_event(interp, callback_prefix, mpg);
+            auto factory = vessel_exec->add_mpg(mpg, callback_prefix);
 
             struct kevent event;
-            EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, pge_buffer);
-
-            int error = kevent(state->kqueue_fd, &event, 1, nullptr, 0, nullptr);
-            if(error == -1)
-            {
-                return vessel::syserror_result(interp, "EXEC", "MONITOR", "KQUEUE");
-            }
+            EV_SET(&event, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT|NOTE_TRACK, 0, nullptr);
+            Kqueue_Add_Event(interp, event, *factory);
         }
         else
         {
