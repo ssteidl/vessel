@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include "exec.h"
@@ -11,7 +12,6 @@
 #include <termios.h>
 #include <vector>
 #include <unistd.h>
-#include <sys/event.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -111,7 +111,7 @@ namespace
     };
 
 
-    using monitored_process_group_list = std::list<std::shared_ptr<monitored_process_group>>;
+    using monitored_process_group_list = std::map<pid_t, std::shared_ptr<monitored_process_group>>;
 
     /**
      * @brief The VesselExecSignalEvent class Encapsulates the event handling of signal events.
@@ -147,9 +147,9 @@ namespace
 
                 /*Add the value of the main pid.  Empty object if the main process has exited.*/
                 vessel::tclobj_ptr main_pid_val = vessel::create_tclobj_ptr(Tcl_NewObj());
-                if(!mpg->has_first_child_exited())
+                if(!mpg.second->has_first_child_exited())
                 {
-                    main_pid_val = vessel::create_tclobj_ptr(Tcl_NewWideIntObj(mpg->first_child_pid()));
+                    main_pid_val = vessel::create_tclobj_ptr(Tcl_NewWideIntObj(mpg.second->first_child_pid()));
                 }
                 error = Tcl_DictObjPut(_this->m_interp, mpg_dict, Tcl_NewStringObj("main_pid", -1), main_pid_val.release());
                 if(error)
@@ -169,7 +169,7 @@ namespace
 
                 /*The signal handler should take a list of lists each of which contain all active pids
                  * for a process group.  The tcl code can search for jails and shut them down as necessary*/
-                for(pid_t pid : mpg->active_pids())
+                for(pid_t pid : mpg.second->active_pids())
                 {
                     error = Tcl_ListObjAppendElement(_this->m_interp, mpg_list, Tcl_NewWideIntObj(pid));
                     if(error)
@@ -212,8 +212,6 @@ namespace
 
             return 1; /*Handled event.  */
         }
-
-
 
     public:
         vessel_exec_signal_event(Tcl_Interp* interp, monitored_process_group_list& mpgs, Tcl_Obj* signal_callback, struct kevent& event)
@@ -300,12 +298,18 @@ namespace
             else if(_this->event.fflags & NOTE_EXIT)
             {
                 bool is_process_group_empty = _this->mpg->exited(_this->event.ident, _this->event.data);
+
+                /*PROC events seem to get removed automatically when a process exits.  I tried removing them
+                 * but I got a file not found.*/
+
                 if(!is_process_group_empty)
                 {
                     /*All processes in group have not yet exited so mark this event as handled*/
                     return 1;
                 }
             }
+
+            /*Process group has finished.  We can invoke the callback and cleanup*/
 
             /*TODO: Add a "reason" parameter to the callback script.  In this case the reason would be
              * 'exit' but in other cases it might be 'signal' and have a jail id.*/
@@ -343,6 +347,29 @@ namespace
         }
     };
 
+    class process_group_event_factory : public tcl_event_factory
+    {
+        Tcl_Interp* m_interp;
+        tclobj_ptr m_callback_script;
+        std::shared_ptr<monitored_process_group> m_mpg;
+
+    public:
+
+        process_group_event_factory(Tcl_Interp* interp, Tcl_Obj* callback_script, std::shared_ptr<monitored_process_group> mpg)
+            : tcl_event_factory(),
+              m_interp(interp),
+              m_callback_script(create_tclobj_ptr(callback_script)),
+              m_mpg(mpg)
+        {
+            Tcl_IncrRefCount(callback_script);
+        }
+
+        tcl_event_ptr create_tcl_event(const struct kevent &event) override
+        {
+            return alloc_tcl_event<process_group_tcl_event>(m_interp, m_callback_script.get(), m_mpg, event);
+        }
+    };
+
     /**
      * @brief dup_fd Duplicates an fd into another specific fd and handles errors as needed.
      * @param old_fd
@@ -366,28 +393,6 @@ namespace
         return 0;
     }
 
-    class process_group_event_factory : public tcl_event_factory
-    {
-        Tcl_Interp* m_interp;
-        tclobj_ptr m_callback_script;
-        std::shared_ptr<monitored_process_group> m_mpg;
-
-    public:
-
-        process_group_event_factory(Tcl_Interp* interp, Tcl_Obj* callback_script, std::shared_ptr<monitored_process_group> mpg)
-            : tcl_event_factory(),
-              m_callback_script(create_tclobj_ptr(callback_script)),
-              m_mpg(mpg)
-        {
-            Tcl_IncrRefCount(callback_script);
-        }
-
-        tcl_event_ptr create_tcl_event(const struct kevent &event) override
-        {
-            return alloc_tcl_event<process_group_tcl_event>(m_interp, m_callback_script.get(), m_mpg, event);
-        }
-    };
-
     /**
      * @brief The vessel_exec_interp_state struct Contains the necessary per-interpreter state.  Basically
      * all of the data that is needed at the global level but hang it off of an interp for good practice.
@@ -396,14 +401,14 @@ namespace
     {
 
         Tcl_Interp* interp;
-        std::map<pid_t, std::shared_ptr<process_group_event_factory>> mpg_event_factory;
+        std::map<pid_t, std::shared_ptr<process_group_event_factory>> mpg_event_factories;
         monitored_process_group_list mpgs;
         signal_event_factory signal_factory;
 
-        /*TODO: Add proc event factories*/
     private:
         vessel_exec_interp_state(Tcl_Interp* interp)
             : interp(interp),
+              mpg_event_factories(),
               mpgs(),
               signal_factory(interp, mpgs)
         {}
@@ -429,10 +434,16 @@ namespace
         std::shared_ptr<process_group_event_factory>
         add_mpg(std::shared_ptr<monitored_process_group>& mpg, Tcl_Obj* callback)
         {
-            mpgs.push_back(mpg);
+            mpgs.insert({mpg->first_child_pid(), mpg});
             auto factory = std::make_shared<process_group_event_factory>(interp, callback, mpg);
-            mpg_event_factory.insert({mpg->first_child_pid(), factory});
+            mpg_event_factories.insert({mpg->first_child_pid(), factory});
             return factory;
+        }
+
+        void remove_mpg(std::shared_ptr<monitored_process_group>& mpg)
+        {
+            mpgs.erase(mpg->first_child_pid());
+            mpg_event_factories.erase(mpg->first_child_pid());
         }
     };
 }
