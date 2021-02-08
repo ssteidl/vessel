@@ -14,6 +14,7 @@ add_library(vesseltcl SHARED
     src/lib/native/url_cmd.cpp
     src/lib/native/pty.cpp
     src/lib/native/exec.cpp
+    src/lib/native/devctl.cpp
     src/lib/native/tcl_kqueue.cpp
     src/lib/native/udp_tcl.c)
 
