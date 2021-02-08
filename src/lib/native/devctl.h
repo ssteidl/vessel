@@ -1,11 +1,8 @@
 #ifndef DEVCTL_CHANNEL_H
 #define DEVCTL_CHANNEL_H
 
+#include <tcl.h>
 
-class devctl_channel
-{
-public:
-    devctl_channel();
-};
+int Vessel_DevCtlInit(Tcl_Interp* interp);
 
 #endif // DEVCTL_CHANNEL_H
