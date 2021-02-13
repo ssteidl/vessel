@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cerrno>
 #include "exec.h"
 #include <fcntl.h>

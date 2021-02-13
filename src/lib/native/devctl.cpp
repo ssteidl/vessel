@@ -17,14 +17,6 @@ using namespace vessel;
 
 namespace
 {    
-    struct devctl_context;
-
-    devctl_context& get_context(Tcl_Interp* interp)
-    {
-        devctl_context* ctx = reinterpret_cast<devctl_context*>(Tcl_GetAssocData(interp, "DevCtlContext", nullptr));
-        return *ctx;
-    }
-
     class devctl_socket
     {
         static const std::string DEVCTL_PATH;
@@ -63,7 +55,7 @@ namespace
             char msg[1024];
             memset(msg, 0, sizeof(msg));
 
-            return std::string(buffer.data());
+            return std::string(msg);
         }
 
         ~devctl_socket()
@@ -90,6 +82,13 @@ namespace
         }
     };
 
+
+    devctl_context& get_context(Tcl_Interp* interp)
+    {
+        devctl_context* ctx = reinterpret_cast<devctl_context*>(Tcl_GetAssocData(interp, "DevCtlContext", nullptr));
+        return *ctx;
+    }
+
     class devctl_socket_ready_event : public Tcl_Event
     {
         Tcl_Interp* interp;
@@ -111,7 +110,23 @@ namespace
             }
 
             tclobj_ptr eval_params = create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
-//            error = Tcl_ListObjAppendElement(_this->interp, eval_params.get(), /*TODO: read the resource string*/);
+            std::string devctl_event = ctx.socket.read();
+            error = Tcl_ListObjAppendElement(_this->interp, eval_params.get(),
+                                             Tcl_NewStringObj(devctl_event.c_str(), devctl_event.size()));
+            if(error)
+            {
+                Tcl_BackgroundError(_this->interp);
+                return 1;
+            }
+
+            error = Tcl_EvalObjEx(_this->interp, eval_params.get(), TCL_EVAL_GLOBAL);
+            if(error)
+            {
+                Tcl_BackgroundError(_this->interp);
+                return 1;
+            }
+
+            return 1;
         }
 
     public:
@@ -160,4 +175,6 @@ int Vessel_DevCtlInit(Tcl_Interp* interp)
 {
     Tcl_SetAssocData(interp, "DevCtlContext", vessel::cpp_delete_with_interp<devctl_context>, new devctl_context(interp));
     Tcl_CreateObjCommand(interp, "vessel::devctl_set_callback", Vessel_DevCtlSetCallback, nullptr, nullptr);
+
+    return TCL_OK;
 }
