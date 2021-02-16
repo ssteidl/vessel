@@ -15,6 +15,7 @@
 #include <getopt.h>
 
 #include "../../dns/embdns.h"
+#include "devctl.h"
 #include "exec.h"
 #include "tcl_kqueue.h"
 #include "tcl_util.h"
@@ -863,12 +864,13 @@ extern int Vesseltcl_Init(Tcl_Interp* interp)
 
     (void)Tcl_CreateObjCommand(interp, "vessel::parse_options", Vessel_ParseOptions, nullptr, nullptr);
 
+    vessel::Kqueue_Init(interp);
     init_dns(interp);
     init_url(interp);
     init_exec(interp);
     Pty_Init(interp);
     Udp_Init(interp);
-    vessel::Kqueue_Init(interp);
+    Vessel_DevCtlInit(interp);
     Tcl_PkgProvide(interp, "vessel::native", "1.0.0");
 
     return TCL_OK;
