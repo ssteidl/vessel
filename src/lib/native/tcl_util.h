@@ -1,6 +1,8 @@
 #ifndef TCL_UTIL_H
 #define TCL_UTIL_H
 
+#include <iostream>
+
 #include <cerrno>
 #include <memory>
 #include <tcl.h>
@@ -59,6 +61,7 @@ struct fd_guard
 template<class T>
 void vessel::tclalloc_free(T* arg)
 {
+    std::cerr << "Deleting event" << std::endl;
     Tcl_Free(reinterpret_cast<char*>(arg));
 }
 

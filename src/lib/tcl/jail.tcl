@@ -28,7 +28,6 @@ namespace eval vessel::jail {
             #Add single quotes around any multi-word parts of the command
             set quoted_cmd [join [lmap word $args {expr {[llength $word] > 1 ?  "\'[join $word]\'" : $word }}]]
             
-            #TODO: Run mustache in a safe interpreter
             #TODO: Host and hostname should be different.
             #TODO: Allow setting any jail parameter
             #can contain different values then name
@@ -64,7 +63,7 @@ namespace eval vessel::jail {
                          append volume_string $mount_string
                      }
                      set volume_string]
-                    
+                    exec.created+="rctl -a jail:${name}:wallclock:devctl=5";
                     [set jail_options_string {}
                      dict for {option value} $jail_options {
                          set option_string [subst {${option}=${value};\n}]
