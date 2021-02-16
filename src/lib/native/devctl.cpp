@@ -124,7 +124,12 @@ namespace
             }
 
             tclobj_ptr eval_params = create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
-            Tcl_IncrRefCount(eval_params.get());
+
+            /*This has to be done because Tcl_EvalObjEx will increment and decrement the ref count
+             * which would delete and the callback prefix elements because the new list refcount
+             * is 0.*/
+            Tcl_IncrRefCount(eval_params);
+
             std::cerr << "ref count:" << callback_elements[0]->refCount << std::endl;
             std::string devctl_event = _this->m_socket.read();
             std::cerr << "2: " << devctl_event << std::endl;
@@ -149,8 +154,7 @@ namespace
             std::cerr << "I'm out" << std::endl;
 
             /*TODO: this should be done with RAII*/
-            _this->~devctl_socket_ready_event();
-
+            _this->~devctl_socket_ready_event();;
             return 1;
         }
 
