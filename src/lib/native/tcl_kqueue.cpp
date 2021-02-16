@@ -205,5 +205,3 @@ int vessel::Kqueue_Remove_Event(Tcl_Interp* interp, struct kevent& event)
     tcl_kqueue* kq = reinterpret_cast<tcl_kqueue*>(Tcl_GetAssocData(interp, "TclKqueueContext", nullptr));
     return kq->remove_kevent(event);
 }
-
-int vessel::Kqueue_Remove_Event(Tcl_Interp* interp, struct kevent& event);

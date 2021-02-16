@@ -123,9 +123,8 @@ namespace
                 return 1;
             }
 
-            {
-            std::cerr << "ref count:" << callback_elements[0]->refCount << std::endl;
             tclobj_ptr eval_params = create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
+            Tcl_IncrRefCount(eval_params.get());
             std::cerr << "ref count:" << callback_elements[0]->refCount << std::endl;
             std::string devctl_event = _this->m_socket.read();
             std::cerr << "2: " << devctl_event << std::endl;
@@ -148,14 +147,9 @@ namespace
             }
 
             std::cerr << "I'm out" << std::endl;
-            }
-            Tcl_Obj* wtf = _this->m_callback_prefix.get();
-            std::cerr << "ref count:" << _this->m_callback_prefix->refCount << std::endl;
 
-
+            /*TODO: this should be done with RAII*/
             _this->~devctl_socket_ready_event();
-            std::cerr << "wtf ref count:" << wtf->refCount << std::endl;
-
 
             return 1;
         }
@@ -174,7 +168,7 @@ namespace
 
             if(m_callback_prefix)
             {
-                Tcl_IncrRefCount(m_callback_prefix);
+                Tcl_IncrRefCount(callback_prefix);
             }
         }
 
@@ -200,14 +194,18 @@ namespace
 
         void set_callback_prefix(Tcl_Obj* callback_prefix)
         {
-            m_callback_prefix = create_tclobj_ptr(callback_prefix);
             Tcl_IncrRefCount(callback_prefix);
+            m_callback_prefix = create_tclobj_ptr(callback_prefix);
         }
 
         tcl_event_ptr create_tcl_event(const struct kevent &event) override
         {
-            std::cerr << "Interp: " << m_interp << std::endl;
             return alloc_tcl_event<devctl_socket_ready_event>(m_interp, std::ref(m_socket), m_callback_prefix.get());
+        }
+
+        ~devctl_socket_ready_event_factory()
+        {
+            std::cerr << "Event factory destructor" << std::endl;
         }
     };
 
@@ -243,14 +241,13 @@ namespace
     int Vessel_DevCtlSetCallback(void *clientData, Tcl_Interp *interp,
                                  int objc, struct Tcl_Obj *const *objv)
     {
-        std::cerr << "Set callback" << std::endl;
         (void)clientData;
         if(objc != 2)
         {
             Tcl_WrongNumArgs(interp, objc, objv, "<callback_prefix>");
             return TCL_ERROR;
         }
-        std::cerr << "Setting callback: " << Tcl_GetString(objv[1]) << std::endl;
+
         devctl_context& ctx = get_context(interp);
         ctx.set_callback(objv[1]);
         return TCL_OK;

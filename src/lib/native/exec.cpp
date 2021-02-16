@@ -193,6 +193,7 @@ namespace
             }
 
             vessel::tclobj_ptr eval_params = vessel::create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
+            Tcl_IncrRefCount(eval_params.get());
             error = Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), Tcl_NewStringObj(sys_signame[_this->m_event.ident], -1));
             error = error || Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), top_level_list.release());
             if(error)
@@ -205,6 +206,7 @@ namespace
             error = Tcl_EvalObjEx(_this->m_interp, eval_params.get(), TCL_EVAL_GLOBAL);
 
             /*Memory will be deleted by the tcl event loop.*/
+            /*TODO: RAII*/
             _this->~vessel_exec_signal_event();
 
             if(error)
