@@ -157,7 +157,7 @@ namespace
          * for any context they need.*/
         int add_kevent(struct kevent& event, tcl_event_factory& event_factory)
         {
-            /*TODO: Note it's up to the consumer to ensure the event_factory object lifetime
+            /*NOTE it's up to the consumer to ensure the event_factory object lifetime
              * is longer then the event lives in kqueue*/
             event.udata = &event_factory;
             int error = kevent(m_kq_state.kqueue_fd, &event, 1, nullptr, 0, nullptr);
