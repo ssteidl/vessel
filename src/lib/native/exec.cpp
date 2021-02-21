@@ -127,7 +127,8 @@ namespace
         static int event_proc(Tcl_Event *evPtr, int flags)
         {
             (void)flags;
-            vessel_exec_signal_event* _this = (vessel_exec_signal_event*)(evPtr);
+
+            placement_ptr<vessel_exec_signal_event> _this = create_placement_ptr((vessel_exec_signal_event*)(evPtr));
 
             /*The list of mpg dicts that will be returned.*/
             vessel::tclobj_ptr top_level_list = vessel::create_tclobj_ptr(Tcl_NewListObj(0, nullptr));
@@ -199,15 +200,10 @@ namespace
             if(error)
             {
                 Tcl_BackgroundError(_this->m_interp);
-                /*Destructor doesn't get called here*/
                 return 1;
             }
 
             error = Tcl_EvalObjEx(_this->m_interp, eval_params.get(), TCL_EVAL_GLOBAL);
-
-            /*Memory will be deleted by the tcl event loop.*/
-            /*TODO: RAII*/
-            _this->~vessel_exec_signal_event();
 
             if(error)
             {
@@ -284,7 +280,7 @@ namespace
         static int event_proc(Tcl_Event *ev, int flags)
         {
             (void)flags;
-            process_group_tcl_event* _this = (process_group_tcl_event*)(ev);
+            placement_ptr<process_group_tcl_event> _this = create_placement_ptr((process_group_tcl_event*)(ev));
 
             if(_this->event.fflags & NOTE_TRACKERR)
             {
@@ -323,10 +319,6 @@ namespace
             {
                 Tcl_BackgroundError(_this->interp);
             }
-
-            /*Explicitly call the destructor because TCL event loop owns the memory.  My understanding is
-             * that this will explicitly call the destructors for member objects.*/
-            _this->~process_group_tcl_event();
 
             return 1; /*Event has been processed*/
         }

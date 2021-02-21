@@ -25,7 +25,7 @@ Feature Highlights
     * - Internal (Bridged) Networking
       - Not yet
     * - Resource control
-      - Not yet
+      - yes
 
 Image Definition Files
 ^^^^^^^^^^^^^^^^^^^^^^
