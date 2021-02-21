@@ -42,7 +42,6 @@ namespace
                 throw std::runtime_error(msg.str());
             }
             int fd = s.release();
-            std::cerr << "my fd: " << fd << std::endl;
             return fd;
         }
 
@@ -50,31 +49,28 @@ namespace
 
         devctl_socket()
             : m_fd(open_devctl())
-        {
-            std::cerr << "constructor fd: " << m_fd.fd << std::endl;
-        }
+        {}
 
         devctl_socket(const devctl_socket& other) = delete;
 
         std::string read()
         {
-            std::cerr << "Reading... " << std::endl;
             char msg[1024];
             memset(msg, 0, sizeof(msg));
-            ssize_t bytes_read = ::recv(fd(), msg, sizeof(msg), MSG_DONTWAIT);
+            ssize_t bytes_read = 0;
+            bytes_read = ::recv(fd(), msg, sizeof(msg), 0);
             switch (bytes_read) {
             case 0:
                 /*TODO: Handle closing socket*/
-                std::cerr << "Socket has closed" << std::endl;
+                throw std::runtime_error("devctl socket closed");
                 break;
             case -1:
-                std::cerr << "devctl error: " << ::strerror(errno) << ": " << m_fd.fd << std::endl;
-                break;
-            default:
+                std::ostringstream msg;
+                msg << "devctl error: " << ::strerror(errno) << ": " << m_fd.fd << std::endl;
+                throw std::runtime_error(msg.str());
                 break;
             }
             std::string msg_str(msg);
-            std::cerr << "MSG: " << msg_str << std::endl;
             return std::string(msg);
         }
 
@@ -84,9 +80,7 @@ namespace
         }
 
         ~devctl_socket()
-        {
-            std::cerr << "Socket destructor" << std::endl;
-        }
+        {}
     };
 
     const std::string devctl_socket::DEVCTL_PATH = "/var/run/devd.seqpacket.pipe";
@@ -100,23 +94,16 @@ namespace
         static int event_proc(Tcl_Event *evPtr, int flags)
         {
             (void)flags;
-
-            devctl_socket_ready_event* _this = (devctl_socket_ready_event*)(evPtr);
-            std::cerr << "Event: " << (void*)_this->interp << std::endl;
+            placement_ptr<devctl_socket_ready_event> _this = create_placement_ptr((devctl_socket_ready_event*)(evPtr));
             if(_this->m_callback_prefix == nullptr)
             {
-                /*Callback prefix hasn't been set so there is no point to continuing*/
-                std::cerr << "Callback not set" << std::endl;
+                std::cerr << "callback prefix is null" << std::endl;
                 return 1;
             }
-
-
-            std::cerr << "Event: yo2" << std::endl;
 
             int callback_length = 0;
             Tcl_Obj **callback_elements = nullptr;
             int error = Tcl_ListObjGetElements(_this->interp, _this->m_callback_prefix.get(), &callback_length, &callback_elements);
-            std::cerr << "1" << std::endl;
             if(error)
             {
                 Tcl_BackgroundError(_this->interp);
@@ -130,31 +117,22 @@ namespace
              * is 0.*/
             Tcl_IncrRefCount(eval_params);
 
-            std::cerr << "ref count:" << callback_elements[0]->refCount << std::endl;
             std::string devctl_event = _this->m_socket.read();
-            std::cerr << "2: " << devctl_event << std::endl;
             error = Tcl_ListObjAppendElement(_this->interp, eval_params.get(),
                                              Tcl_NewStringObj(devctl_event.c_str(), devctl_event.size()));
             if(error)
             {
-                std::cerr << "Error appending" << std::endl;
                 Tcl_BackgroundError(_this->interp);
                 return 1;
             }
 
-            std::cerr << "3: " << Tcl_GetStringFromObj(eval_params.get(), nullptr) << std::endl;
             error = Tcl_EvalObjEx(_this->interp, eval_params.get(), TCL_EVAL_GLOBAL);
             if(error)
             {
-                std::cerr << "error eval: " << Tcl_GetStringResult(_this->interp) << std::endl;
                 Tcl_BackgroundError(_this->interp);
                 return 1;
             }
 
-            std::cerr << "I'm out" << std::endl;
-
-            /*TODO: this should be done with RAII*/
-            _this->~devctl_socket_ready_event();;
             return 1;
         }
 
@@ -177,9 +155,7 @@ namespace
         }
 
         ~devctl_socket_ready_event()
-        {
-            std::cerr << "Destructed" << std::endl;
-        }
+        {}
     };
 
     class devctl_socket_ready_event_factory : public tcl_event_factory
@@ -207,6 +183,11 @@ namespace
             return alloc_tcl_event<devctl_socket_ready_event>(m_interp, std::ref(m_socket), m_callback_prefix.get());
         }
 
+        bool is_callback_set() const
+        {
+            return (m_callback_prefix != nullptr);
+        }
+
         ~devctl_socket_ready_event_factory()
         {
             std::cerr << "Event factory destructor" << std::endl;
@@ -228,12 +209,36 @@ namespace
         void set_callback(Tcl_Obj* callback_prefix)
         {
             event_factory.set_callback_prefix(callback_prefix);
+
+            /*If we are transitioning from unset callback to set callback,
+             * add the event to kqueue*/
+            if(!event_factory.is_callback_set() && callback_prefix != nullptr)
+            {
+                struct kevent event;
+                EV_SET(&event, socket.fd(), EVFILT_READ, EV_ADD, 0, 0, 0);
+                int error = Kqueue_Add_Event(interp, event, event_factory);
+                if(error)
+                {
+                    Tcl_SetResult(interp, (char*)"Error adding devd socket to kqueue", TCL_STATIC);
+                    Tcl_BackgroundError(interp);
+                }
+            }
+            else if(event_factory.is_callback_set() && callback_prefix == nullptr)
+            {
+
+                struct kevent event;
+                EV_SET(&event, socket.fd(), EVFILT_READ, EV_DELETE, 0, 0, 0);
+                int error = Kqueue_Remove_Event(interp, event);
+                if(error)
+                {
+                    Tcl_SetResult(interp, (char*)"Error removing devd socket to kqueue", TCL_STATIC);
+                    Tcl_BackgroundError(interp);
+                }
+            }
         }
 
         ~devctl_context()
-        {
-            std::cerr << "Devctl context destructor" << std::endl;
-        }
+        {}
     };
 
     devctl_context& get_context(Tcl_Interp* interp)
@@ -264,10 +269,5 @@ int Vessel_DevCtlInit(Tcl_Interp* interp)
     Tcl_SetAssocData(interp, "DevCtlContext", vessel::cpp_delete_with_interp<devctl_context>, new devctl_context(interp));
     Tcl_CreateObjCommand(interp, "vessel::devctl_set_callback", Vessel_DevCtlSetCallback, nullptr, nullptr);
 
-    devctl_context& ctx = get_context(interp);
-
-    std::cerr << "Devctlinit" << std::endl;
-    struct kevent event;
-    EV_SET(&event, ctx.socket.fd(), EVFILT_READ, EV_ADD, 0, 0, 0);
-    return Kqueue_Add_Event(interp, event, ctx.event_factory);
+    return TCL_OK;
 }

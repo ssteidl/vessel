@@ -9,8 +9,7 @@ Application containers for FreeBSD
 
 Project Goals
 ^^^^^^^^^^^^^
-Unleash all of the features of the FreeBSD operating system to application developers.  This is done
-
+Unleash all of the features of the FreeBSD operating system to application developers.
 
 .. toctree::
    :maxdepth: 2
@@ -18,6 +17,7 @@ Unleash all of the features of the FreeBSD operating system to application devel
 
    QuickStart
    FeatureHighlights
+   ResourceControl
    supervisor
 
 
