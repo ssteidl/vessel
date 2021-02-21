@@ -170,7 +170,6 @@ namespace
 
         int remove_kevent(struct kevent& event)
         {
-
             int error = kevent(m_kq_state.kqueue_fd, &event, 1, nullptr, 0, nullptr);
             if(error == -1)
             {
