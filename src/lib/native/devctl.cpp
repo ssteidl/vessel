@@ -208,8 +208,6 @@ namespace
 
         void set_callback(Tcl_Obj* callback_prefix)
         {
-            event_factory.set_callback_prefix(callback_prefix);
-
             /*If we are transitioning from unset callback to set callback,
              * add the event to kqueue*/
             if(!event_factory.is_callback_set() && callback_prefix != nullptr)
@@ -235,6 +233,8 @@ namespace
                     Tcl_BackgroundError(interp);
                 }
             }
+
+            event_factory.set_callback_prefix(callback_prefix);
         }
 
         ~devctl_context()

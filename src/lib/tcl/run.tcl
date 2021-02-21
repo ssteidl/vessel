@@ -20,7 +20,7 @@ namespace eval vessel::run {
 
         proc handle_dataset_argument {dataset_arg} {
 
-            puts "dataset_arg: $dataset_arg"
+            debug.run "dataset_arg: $dataset_arg"
             set arg_list [split $dataset_arg ":"]
             if {[llength $arg_list] != 2} {
                 return -code error -errorcode {DATASET ARGS} "dataset requires a value in the format <source>:<dest>"
@@ -70,6 +70,7 @@ namespace eval vessel::run {
 
             set run_dict $args_dict
             dict set run_dict jail [dict create]
+            dict set run_dict limits [list]
             
             set ini_file [dict get $args_dict ini_file]
             
@@ -111,10 +112,28 @@ namespace eval vessel::run {
                         dict set run_dict jail $param $value
                     }
                 }
+
+                if {[string first {resource:} $section] eq 0} {
+
+                    set resource_tokens [split $section :]
+                    if {[llength ${resource_tokens}] != 2} {
+                        return -code error "Invalid resource section name: $section"
+                    }
+
+                    set limit_name [lindex ${resource_tokens} 1]
+                    set rctl_string [dict get $section_value_dict rctl]
+                    set devctl_action [dict getnull $section "devctl-action"]
+                    dict lappend run_dict limits [dict create "name" $limit_name "rctl" $rctl_string "devctl-action" $devctl_action]
+                }
             }
             
             return $run_dict
         }
+    }
+
+    proc resource_limits_cb {limits_list limits_string} {
+
+        #TODO: Parse limits
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
@@ -198,6 +217,11 @@ namespace eval vessel::run {
             set jail_name [dict get $args_dict "name"]
         }
 
+        set limits [dict get $args_dict "limits"]
+        if {$limits ne {}} {
+            #TODO
+        }
+
         set coro_name [info coroutine]
         set error [catch {
             vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
@@ -229,6 +253,8 @@ namespace eval vessel::run {
                 puts stderr "Error unmounting $volume_mount: $error_msg"
             }
         }
+
+        #TODO: Remove rctl rules for jail
 
         debug.run "Unjailing jailed datasets"
         foreach volume_dataset $volume_datasets {
