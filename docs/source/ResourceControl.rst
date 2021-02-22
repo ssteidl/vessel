@@ -34,7 +34,7 @@ Using Resource Limits
 * The :code:`rctl` key can be set to a valid rctl string.  The rctl string should not contain the subject or subjectid as those will be
   added by vessel.
 * There is a second optional key :code:`devctl-action`.  If you use devctl as the resource string action then a custom
-  action can be taken.  The supported actions are
+  action can be taken.  The supported actions are: 
     * :code:`shutdown`.  Cleanly shutdown the jail.
     * :code:`exec=<command params>`.  Execute an arbitrary process that can be very useful for monitoring and alerting.
 

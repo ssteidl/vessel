@@ -19,6 +19,7 @@ Unleash all of the features of the FreeBSD operating system to application devel
    FeatureHighlights
    ResourceControl
    supervisor
+   FeatureIdeas
 
 
 Indices and tables
