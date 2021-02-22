@@ -7,22 +7,26 @@ namespace eval vessel::deploy {
 
 	namespace eval _ {
 	    proc validate_section_name {name} {
-		if {$name eq {vessel-supervisor}} {
-		    return
-		}
+			if {$name eq {vessel-supervisor}} {
+				return
+			}
 
-		if {[string first {dataset:} $name] != -1} {
-		    return
-		}
+			if {[string first {dataset:} $name] != -1} {
+				return
+			}
 
-		if {$name eq {jail}} {
-		    return
-		}
+			if {$name eq {jail}} {
+				return
+			}
 
-		return -code error -errorcode {VESSEL INI SECTION UNEXPECTED} \
-		    "Unexpected section $name"
-	    }
-	}
+			if {[string first {resource:} $name] != -1} {
+				return
+			}
+
+			return -code error -errorcode {VESSEL INI SECTION UNEXPECTED} \
+				"Unexpected section $name"
+			}
+		}
 	
 	proc get_deployment_dict {ini_file} {
 	    set fh [ini::open $ini_file]
@@ -35,11 +39,6 @@ namespace eval vessel::deploy {
 	    foreach section $sections {
 		dict set deployment_dict $section [ini::get $fh $section]
 		_::validate_section_name $section
-	    }
-
-	    if {![dict exists $deployment_dict {vessel-supervisor}]} {
-		return -code error -errorcode {VESSEL INI SECTION MISSING} \
-		    "Missing vessel-supervisor section"
 	    }
 	    
 	    return $deployment_dict

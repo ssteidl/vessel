@@ -121,8 +121,8 @@ namespace eval vessel::run {
                     }
 
                     set limit_name [lindex ${resource_tokens} 1]
-                    set rctl_string [dict get $section_value_dict rctl]
-                    set devctl_action [dict getnull $section "devctl-action"]
+                    set rctl_string [dict get $section_value_dict "rctl"]
+                    set devctl_action [dict getnull $section_value_dict "devctl-action"]
                     dict lappend run_dict limits [dict create "name" $limit_name "rctl" $rctl_string "devctl-action" $devctl_action]
                 }
             }
@@ -131,9 +131,54 @@ namespace eval vessel::run {
         }
     }
 
-    proc resource_limits_cb {limits_list limits_string} {
+    proc resource_limits_cb {user_limits_list jail_name devd_str} {
+        # The callback for the devctl module to call when a devd string
+        # is read from the socket.  
+        #
+        # param user_limits_list: List of dictionaries that potentially contain actions to
+        # perform when the jail exceeds a limit
+        #
+        # param jail_name: The name of the jail being executed by this instance of vessel
+        #
+        # param rctl_str: The string read from devd socket.  It could be from any subsystem
+        # not just rctl.
+        debug.run "resource limits callback"
+        set rctl_dict [vessel::bsd::parse_devd_rctl_str $devd_str]
 
-        #TODO: Parse limits
+        #If it's not an rctl string then return
+        if {$rctl_dict eq {}} {
+            debug.run "devd str is not an rctl string"
+            return
+        }
+
+        set jail [dict get $rctl_dict "jail"]
+
+        debug.run "Jail exceeded resource: $jail"
+
+        if {$jail eq $jail_name} {
+
+            #Iterate through all of the resource definitions provided
+            # by the user.
+            foreach user_limit_dict $user_limits_list {
+                #Get the rctl rule which is resource:action
+                set user_rctl_rule [dict get $user_limit_dict "rctl"]
+                set user_resource [lindex [split $user_rctl_rule :] 0]
+                
+                set rctl_resource [dict get $rctl_dict "rule" "resource"]
+                debug.run "User resource: $user_resource"
+                debug.run "rctl resource: $rctl_resource"
+                if {$user_resource eq $rctl_resource} {
+                    #The user provided resource matches the resource provided by the devd rctl string
+                    set user_action [dict get $user_limit_dict "devctl-action"]
+                    debug.run "User action: $user_action"
+                    if {$user_action eq "shutdown"} {
+                        debug.run "Resource limit exceeded.  shutting down"
+                    } else {
+                        debug.run "Resource limit exceeded.  Executing some other action"
+                    }
+                }
+            }
+        }
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
@@ -219,7 +264,7 @@ namespace eval vessel::run {
 
         set limits [dict get $args_dict "limits"]
         if {$limits ne {}} {
-            #TODO
+            vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name]
         }
 
         set coro_name [info coroutine]
