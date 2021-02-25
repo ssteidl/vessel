@@ -653,6 +653,11 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         return TCL_ERROR;
     default:
     {
+        /*This seems like the proper thing to set as the result.  But it's not really
+         * useful when you are trying to get the jail id.  Need to use procfs and jail name for
+         * that.*/
+        Tcl_SetObjResult(interp, Tcl_NewWideIntObj(pid));
+
         /*Parent*/
         if(async)
         {
