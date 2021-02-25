@@ -21,20 +21,13 @@ namespace eval vessel::jail {
         }
         
         #Build the jail command which can be exec'd
-        proc build_jail_conf {name mountpoint volume_datasets network jail_options args} {
+        proc build_jail_conf {name mountpoint volume_datasets network limits jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
             
             #Add single quotes around any multi-word parts of the command
             set quoted_cmd [join [lmap word $args {expr {[llength $word] > 1 ?  "\'[join $word]\'" : $word }}]]
             
-            #TODO: Host and hostname should be different.
-            #TODO: Allow setting any jail parameter
-            #can contain different values then name
-            #NOTE: Everything in the jailconf jail lifecycle after exec.start is pretty much
-            #useless because there is no guarantee the jail command is still running.  Most
-            #of the cleanup needs to be reimplemented.
-
             textutil::expander jail_file_expander
             try {
             jail_file_expander evalcmd [list uplevel "#[info level]"]
@@ -53,8 +46,6 @@ namespace eval vessel::jail {
                          append network_string "${parameter}=${value};"
                      }
                      set network_string]
-                    
-                    
                     [set volume_string {}
                      foreach volume $volume_datasets {
                          set jail_string [subst {exec.created+="zfs jail $name $volume";\n}]
@@ -63,7 +54,16 @@ namespace eval vessel::jail {
                          append volume_string $mount_string
                      }
                      set volume_string]
-                    exec.created+="rctl -a jail:${name}:wallclock:devctl=5";
+                     [set rctl_string {}
+                     foreach limit_dict $limits {
+                         set user_rctl_string [dict get $limit_dict "rctl"]
+                         append rctl_string [subst {exec.created+="rctl -a jail:$name:$user_rctl_string";\n}]
+                     }
+                     set rctl_string
+                     if {$rctl_string ne {}} {
+                         append rctl_string [subst {exec.release="rctl -r jail:$name";}]
+                     }]
+
                     [set jail_options_string {}
                      dict for {option value} $jail_options {
                          set option_string [subst {${option}=${value};\n}]
@@ -87,8 +87,8 @@ namespace eval vessel::jail {
         return [exec -ignorestderr jexec $jid kill "-${signal}" -1 >&@ $output_chan]
     }
 
-    proc shutdown {jid {output_chan stderr}} {
-        return [exec -ignorestderr jail -r $jid >&@ $output_chan]
+    proc shutdown {jid jail_file {output_chan stderr}} {
+        return [exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan]
     }
 
     proc remove {jid {output_chan stderr}} {
@@ -96,11 +96,11 @@ namespace eval vessel::jail {
         return [exec -ignorestderr jail -r $jid >&@ $output_chan]
     }
     
-    proc run_jail {name mountpoint volume_datasets chan_dict network jail_options_dict \
+    proc run_jail {name mountpoint volume_datasets chan_dict network limits jail_options_dict \
                        callback args} {
 
         #Create the conf file
-        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network \
+        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network $limits \
                            $jail_options_dict {*}$args]
         set jail_conf_file {}
         set jail_conf_file_chan [file tempfile jail_conf_file]
@@ -116,9 +116,18 @@ namespace eval vessel::jail {
         #async mode.  If async, make sure the callback has the jail conf file to cleanup
         set _callback {}
         if {$callback ne {}} {
-            set _callback [list $callback $jail_conf_file] 
+            set _callback [list $callback $jail_conf_file]
+
+            #Run the async command in the background.  This way we can return the jail conf file
+            #without a race condition.  The higher level can finish setting up with data from
+            #the jail being started.
+            after idle [list vessel::exec $chan_dict ${_callback} {*}$jail_command]
+        } else {
+            #Blocking so run it inline
+            vessel::exec $chan_dict {} {*}$jail_command
         }
-        vessel::exec $chan_dict ${_callback} {*}$jail_command
+        
+        return $jail_conf_file
     }
 }
 

@@ -131,7 +131,7 @@ namespace eval vessel::run {
         }
     }
 
-    proc resource_limits_cb {user_limits_list jail_name devd_str} {
+    proc resource_limits_cb {user_limits_list jail_name jail_file devd_str} {
         # The callback for the devctl module to call when a devd string
         # is read from the socket.  
         #
@@ -142,12 +142,10 @@ namespace eval vessel::run {
         #
         # param rctl_str: The string read from devd socket.  It could be from any subsystem
         # not just rctl.
-        debug.run "resource limits callback"
         set rctl_dict [vessel::bsd::parse_devd_rctl_str $devd_str]
 
         #If it's not an rctl string then return
         if {$rctl_dict eq {}} {
-            debug.run "devd str is not an rctl string"
             return
         }
 
@@ -173,6 +171,7 @@ namespace eval vessel::run {
                     debug.run "User action: $user_action"
                     if {$user_action eq "shutdown"} {
                         debug.run "Resource limit exceeded.  shutting down"
+                        vessel::jail::shutdown $jail_name $jail_file
                     } else {
                         debug.run "Resource limit exceeded.  Executing some other action"
                     }
@@ -262,22 +261,28 @@ namespace eval vessel::run {
             set jail_name [dict get $args_dict "name"]
         }
 
-        set limits [dict get $args_dict "limits"]
-        if {$limits ne {}} {
-            vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name]
-        }
-
         set coro_name [info coroutine]
+        set limits [dict get $args_dict "limits"]
+        set tmp_jail_conf {}
         set error [catch {
-            vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
-                $network $jail_options_dict $coro_name {*}$command
+            set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
+                $network $limits $jail_options_dict $coro_name {*}$command]
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {VESSEL JAIL EXEC} "Error running jail: $error_msg"
         }
         
+        if {$limits ne {}} {
+            vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name $tmp_jail_conf]
+        }
+
         #Wait for the command to finish
-        set tmp_jail_conf [yield]
+        yield
+
+        #TODO: Now that we can use the jail file we need to:
+        # 1. Move jail cleanup to the jail file commands
+        # 2. Move the jail file itself to /var/run/vessel/jailconf/<jail>-<uuid>
+
         debug.run "Container exited. Cleaning up..."
         file delete $tmp_jail_conf
 
@@ -298,8 +303,6 @@ namespace eval vessel::run {
                 puts stderr "Error unmounting $volume_mount: $error_msg"
             }
         }
-
-        #TODO: Remove rctl rules for jail
 
         debug.run "Unjailing jailed datasets"
         foreach volume_dataset $volume_datasets {
