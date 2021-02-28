@@ -180,6 +180,120 @@ namespace eval vessel::run {
         }
     }
 
+    proc signal_handler {jail_file signal active_pid_groups} {
+
+        puts stderr "apgs: $active_pid_groups"
+
+        proc find_jail_from_pid {pids} {
+
+            # Look through each pid and find the first
+            # jail listed in proc filesystem
+            #
+            # jail id is the last field in the status file for the
+            # pid
+            
+            set jail {}
+            foreach p $pids {
+                if {$p eq {}} {
+                    continue
+                }
+                set data [fileutil::cat "/proc/${p}/status"]
+                puts stderr "status: $data"
+                set jail_status [lindex $data end]
+                puts stderr "jail_status: $jail_status"
+                if {$jail_status ne {-} && $jail_status ne {}} {
+                    set jail $jail_status
+                    break
+                }
+            }
+
+            return $jail
+        }
+
+        foreach pid_group $active_pid_groups {
+
+            set jail {}
+            set main_pid [dict get $pid_group "main_pid"]
+            dict for {key pid_list} $pid_group {
+                #Find the jail from the main pid or
+                # if main_pid has closed, from the active pids
+
+                switch -exact $key {
+
+                    "main_pid" {
+                        #main_pid isn't a list so we make it one
+                        set jail [find_jail_from_pid [list $pid_list]]
+                    }
+
+                    "active_pids" {
+                        set jail [find_jail_from_pid $pid_list]
+                    }
+                }
+
+                if {$jail ne {}} {
+                    break
+                }
+            }
+
+            if {$jail eq {}} {
+                return -code error "Could not find jail in signal handler"
+            }
+
+            
+            debug.vessel "jail for signal: $jail"
+
+                
+            #Propagate the signal as follows:
+            # 1. If it's sigint, go through the shutdown process.
+            #    The thought being that sigint comes from a keyboard and generally will mean, stop jail.
+            #
+            # 2. If it's an interactive shell, pass through the signal to the main process.  NOTE: Perhaps
+            #    we need a way to define the main process in the VesselFile (or signal handler processes).
+            #    Then we could search for it by name in the pid status files.
+            #    
+            # 3. SIGTERM should shutdown the jail (/etc/rc.shutdown, then kill -TERM -1)
+
+            
+            #If the main pid is still running, pass the signal to the main pid
+            if {$main_pid ne {}} {
+                puts stderr "Passing signal to main pid"
+                set err [catch {exec -ignorestderr jexec $jail kill "-${signal}" $main_pid}]
+                if {$err} {
+                    puts stderr "Error killing main process in jail: $jail"
+                }
+
+                #If it's a sigint and main process is still running, remove the jail.
+                switch -exact $signal {
+                    INT {
+                        #Give it 5 seconds to shutdown.
+                        #TODO: We could make this configurable via the commandline
+                        after 5000 [list apply {{jid} { 
+                        
+                            puts stderr "Removing jail $jid"
+                            exec -ignorestderr jail -f $jail_file -r $jid >&@ stderr
+                        }} $jail]
+                    }
+                }
+            } else {
+                #For background jails, sigint is immediate jail -r.  sigterm triggers the
+                #shutdown process
+                puts stderr "Handling SIG${signal} for background process"
+                switch -exact $signal {
+                    INT {
+                        vessel::jail::remove $jail stderr
+                    }
+                    TERM {
+                        catch {vessel::jail::shutdown $jail $jail_file stderr}
+                        after 2000 [list exec -ignorestderr jail -f $jail_file -r $jail >&@ stderr]
+                    }
+                    default {
+                        vessel::jail::kill $jail "-${signal}" stderr
+                    }
+                }
+            }
+        }
+    }
+
     proc run_command {chan_dict args_dict cb_coro} {
 
         defer::with [list cb_coro] {
@@ -231,7 +345,7 @@ namespace eval vessel::run {
             set uuid [uuid::uuid generate]
             set container_dataset [vessel::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
 
-            puts stderr "Cloning b snapshot: ${image_dataset}@b $container_dataset"
+            debug.run "Cloning b snapshot: ${image_dataset}@b $container_dataset"
             vessel::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
         } else {
 
@@ -253,6 +367,7 @@ namespace eval vessel::run {
             lappend volume_datasets $dataset
         }
 
+        #NOTE: We need a better way to handle resolv conf.  Ideally a dns server
         vessel::env::copy_resolv_conf $mountpoint
         
         set command [dict get $args_dict "command"]
@@ -276,6 +391,9 @@ namespace eval vessel::run {
             vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name $tmp_jail_conf]
         }
 
+        #Signal handler to intelligently shutdown jails from received signals.
+        vessel::exec_set_signal_handler [list vessel::run::signal_handler $tmp_jail_conf]
+
         #Wait for the command to finish
         yield
 
@@ -284,17 +402,15 @@ namespace eval vessel::run {
         # 2. Move the jail file itself to /var/run/vessel/jailconf/<jail>-<uuid>
 
         debug.run "Container exited. Cleaning up..."
+
+        # TODO: Do a check to see if cleanup is needed.  If so run this command and
+        #ideally do all of the cleanup in the jail.conf.
+        debug.run "Removing jail: $jail_name, $tmp_jail_conf"
+        if {[catch {vessel::jail::shutdown $jail_name $tmp_jail_conf} error_msg]} {
+            puts stderr "Unable to remove jail: $error_msg"
+        }
+
         file delete $tmp_jail_conf
-
-        debug.run "Removing jail: $jail_name"
-        if {[catch {exec jail -r $jail_name >&@ stderr} error_msg]} {
-            puts stderr "Unable to remove jail.  Attempting to cleanup filesystem: $error_msg"
-        }
-
-        debug.run "Unmounting jail dev filesystem"
-        if {[catch {vessel::bsd::umount "${mountpoint}/dev"} error_msg]} {
-            puts stderr "Unable to umount dev filesystem, continuing on...: $error_msg"
-        }
 
         debug.run "Unmounting nullfs volumes"
         foreach volume_mount $jailed_mount_paths {
