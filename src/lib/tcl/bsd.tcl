@@ -35,6 +35,17 @@ namespace eval vessel::bsd {
         }
     }
 
+    proc is_mountpoint {path} {
+        if {[catch {exec df /proc} msg]} {
+            return false
+        }
+        return true
+    }
+
+    proc mount_procfs {} {
+        exec mount -t procfs /proc /proc
+    }
+
     proc parse_devd_rctl_str {rctl_str} {
         # Parse the devd string and break it down into a dictionary if it
         # is from the rctl subsystem.  Examples of devd strings are below

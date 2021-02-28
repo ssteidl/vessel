@@ -70,6 +70,9 @@ namespace eval vessel::jail {
                          append jail_options_string $option_string
                      }
                      set jail_options_string]
+
+                     #Set persist=1 so we can properly run shutdown commands after all processes exit
+                     persist=1;
                     exec.start+="[set quoted_cmd]";
                     
                 }}]
@@ -91,9 +94,9 @@ namespace eval vessel::jail {
         return [exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan]
     }
 
-    proc remove {jid {output_chan stderr}} {
+    proc remove {jid jail_file {output_chan stderr}} {
 
-        return [exec -ignorestderr jail -r $jid >&@ $output_chan]
+        return [exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan]
     }
     
     proc run_jail {name mountpoint volume_datasets chan_dict network limits jail_options_dict \
@@ -102,13 +105,13 @@ namespace eval vessel::jail {
         #Create the conf file
         set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network $limits \
                            $jail_options_dict {*}$args]
-        set jail_conf_file {}
-        set jail_conf_file_chan [file tempfile jail_conf_file]
+        set jail_conf_file [file join [vessel::env::jail_confs_dir] "$name.conf"]
+        set jail_conf_file_chan [open  $jail_conf_file w]
 
         puts $jail_conf_file_chan $jail_conf
         close $jail_conf_file_chan
         
-        set jail_command [list jail -f $jail_conf_file -c $name]
+        set jail_command [list jail -v -f $jail_conf_file -c $name]
         
         puts stderr "JAIL CONF: $jail_conf"
 

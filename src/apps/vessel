@@ -37,128 +37,17 @@ if {![vessel::zfs::is_mounted $pool]} {
     }
 }
 
-#TODO: Check if proc filesystem is mounted.  If not, mount it
+if {![vessel::bsd::is_mountpoint /proc]} {
+    vessel.debug "Mounting /proc"
+    vessel::bsd::mount_procfs
+}
+
+#Make the runtime directories.
+file mkdir [vessel::env::vessel_run_dir]
+file mkdir [vessel::env::jail_confs_dir]
 
 set run_done_flag [expr false]
 
-proc signal_handler {signal active_pid_groups} {
-
-    #TODO: Move this shutdown code to the jail module.  The signal
-    # handler should stay here.
-    
-    puts stderr "apgs: $active_pid_groups"
-
-    proc find_jail_from_pid {pids} {
-
-        # Look through each pid and find the first
-        # jail listed in proc filesystem
-        #
-        # jail id is the last field in the status file for the
-        # pid
-        
-        set jail {}
-        foreach p $pids {
-            if {$p eq {}} {
-                continue
-            }
-            set data [fileutil::cat "/proc/${p}/status"]
-            puts stderr "status: $data"
-            set jail_status [lindex $data end]
-            puts stderr "jail_status: $jail_status"
-            if {$jail_status ne {-} && $jail_status ne {}} {
-                set jail $jail_status
-                break
-            }
-        }
-
-        return $jail
-    }
-
-    foreach pid_group $active_pid_groups {
-
-        set jail {}
-        set main_pid [dict get $pid_group "main_pid"]
-        dict for {key pid_list} $pid_group {
-            #Find the jail from the main pid or
-            # if main_pid has closed, from the active pids
-
-            switch -exact $key {
-
-                "main_pid" {
-                    #main_pid isn't a list so we make it one
-                    set jail [find_jail_from_pid [list $pid_list]]
-                }
-
-                "active_pids" {
-                    set jail [find_jail_from_pid $pid_list]
-                }
-            }
-
-            if {$jail ne {}} {
-                break
-            }
-        }
-
-        if {$jail eq {}} {
-            return -code error "Could not find jail in signal handler"
-        }
-
-        
-        debug.vessel "jail for signal: $jail"
-
-            
-        #Propagate the signal as follows:
-        # 1. If it's sigint, go through the shutdown process.
-        #    The thought being that sigint comes from a keyboard and generally will mean, stop jail.
-        #
-        # 2. If it's an interactive shell, pass through the signal to the main process.  NOTE: Perhaps
-        #    we need a way to define the main process in the VesselFile (or signal handler processes).
-        #    Then we could search for it by name in the pid status files.
-        #    
-        # 3. SIGTERM should shutdown the jail (/etc/rc.shutdown, then kill -TERM -1)
-
-        
-        #If the main pid is still running, pass the signal to the main pid
-        if {$main_pid ne {}} {
-            puts stderr "Passing signal to main pid"
-            set err [catch {exec -ignorestderr jexec $jail kill "-${signal}" $main_pid}]
-            if {$err} {
-                puts stderr "Error killing main process in jail: $jail"
-            }
-
-            #If it's a sigint and main process is still running, remove the jail.
-            switch -exact $signal {
-                INT {
-                    #Give it 5 seconds to shutdown.
-                    #TODO: We could make this configurable via the commandline
-                    after 5000 [list apply {{jid} { 
-                    
-                        puts stderr "Removing jail $jid"
-                        exec -ignorestderr jail -r $jid >&@ stderr
-                    }} $jail]
-                }
-            }
-        } else {
-            #For background jails, sigint is immediate jail -r.  sigterm triggers the
-            #shutdown process
-            puts stderr "Handling SIG${signal} for background process"
-            switch -exact $signal {
-                INT {
-                    vessel::jail::remove $jail stderr
-                }
-                TERM {
-                    catch {vessel::jail::shutdown $jail stderr}
-                    after 2000 [list exec -ignorestderr jail -r $jail >&@ stderr]
-                }
-                default {
-                    vessel::jail::kill $jail "-${signal}" stderr
-                }
-            }
-        }
-    }
-}
-
-vessel::exec_set_signal_handler [list signal_handler]
 
 #TODO: This belongs in the 'vessel init' command whenever
 # we decide to implement that..

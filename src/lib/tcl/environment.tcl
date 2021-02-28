@@ -78,5 +78,14 @@ namespace eval vessel::env {
         set workdir [get_workdir]
         return [get_from_env VESSEL_METADATA_DB_DIR [file join $workdir {db}]]
     }
+
+    proc vessel_run_dir {} {
+        return [get_from_env VESSEL_RUN_DIR [file join var run vessel]]
+    }
+
+    proc jail_confs_dir {} {
+
+        return [get_from_env VESSEL_VAR_RUN_DIR {/var/run/vessel/jails}]
+    }
 }
 package provide vessel::env 1.0.0
