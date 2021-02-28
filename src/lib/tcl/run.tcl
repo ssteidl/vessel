@@ -180,7 +180,7 @@ namespace eval vessel::run {
         }
     }
 
-    proc signal_handler {jail_file signal active_pid_groups} {
+    proc signal_handler {jail_name jail_file signal active_pid_groups} {
 
         puts stderr "apgs: $active_pid_groups"
 
@@ -280,7 +280,7 @@ namespace eval vessel::run {
                 puts stderr "Handling SIG${signal} for background process"
                 switch -exact $signal {
                     INT {
-                        vessel::jail::remove $jail stderr
+                        vessel::jail::remove $jail $jail_file stderr
                     }
                     TERM {
                         catch {vessel::jail::shutdown $jail $jail_file stderr}
@@ -392,7 +392,7 @@ namespace eval vessel::run {
         }
 
         #Signal handler to intelligently shutdown jails from received signals.
-        vessel::exec_set_signal_handler [list vessel::run::signal_handler $tmp_jail_conf]
+        vessel::exec_set_signal_handler [list vessel::run::signal_handler $jail_name $tmp_jail_conf]
 
         #Wait for the command to finish
         yield
