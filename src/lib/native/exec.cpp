@@ -120,19 +120,18 @@ namespace
     class vessel_exec_signal_event : public Tcl_Event
     {
         Tcl_Interp* m_interp;
-        monitored_process_group_list& m_mpgs;
+        monitored_process_group_list m_mpgs;
         Tcl_Obj* m_signal_callback;
         struct kevent m_event;
 
         static int event_proc(Tcl_Event *evPtr, int flags)
         {
             (void)flags;
-
             placement_ptr<vessel_exec_signal_event> _this = create_placement_ptr((vessel_exec_signal_event*)(evPtr));
 
             /*The list of mpg dicts that will be returned.*/
             vessel::tclobj_ptr top_level_list = vessel::create_tclobj_ptr(Tcl_NewListObj(0, nullptr));
-            for(auto mpg : _this->m_mpgs)
+            for(auto& mpg : _this->m_mpgs)
             {
                 /*Each mpg is represented by a dict:
                  * "main_pid": empty if main pid has exited.  Pid if it is still active.
@@ -253,6 +252,7 @@ namespace
             {
                 throw std::logic_error("Signal callback has not yet been set");
             }
+
             return alloc_tcl_event<vessel_exec_signal_event>(m_interp, m_mpgs, m_signal_callback.get(), event);
         }
 
@@ -470,7 +470,7 @@ int Vessel_ExecInit(Tcl_Interp* interp)
 int Vessel_Exec_SetSignalHandler(void *clientData, Tcl_Interp *interp,
               int objc, struct Tcl_Obj *const *objv)
 {
-
+    (void)clientData;
     /*NOTE: I wonder if I should be using a pty to pass along signals instead of doing this?
      * I don't think so because that wouldn't help with jail processes that run in the background.  Perhaps
      * that should be done in interactive mode.  See ticket #37*/

@@ -1,5 +1,8 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
+package require json
+package require dicttool
+
 namespace eval vessel::bsd {
 
     proc host_architecture {} {
@@ -36,10 +39,17 @@ namespace eval vessel::bsd {
     }
 
     proc is_mountpoint {path} {
-        if {[catch {exec df /proc} msg]} {
-            return false
+        set fs_json [exec df --libxo=json $path]
+        set mountpoint_dicts [json::json2dict $fs_json]
+
+        set mp_list [dict getnull $mountpoint_dicts storage-system-information filesystem]
+        foreach mp_dict $mp_list {
+            if {[dict get $mp_dict "mounted-on"] eq $path} {
+                return true
+            }
         }
-        return true
+
+        return false
     }
 
     proc mount_procfs {} {
