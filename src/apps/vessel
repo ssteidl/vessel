@@ -38,7 +38,7 @@ if {![vessel::zfs::is_mounted $pool]} {
 }
 
 if {![vessel::bsd::is_mountpoint /proc]} {
-    vessel.debug "Mounting /proc"
+    debug.vessel "Mounting /proc"
     vessel::bsd::mount_procfs
 }
 
