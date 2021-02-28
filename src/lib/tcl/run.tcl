@@ -171,7 +171,9 @@ namespace eval vessel::run {
                     debug.run "User action: $user_action"
                     if {$user_action eq "shutdown"} {
                         debug.run "Resource limit exceeded.  shutting down"
-                        vessel::jail::shutdown $jail_name $jail_file
+                        if {[catch {vessel::jail::shutdown $jail_name $jail_file} msg]} {
+                            debug.run "Error shutting down after resource limit exceeded: $msg"
+                        }
                     } else {
                         debug.run "Resource limit exceeded.  Executing some other action"
                     }
