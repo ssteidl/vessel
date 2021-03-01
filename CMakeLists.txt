@@ -30,6 +30,7 @@ install(FILES src/lib/tcl/vessel_file_commands.tcl
               src/lib/tcl/bsd.tcl
               src/lib/tcl/build.tcl
               src/lib/tcl/definition_file.tcl
+	      src/lib/tcl/deploy.tcl
               src/lib/tcl/environment.tcl
               src/lib/tcl/export.tcl
               src/lib/tcl/import.tcl
