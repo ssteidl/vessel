@@ -1,5 +1,5 @@
-PORTNAME=	fbsdappc
-DISTVERSION=	1.0
+PORTNAME=	vessel
+DISTVERSION=	1.1
 CATEGORIES=	sysutils
 
 MAINTAINER=	ssteidley@gnsoftwarelabs.com
