@@ -97,7 +97,6 @@ namespace
             placement_ptr<devctl_socket_ready_event> _this = create_placement_ptr((devctl_socket_ready_event*)(evPtr));
             if(_this->m_callback_prefix == nullptr)
             {
-                std::cerr << "callback prefix is null" << std::endl;
                 return 1;
             }
 
@@ -189,9 +188,7 @@ namespace
         }
 
         ~devctl_socket_ready_event_factory()
-        {
-            std::cerr << "Event factory destructor" << std::endl;
-        }
+        {}
     };
 
     struct devctl_context
