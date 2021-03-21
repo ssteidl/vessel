@@ -221,14 +221,18 @@ proc RUN {args} {
     
     try {
 
-	#Copy resolv conf so we can access the internet
-	vessel::env::copy_resolv_conf $mountpoint
-	
-	#Empty callback signifies blocking mode
-	set callback {}
+        #Copy resolv conf so we can access the internet
+        vessel::env::copy_resolv_conf $mountpoint
+        
+        #Empty callback signifies blocking mode
+        set callback {}
 
-	set volumes [list]
-        vessel::jail::run_jail "${name}-buildcmd" $mountpoint $volumes $channel_dict $network $callback {*}$args
+        set volumes [list]
+        set limits [dict create]
+        set jail_options [dict create]
+        set jail_name "${name}-buildcmd"
+        set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volumes $channel_dict $network $limits $jail_options $callback {*}$args]
+        exec jail -f $tmp_jail_conf -r $jail_name
     } trap {CHILDSTATUS} {results options} {
 
         puts stderr "Run failed: $results"
