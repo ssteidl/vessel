@@ -105,7 +105,7 @@ namespace eval vessel::jail {
         #Create the conf file
         set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network $limits \
                            $jail_options_dict {*}$args]
-        set jail_conf_file [file join [vessel::env::jail_confs_dir] "$name.conf"]
+        set jail_conf_file [file join [vessel::env::jail_confs_dir] "${name}.conf"]
         set jail_conf_file_chan [open  $jail_conf_file w]
 
         puts $jail_conf_file_chan $jail_conf

@@ -89,30 +89,30 @@ namespace eval vessel::import {
     }
 
     proc import_image_metadata_dict {metadata_dict} {
-	set name [dict get $metadata_dict name]
-	set tag [dict get $metadata_dict tag]
-	set command [dict get $metadata_dict command]
-	set cwd [dict get $metadata_dict cwd]
-	set parent_images [dict get $metadata_dict parent_images]
+		set name [dict get $metadata_dict name]
+		set tag [dict get $metadata_dict tag]
+		set command [dict get $metadata_dict command]
+		set cwd [dict get $metadata_dict cwd]
+		set parent_images [dict get $metadata_dict parent_images]
 
-	import_image_metadata $name $tag $cwd $command $parent_images
-    }
-    
-    proc import {image tag image_dir status_channel} {
-	# Import an image into the vessel environment.
-	#
-	# params:
-	#
-	# image_w_tag: The name of the image without tag appended
-	# tag: The tag of the image
-	# image_dir: The directory where the image file resides
-	debug.import "import{}: ${image},${tag}"
+		import_image_metadata $name $tag $cwd $command $parent_images
+		}
+		
+		proc import {image tag image_dir status_channel} {
+		# Import an image into the vessel environment.
+		#
+		# params:
+		#
+		# image_w_tag: The name of the image without tag appended
+		# tag: The tag of the image
+		# image_dir: The directory where the image file resides
+		debug.import "import{}: ${image},${tag}"
 
-	set extracted_path [file join $image_dir "${image}:${tag}"]
+		set extracted_path [file join $image_dir "${image}:${tag}"]
 
-	#Extract files into extracted_path overriding files that already exist.
-	exec unzip -o -d $extracted_path [file join $image_dir "${image}:${tag}.zip"] >&@ $status_channel
-	_::create_layer $image $tag $extracted_path $status_channel
+		#Extract files into extracted_path overriding files that already exist.
+		exec unzip -o -d $extracted_path [file join $image_dir "${image}:${tag}.zip"] >&@ $status_channel
+		_::create_layer $image $tag $extracted_path $status_channel
 
     }
 }

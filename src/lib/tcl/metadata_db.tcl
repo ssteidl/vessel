@@ -1,3 +1,5 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
 package require vessel::env
 package require vessel::zfs
 package require defer
