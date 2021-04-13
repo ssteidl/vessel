@@ -209,6 +209,13 @@ namespace eval vessel::run {
         set image_components [split $image :]
         set image_name [lindex $image_components 0]
         set network [dict get $args_dict "network"]
+        
+        set uuid [uuid::uuid generate]
+        set jail_name $uuid
+        if {[dict exists $args_dict "name" ]} {
+            set jail_name [dict get $args_dict "name"]
+        }
+
         set tag {latest}
         if {[llength $image_components] > 1} {
             set tag [lindex $image_components 1]
@@ -236,11 +243,12 @@ namespace eval vessel::run {
         debug.run "RUN COMMAND b snapshot exists: $b_snapshot_exists"
         if {$b_snapshot_exists && $tag ne {local}} {
 
-            set uuid [uuid::uuid generate]
-            set container_dataset [vessel::env::get_dataset_from_image_name $image_name ${tag}/${uuid}]
+            set container_dataset [vessel::env::get_dataset_from_image_name $image_name ${tag}/${jail_name}]
 
-            debug.run "Cloning b snapshot: ${image_dataset}@b $container_dataset"
-            vessel::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
+            if {![dict exists $mountpoints_dict $container_dataset]} {
+                debug.run "Cloning b snapshot: ${image_dataset}@b $container_dataset"
+                vessel::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
+            }
         } else {
 
             #Support manually created or pulled datasets
@@ -265,10 +273,6 @@ namespace eval vessel::run {
         vessel::env::copy_resolv_conf $mountpoint
         
         set command [dict get $args_dict "command"]
-        set jail_name [uuid::uuid generate]
-        if {[dict exists $args_dict "name" ]} {
-            set jail_name [dict get $args_dict "name"]
-        }
 
         set coro_name [info coroutine]
         set limits [dict get $args_dict "limits"]
