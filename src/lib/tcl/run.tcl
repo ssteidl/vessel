@@ -94,7 +94,7 @@ namespace eval vessel::run {
                 if {[string first {dataset:} $section] eq 0} {
 
                     set dataset_name [dict get $section_value_dict dataset]
-                    set dataset_name "[vessel::env::get_dataset]/${dataset_name}"
+                    set dataset_name "${dataset_name}"
                     set dataset_mount [dict get $section_value_dict mount]
 
                     dict lappend run_dict datasets "${dataset_name}:${dataset_mount}"
