@@ -14,15 +14,12 @@ proc bgerror {message} {
 
 namespace eval vessel::supervisor {
 
-    #dictionary of statbuf arrays of deployment files
-    variable deploy_files_dict [dict create]
-
     #Dictionary of containers that we are monitoring
     variable monitored_containers_dict [dict create]
     
     proc start_container_coro {deploy_file} {
 
-        puts "starting container"
+        puts stderr "starting container"
         set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
 
         puts $deploy_dict
@@ -32,7 +29,6 @@ namespace eval vessel::supervisor {
         #initialization yield
         yield
         
-
         if {![vessel::metadata_db::image_exists $image $tag]} {
 
             #Image doesn't exist.  We need to pull it from the repository
@@ -68,43 +64,6 @@ namespace eval vessel::supervisor {
     proc shutdown_container_coro {} {
 
         yield        
-    }
-    
-	proc poll_deploy_dir {deploy_dir} {
-        variable deploy_files_dict
-
-        set ini_files [glob -nocomplain [file join $deploy_dir]/*.ini]
-        puts stderr "Polling ini files: ${ini_files}"
-
-        foreach f $ini_files {
-
-            set deploy_file [file normalize $f]
-            file stat $deploy_file statbuf
-
-            if {$statbuf(type) eq {file}} {
-
-                if {[dict exists $deploy_files_dict $deploy_file]} {
-
-                    #TODO: Check if modification time has changed
-                    
-                } else {
-                    # new file, let's spin up the container
-                    #TODO: parse the ini and generate the container
-
-                    #save the deploy file to the deploy_files_dict so we
-                    # can check if files are already available or not.
-                    dict set deploy_files_dict $deploy_file [array get statbuf]
-                    set container_coro_name [file tail [file rootname ${deploy_file}]]
-                    coroutine  $container_coro_name start_container_coro $deploy_file
-                    after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
-                }
-            }
-        }
-
-        #Make a second loop to check if any files have been deleted.  There's
-        # probably something clever for a diff'ing algo but a second loop seems
-        # simple, unless i'm missing some edge case.
-
     }
 }
 

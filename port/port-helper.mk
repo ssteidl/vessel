@@ -1,6 +1,6 @@
 #Run from top level directory
 COMMIT!= git rev-parse HEAD
-VERSION?=1.1-${COMMIT}
+VERSION?=1.1.2-${COMMIT}
 DISTDIR?=/tmp
 STAGEDIR?=FBSD
 

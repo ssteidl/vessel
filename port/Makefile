@@ -1,5 +1,5 @@
 PORTNAME=	vessel
-DISTVERSION=	1.1
+DISTVERSION=	1.1.2
 CATEGORIES=	sysutils
 
 MAINTAINER=	ssteidley@gnsoftwarelabs.com
