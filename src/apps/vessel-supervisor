@@ -7,6 +7,7 @@ package require inifile
 package require vessel::native
 package require vessel::deploy
 package require vessel::metadata_db
+package require dicttool
 
 proc bgerror {message} {
     puts "bgerror: $message"
@@ -42,7 +43,7 @@ namespace eval vessel::supervisor {
 
         #TODO: Name should be mandatory
         set jail_name [dict get $deploy_dict vessel-supervisor name]
-        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} --rm ${image}:${tag}"
+        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} ${image}:${tag}"
         lappend vessel_cmd {*}$command
         puts "$vessel_cmd"
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
@@ -65,6 +66,34 @@ namespace eval vessel::supervisor {
 
         yield        
     }
+
+    proc poll_deploy_dir {deploy_dir} {
+
+        defer::defer after 2000 [namespace current]::poll_deploy_dir $deploy_dir
+
+        set changed_dict [vessel::deploy::poll_deploy_dir $deploy_dir]
+
+        puts stderr "changed dict: $changed_dict"
+        #Queue up the containers that need to be 
+        foreach deploy_file [dict getnull $changed_dict "start"] {
+            #TODO: make a queue or figure out how to do this synchronously.  We don't
+            #want to be starting some containers while the same container is still starting.
+            #There needs to be some safe guards in place.
+
+
+            set container_coro_name [file tail [file rootname ${deploy_file}]]
+            coroutine  $container_coro_name start_container_coro $deploy_file
+            after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
+        }
+
+        foreach deploy_file [dict getnull $changed_dict "stop"] {
+            puts stderr "Stop2: $deploy_file"
+        }
+
+        foreach deploy_file [dict getnull $changed_dict "modified"] {
+            puts stderr "modified: $deploy_file"
+        }
+    }
 }
 
 
@@ -79,7 +108,7 @@ try {
     
     # Trap the usage signal, print the message, and exit the application.
     # Note: Other errors are not caught and passed through to higher levels!
-    puts $msg
+    puts stderr $msg
     exit 1
 }
 
@@ -87,7 +116,7 @@ parray params
 
 set deploy_dir $params(d)
 
-after 5000 [list vessel::supervisor::poll_deploy_dir $deploy_dir]
+after idle [list vessel::supervisor::poll_deploy_dir $deploy_dir]
 
 set running true
 vwait  running

@@ -65,67 +65,65 @@ namespace eval vessel::deploy {
             }
 
             return $deployment_dict
-            }}
+        }
+    }
 
-            proc poll_deploy_dir {deploy_dir} {
+    proc poll_deploy_dir {deploy_dir} {
 
-                # Returns a dictionary with 'start', 'stop' and 'modified' keys.
-                # Each key has a list of ini files to handle.
+        # Returns a dictionary with 'start', 'stop' and 'modified' keys.
+        # Each key has a list of ini files to handle.
 
-                set change_dict [dict create "start" [list] "stop" [list] "modified" [list]]
+        set change_dict [dict create "start" [list] "stop" [list] "modified" [list]]
 
-                variable _::deploy_files_dict
+        variable _::deploy_files_dict
 
-                set ini_files [glob -nocomplain [file join $deploy_dir]/*.ini]
-                debug.deploy "Polling ini files: ${ini_files}"
+        set ini_files [glob -nocomplain [file join $deploy_dir]/*.ini]
+        debug.deploy "Polling ini files: ${ini_files}"
 
-                debug.deploy "Deploy files dict: [dict keys $deploy_files_dict]"
-                foreach f $ini_files {
+        debug.deploy "Deploy files dict: [dict keys $deploy_files_dict]"
+        foreach f $ini_files {
 
-                    set deploy_file [file normalize $f]
-                    file stat $deploy_file statbuf
+            set deploy_file [file normalize $f]
+            file stat $deploy_file statbuf
 
-                    if {$statbuf(type) eq {file}} {
+            if {$statbuf(type) eq {file}} {
 
-                        if {[dict exists $deploy_files_dict $deploy_file]} {
+                if {[dict exists $deploy_files_dict $deploy_file]} {
 
-                            set existing_mtime [dict get $deploy_files_dict $deploy_file "mtime"]
+                    set existing_mtime [dict get $deploy_files_dict $deploy_file "mtime"]
 
-                            if {$existing_mtime < $statbuf(mtime)} {
-                                dict lappend change_dict "modified" $deploy_file
-                            } elseif {$existing_mtime == $statbuf(mtime)} {
-                                debug.deploy "File exists but hasn't changed"
-                            } else {
-                                debug.deploy "Existing statbuf is new then updated modification time"
-                            }
-                        } else {
-
-                            #save the deploy file to the deploy_files_dict so we
-                            # can check if files are already available or not.
-                            dict set deploy_files_dict $deploy_file [array get statbuf]
-                            dict lappend change_dict "start" $deploy_file
-
-                            #TODO: Move these lines into the service
-                            # set container_coro_name [file tail [file rootname ${deploy_file}]]
-                            # coroutine  $container_coro_name start_container_coro $deploy_file
-                            # after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
-                        }
+                    if {$existing_mtime < $statbuf(mtime)} {
+                        dict lappend change_dict "modified" $deploy_file
+                    } elseif {$existing_mtime == $statbuf(mtime)} {
+                        debug.deploy "File exists but hasn't changed"
+                    } else {
+                        debug.deploy "Existing statbuf is newer then updated modification time... ignoring."
                     }
+                } else {
+
+                    dict lappend change_dict "start" $deploy_file
                 }
 
-                # Figure out which files have been deleted by doing a set difference between
-                # ini files and known ini files.
-                set known_deploy_files [list]
-                struct::set add known_deploy_files [dict keys $deploy_files_dict]
-                set deleted_files [struct::set difference $known_deploy_files $ini_files]
-                dict lappend change_dict "stop" $deleted_files
 
-                #Remove the deleted files from the deploy_files_dict
-                foreach filename $deleted_files {
-                    dict unset deploy_files_dict $filename
-                }
-                return $change_dict
+                #save the deploy file to the deploy_files_dict so we can
+                # check if anything changed in the next invocation.
+                dict set deploy_files_dict $deploy_file [array get statbuf]
             }
         }
 
-        package provide vessel::deploy 1.0.0
+        # Figure out which files have been deleted by doing a set difference between
+        # ini files and known ini files.
+        set known_deploy_files [list]
+        struct::set add known_deploy_files [dict keys $deploy_files_dict]
+        set deleted_files [struct::set difference $known_deploy_files $ini_files]
+        
+        #Remove the deleted files from the deploy_files_dict
+        foreach filename $deleted_files {            
+            dict lappend change_dict "stop" $filename
+            dict unset deploy_files_dict $filename
+        }
+        return $change_dict
+    }
+}
+
+package provide vessel::deploy 1.0.0
