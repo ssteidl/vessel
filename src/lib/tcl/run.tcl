@@ -175,6 +175,7 @@ namespace eval vessel::run {
                             debug.run "Error shutting down after resource limit exceeded: $msg"
                         }
                     } else {
+                        #TODO: Implement exec subprocess
                         debug.run "Resource limit exceeded.  Executing some other action"
                     }
                 }
@@ -278,13 +279,17 @@ namespace eval vessel::run {
         set limits [dict get $args_dict "limits"]
         set tmp_jail_conf {}
         set error [catch {
-            set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
+            set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
                 $network $limits $jail_options_dict $coro_name {*}$command]
+            
+            debug.run "jail_start_params: $jail_start_params"
+            set tmp_jail_conf [lindex $jail_start_params 0]
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {VESSEL JAIL EXEC} "Error running jail: $error_msg"
         }
         
+        debug.run "Setting devctl callback"
         if {$limits ne {}} {
             vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name $tmp_jail_conf]
         }
@@ -292,12 +297,12 @@ namespace eval vessel::run {
         #Signal handler to intelligently shutdown jails from received signals.
         vessel::exec_set_signal_handler [list vessel::run::signal_handler $jail_name $tmp_jail_conf]
 
-        #Wait for the command to finish
-        yield
+        #Wait for the exit callback 
+        set exit_params [yieldto return -level 0 {}]
+        debug.run "exit params: $exit_params"
 
         #TODO: Now that we can use the jail file we need to:
         # 1. Move jail cleanup to the jail file commands
-        # 2. Move the jail file itself to /var/run/vessel/jailconf/<jail>-<uuid>
 
         debug.run "Container exited. Cleaning up..."
 

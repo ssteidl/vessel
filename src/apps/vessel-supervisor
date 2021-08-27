@@ -86,8 +86,17 @@ namespace eval vessel::supervisor {
             after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
         }
 
+        #TODO: We need to send a message via pipe for stop and modify.
+        #This is because shutdown needs to happen from inside of the process.
+        #Modify should be a stop within the process and when the process exits
+        #(the pipe closes) then we'll start it again.
+        #
+        # Create a command that returns pipe file descriptors and a channel
+        # can be created that integrates with kqueue.  We should be able to 
+        # set a callback when the read side has closed.  Or we could just note
+        # when the vessel process closes.
         foreach deploy_file [dict getnull $changed_dict "stop"] {
-            puts stderr "Stop2: $deploy_file"
+            puts stderr "stop: $deploy_file"
         }
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {

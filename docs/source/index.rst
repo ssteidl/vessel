@@ -20,6 +20,8 @@ Unleash all of the features of the FreeBSD operating system to application devel
    ResourceControl
    supervisor
    FeatureIdeas
+   InteractingWithContainers
+   DesignDetails
 
 
 Indices and tables
