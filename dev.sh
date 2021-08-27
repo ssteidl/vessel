@@ -3,4 +3,4 @@
 export TCLLIBPATH=$PWD/src/lib/tcl
 export LD_LIBRARY_PATH=$PWD/build
 export PATH=$PWD/src/apps:$PATH
-ln -sf $PWD/build/libappctcl.so $PWD/src/lib/tcl/libappctcl.so 
+ln -sf $PWD/build/libvesseltcl.so $PWD/src/lib/tcl/libvesseltcl.so 

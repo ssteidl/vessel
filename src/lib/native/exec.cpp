@@ -193,7 +193,9 @@ namespace
             }
 
             vessel::tclobj_ptr eval_params = vessel::create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
+            /*NOTE: Will segfault when evaluating if we don't incr the ref count.*/
             Tcl_IncrRefCount(eval_params.get());
+
             error = Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), Tcl_NewStringObj(sys_signame[_this->m_event.ident], -1));
             error = error || Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), top_level_list.release());
             if(error)
@@ -313,9 +315,21 @@ namespace
 
             /*TODO: Add a "reason" parameter to the callback script.  In this case the reason would be
              * 'exit' but in other cases it might be 'signal' and have a jail id.*/
-            int ret = Tcl_EvalObjEx(_this->interp, _this->callback_script, TCL_EVAL_GLOBAL);
 
-            if(ret != TCL_OK)
+            /*TODO: Make a function to invoke the callback*/
+            /*TODO: The if(tcl_error) return tcl_error; pattern doesn't work.  We should be raising a background error if it
+             * fails.*/
+            Tcl_Obj** elements = nullptr;
+            int length = 0;
+            int tcl_error = Tcl_ListObjGetElements(_this->interp, _this->callback_script, &length, &elements);
+            if(tcl_error) return tcl_error;
+            tclobj_ptr cmd_exited_callback = create_tclobj_ptr(Tcl_NewListObj(length, elements));
+            Tcl_IncrRefCount(cmd_exited_callback.get());
+            tcl_error = Tcl_ListObjAppendElement(_this->interp, cmd_exited_callback.get(), Tcl_NewStringObj("exit", -1));
+            if(tcl_error) return tcl_error;
+            tcl_error = Tcl_EvalObjEx(_this->interp, cmd_exited_callback.get(), TCL_EVAL_GLOBAL);
+
+            if(tcl_error != TCL_OK)
             {
                 Tcl_BackgroundError(_this->interp);
             }
@@ -563,6 +577,17 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
     }
     args.push_back(nullptr);
 
+
+    int pipe_fds[2];
+    int error = pipe(pipe_fds);
+    if(error == -1)
+    {
+        return syserror_result(interp, "Exec", "CTRL_PIPE", "CREATE");
+    }
+
+    fd_guard ctrl_pipe_read(pipe_fds[0]);
+    fd_guard ctrl_pipe_write(pipe_fds[1]);
+
     pid_t pid = fork();
 
     switch(pid)
@@ -570,6 +595,9 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
     case 0:
     {
         /*Child*/
+        int ctrl_read_fd = ctrl_pipe_read.release();
+        error = setenv("VESSEL_CTRL_FD", std::to_string(ctrl_read_fd).c_str(), 1 /*override*/);
+        if(error) return vessel::syserror_result(interp, "Exec", "CTRL_PIPE", "ENV");
 
         /*I don't think we want to touch the interp as even deleting it calls
          * deletion callbacks*/
@@ -625,7 +653,7 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
 
         /*dup2 handles the case where the fds are the same*/
         int error = dup_fd(stdin_fd, 0, "stdin");
-        if(error) exit(1);
+        if(error) exit(1); //TODO: This shouldn't be an exit()
 
         error = dup_fd(stdout_fd, 1, "stdout");
         if(error) exit(1);
@@ -633,7 +661,11 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         error = dup_fd(stderr_fd, 2, "stderr");
         if(error) exit(1);
 
-        closefrom(3);
+        for(int fd = 3; fd < ctrl_read_fd; fd++)
+        {
+            close(fd);
+        }
+        closefrom(ctrl_read_fd + 1);
 
         /*For now we keep the same environment or at least don't do anything special
          * to change the environment.  In the future we can use exect to setup environment
@@ -653,6 +685,8 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         return TCL_ERROR;
     default:
     {
+        int ctrl_write_fd = ctrl_pipe_write.release();
+        //TODO: Make this into a channel and add to a callback.
         /*This seems like the proper thing to set as the result.  But it's not really
          * useful when you are trying to get the jail id.  Need to use procfs and jail name for
          * that.*/
@@ -661,6 +695,20 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         /*Parent*/
         if(async)
         {
+            int length = 0;
+
+            /*Invoke the startup callback*/
+            Tcl_Obj** elements = nullptr;
+            tcl_error = Tcl_ListObjGetElements(interp, callback_prefix, &length, &elements);
+            if(tcl_error) return tcl_error;
+            tclobj_ptr cmd_started_callback = create_tclobj_ptr(Tcl_NewListObj(length, elements));
+            Tcl_IncrRefCount(cmd_started_callback.get());
+            tcl_error = Tcl_ListObjAppendElement(interp, cmd_started_callback.get(), Tcl_NewStringObj("start", -1));
+            if(tcl_error) return tcl_error;
+
+            tcl_error = Tcl_NREvalObj(interp, cmd_started_callback.get(), TCL_EVAL_GLOBAL);
+            if(tcl_error) return tcl_error;
+
             std::shared_ptr<monitored_process_group> mpg = std::make_shared<monitored_process_group>(pid);
             auto factory = vessel_exec->add_mpg(mpg, callback_prefix);
 
