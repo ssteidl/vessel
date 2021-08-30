@@ -284,11 +284,23 @@ namespace eval vessel::run {
             
             debug.run "jail_start_params: $jail_start_params"
             set tmp_jail_conf [lindex $jail_start_params 0]
+            set ctrl_pipe [lindex $jail_start_params 2]
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {VESSEL JAIL EXEC} "Error running jail: $error_msg"
         }
         
+        #NOTE: I'm leaving this bit of code in for now.  vessel proper doesn't
+        #actually use the control pipe.
+        chan configure $ctrl_pipe -blocking 0 -buffering none 
+        chan event $ctrl_pipe readable [list apply {{cpipe} {
+            set val [chan read $cpipe]
+            puts "ctrl_pipe: $val"
+            if {[eof $cpipe]} {
+                close $cpipe
+            }
+        }} $ctrl_pipe]
+
         debug.run "Setting devctl callback"
         if {$limits ne {}} {
             vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name $tmp_jail_conf]

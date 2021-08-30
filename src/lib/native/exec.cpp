@@ -23,12 +23,120 @@ using namespace vessel;
 
 /*TODO: Consistent naming conventions*/
 /*TODO: Better logging support.  There is too much logging to cerr for an extension*/
-/*TODO: There are actually 3 potentially separate modules in this file.  kqueue, process monitoring
- * and exec
- * NOTE: Now that we have added the signal handling and jail lookup, this isn't really a generic exec
- * module anymore.  It's now pretty specialized for the running a jail use case.*/
 namespace
 {
+    /**
+     * @brief The ctrl_pipe class handles the creation, configuration and destruction of
+     * the process monitor group's control pipe.  A control pipe accepts commands from a
+     * supervisor and acts accordingly.  It is a more synchronous, robust and extensible
+     * mechanism then sending signals.
+     */
+    class ctrl_pipe
+    {
+        int m_child_fd;
+        int m_parent_fd;
+        bool m_initialized;
+        bool m_in_parent;
+        Tcl_Interp* m_interp;
+        Tcl_Channel m_chan;
+
+    public:
+        ctrl_pipe(Tcl_Interp* interp)
+            : m_child_fd(-1),
+              m_parent_fd(-1),
+              m_initialized(false),
+              m_in_parent(false),
+              m_interp(interp),
+              m_chan(nullptr)
+        {
+            int pipe_fds[2];
+            int ret = pipe2(pipe_fds, O_NONBLOCK);
+            if(ret)
+            {
+                std::ostringstream msg;
+                msg << "Error creating ctrl pipe: " << strerror(errno);
+                throw std::runtime_error(msg.str());
+            }
+            m_child_fd = pipe_fds[0];
+            m_parent_fd = pipe_fds[1];
+        }
+
+        /**
+         * @brief parent Should be called after fork while in the parent process.  Initializes the
+         * pipe to live in the parent.
+         * @return
+         */
+        Tcl_Obj* parent()
+        {
+            if(m_initialized)
+            {
+                throw std::logic_error("ctrl_pipe already initialized when trying to initialize in parent");
+            }
+
+            m_in_parent = true;
+            close(m_child_fd);
+
+            /*We use the freebsd specific bi-directional pipe*/
+            Tcl_Channel chan = Tcl_MakeFileChannel((ClientData)m_parent_fd, TCL_READABLE|TCL_WRITABLE);
+            if(chan == nullptr)
+            {
+                return nullptr;
+            }
+
+            Tcl_RegisterChannel(m_interp, chan);
+            m_initialized = true;
+            return Tcl_NewStringObj(Tcl_GetChannelName(chan), -1);
+        }
+
+        /**
+         * @brief child Should be called in the child process after a fork.  Initializes the pipe
+         * for operation in the child, including setting the environment variable.
+         * @return
+         */
+        int child()
+        {
+            if(m_initialized)
+            {
+                throw std::logic_error("ctrl_pipe already initialized when trying to initialize in child");
+            }
+            m_in_parent = false;
+            close(m_parent_fd);
+
+            m_initialized = true;
+            return setenv("VESSEL_CTRL_FD", std::to_string(m_child_fd).c_str(), 1 /*override*/);
+        }
+
+        int parent_fd()
+        {
+            return m_parent_fd;
+        }
+
+        int child_fd()
+        {
+            return m_child_fd;
+        }
+
+        ~ctrl_pipe()
+        {
+            std::cerr << "Destroying pipe" << std::endl;
+            if(!m_initialized)
+            {
+                return;
+            }
+
+            if(m_in_parent)
+            {
+                std::cerr << "Destroying parent" << std::endl;
+                close(m_parent_fd);
+                Tcl_UnregisterChannel(m_interp, m_chan);
+            }
+            else
+            {
+                std::cerr << "Destroying child" << std::endl;
+                close(m_child_fd);
+            }
+        }
+    };
 
     /**
      * Class for monitoring a heirarchy of processes.  This class provides the interface
@@ -43,11 +151,18 @@ namespace
 
         std::set<pid_t> m_descendants; /**< Flattened set of descendant processes.*/
 
+        std::unique_ptr<ctrl_pipe> m_cpipe; /**< The control pipe that can be used by the process group.
+                                                 This probably doesn't belong to this class but it needs
+                                                 to share the same scope. However, I could imagine future
+                                                 features that could send pipe messages based on the events
+                                                 tracked in this class.*/
+
     public:
-        monitored_process_group(pid_t child)
+        monitored_process_group(pid_t child, std::unique_ptr<ctrl_pipe> cpipe)
             : m_child(child),
               m_child_exited(false),
-              m_descendants()
+              m_descendants(),
+              m_cpipe(std::move(cpipe))
         {}
 
         void add_descendant(pid_t pid)
@@ -578,15 +693,7 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
     args.push_back(nullptr);
 
 
-    int pipe_fds[2];
-    int error = pipe(pipe_fds);
-    if(error == -1)
-    {
-        return syserror_result(interp, "Exec", "CTRL_PIPE", "CREATE");
-    }
-
-    fd_guard ctrl_pipe_read(pipe_fds[0]);
-    fd_guard ctrl_pipe_write(pipe_fds[1]);
+    std::unique_ptr<ctrl_pipe> cpipe = std::make_unique<ctrl_pipe>(interp);
 
     pid_t pid = fork();
 
@@ -595,8 +702,7 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
     case 0:
     {
         /*Child*/
-        int ctrl_read_fd = ctrl_pipe_read.release();
-        error = setenv("VESSEL_CTRL_FD", std::to_string(ctrl_read_fd).c_str(), 1 /*override*/);
+        int error = cpipe->child();
         if(error) return vessel::syserror_result(interp, "Exec", "CTRL_PIPE", "ENV");
 
         /*I don't think we want to touch the interp as even deleting it calls
@@ -652,7 +758,7 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         }
 
         /*dup2 handles the case where the fds are the same*/
-        int error = dup_fd(stdin_fd, 0, "stdin");
+        error = dup_fd(stdin_fd, 0, "stdin");
         if(error) exit(1); //TODO: This shouldn't be an exit()
 
         error = dup_fd(stdout_fd, 1, "stdout");
@@ -661,14 +767,13 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         error = dup_fd(stderr_fd, 2, "stderr");
         if(error) exit(1);
 
-        for(int fd = 3; fd < ctrl_read_fd; fd++)
+        for(int fd = 3; fd < cpipe->child_fd(); fd++)
         {
             close(fd);
         }
-        closefrom(ctrl_read_fd + 1);
+        closefrom(cpipe->child_fd() + 1);
 
-        /*For now we keep the same environment or at least don't do anything special
-         * to change the environment.  In the future we can use exect to setup environment
+        /*In the future we can use exect to setup environment
          * and do things with resource control, etc.*/
 
         error = execvp(args[0], args.data());
@@ -685,8 +790,8 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         return TCL_ERROR;
     default:
     {
-        int ctrl_write_fd = ctrl_pipe_write.release();
-        //TODO: Make this into a channel and add to a callback.
+        Tcl_Obj* cpipe_name = cpipe->parent();
+
         /*This seems like the proper thing to set as the result.  But it's not really
          * useful when you are trying to get the jail id.  Need to use procfs and jail name for
          * that.*/
@@ -705,11 +810,13 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
             Tcl_IncrRefCount(cmd_started_callback.get());
             tcl_error = Tcl_ListObjAppendElement(interp, cmd_started_callback.get(), Tcl_NewStringObj("start", -1));
             if(tcl_error) return tcl_error;
-
+            tcl_error = Tcl_ListObjAppendElement(interp, cmd_started_callback.get(), cpipe_name);
+            if(tcl_error) return tcl_error;
             tcl_error = Tcl_NREvalObj(interp, cmd_started_callback.get(), TCL_EVAL_GLOBAL);
             if(tcl_error) return tcl_error;
 
-            std::shared_ptr<monitored_process_group> mpg = std::make_shared<monitored_process_group>(pid);
+            /*TODO: cpipe needs to be scoped to an mpg*/
+            std::shared_ptr<monitored_process_group> mpg = std::make_shared<monitored_process_group>(pid, std::move(cpipe));
             auto factory = vessel_exec->add_mpg(mpg, callback_prefix);
 
             struct kevent event;
