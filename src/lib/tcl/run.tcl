@@ -295,7 +295,7 @@ namespace eval vessel::run {
         chan configure $ctrl_pipe -blocking 0 -buffering none 
         chan event $ctrl_pipe readable [list apply {{cpipe} {
             set val [chan read $cpipe]
-            puts "ctrl_pipe: $val"
+            debug.run "ctrl_pipe: $val"
             if {[eof $cpipe]} {
                 close $cpipe
             }

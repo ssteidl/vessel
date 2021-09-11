@@ -77,15 +77,16 @@ namespace
             close(m_child_fd);
 
             /*We use the freebsd specific bi-directional pipe*/
-            Tcl_Channel chan = Tcl_MakeFileChannel((ClientData)m_parent_fd, TCL_READABLE|TCL_WRITABLE);
-            if(chan == nullptr)
+            m_chan = Tcl_MakeFileChannel((ClientData)m_parent_fd, TCL_READABLE|TCL_WRITABLE);
+
+            if(m_chan == nullptr)
             {
                 return nullptr;
             }
 
-            Tcl_RegisterChannel(m_interp, chan);
+            Tcl_RegisterChannel(m_interp, m_chan);
             m_initialized = true;
-            return Tcl_NewStringObj(Tcl_GetChannelName(chan), -1);
+            return Tcl_NewStringObj(Tcl_GetChannelName(m_chan), -1);
         }
 
         /**
@@ -118,7 +119,9 @@ namespace
 
         ~ctrl_pipe()
         {
-            std::cerr << "Destroying pipe" << std::endl;
+            /*I'm not really sure we need to do anything here.  We close
+             * the child pipe just in case it's needed but if the child process
+             * has exited, the pipe should be closed.*/
             if(!m_initialized)
             {
                 return;
@@ -126,14 +129,11 @@ namespace
 
             if(m_in_parent)
             {
-                std::cerr << "Destroying parent" << std::endl;
-                close(m_parent_fd);
-                Tcl_UnregisterChannel(m_interp, m_chan);
+                /*tcl script is responsible for closing the channel*/
             }
             else
             {
-                std::cerr << "Destroying child" << std::endl;
-                close(m_child_fd);
+                (void)close(m_child_fd);
             }
         }
     };
@@ -349,6 +349,10 @@ namespace
         }
     };
 
+    /**
+     * @brief The signal_event_factory class is used to tie kqueue signal processing
+     * with tcl events.
+     */
     class signal_event_factory : public tcl_event_factory
     {
         Tcl_Interp* m_interp;
@@ -381,6 +385,24 @@ namespace
         ~signal_event_factory()
         {}
     };
+
+    /**
+     * @brief The mpg_cleanup_ctx struct is used to group together data needed
+     * to properly cleanup an mpg after all processes have exited.
+     */
+    struct mpg_cleanup_ctx
+    {
+        Tcl_Interp* interp;
+        std::shared_ptr<monitored_process_group> mpg;
+
+        mpg_cleanup_ctx(Tcl_Interp* interp, std::shared_ptr<monitored_process_group>& mpg)
+            : interp(interp),
+              mpg(mpg)
+        {}
+    };
+
+    /*declaration for cleaning up a process group*/
+    void cleanup_mpg_from_interp(ClientData data);
 
     /**
      * @brief The process_group_tcl_event struct is the structure that is used as
@@ -428,9 +450,6 @@ namespace
 
             /*Process group has finished.  We can invoke the callback and cleanup*/
 
-            /*TODO: Add a "reason" parameter to the callback script.  In this case the reason would be
-             * 'exit' but in other cases it might be 'signal' and have a jail id.*/
-
             /*TODO: Make a function to invoke the callback*/
             /*TODO: The if(tcl_error) return tcl_error; pattern doesn't work.  We should be raising a background error if it
              * fails.*/
@@ -449,6 +468,10 @@ namespace
                 Tcl_BackgroundError(_this->interp);
             }
 
+            /*TODO: we need a struct that has the mpg pointer and the interp*/
+            char* ctx_buf = Tcl_Alloc(sizeof(mpg_cleanup_ctx));
+            mpg_cleanup_ctx* cleanup_ctx = new(ctx_buf) mpg_cleanup_ctx(_this->interp, _this->mpg);
+            Tcl_DoWhenIdle(cleanup_mpg_from_interp, cleanup_ctx);
             return 1; /*Event has been processed*/
         }
 
@@ -571,6 +594,25 @@ namespace
             mpg_event_factories.erase(mpg->first_child_pid());
         }
     };
+
+
+    void cleanup_mpg_from_interp(ClientData data)
+    {
+        tclalloc_ptr<mpg_cleanup_ctx> ctx(reinterpret_cast<mpg_cleanup_ctx*>(data), tclalloc_destruct<mpg_cleanup_ctx>);
+
+        /*TODO: Need a function for this*/
+        vessel_exec_interp_state* interp_state =
+                reinterpret_cast<vessel_exec_interp_state*>(Tcl_GetAssocData(ctx->interp, "VesselExec", nullptr));
+
+        std::shared_ptr<monitored_process_group> mpg = ctx->mpg;
+
+        if(interp_state == nullptr)
+        {
+            throw std::logic_error("Interp state not found when cleaning up mpg");
+        }
+
+        interp_state->remove_mpg(ctx->mpg);
+    }
 }
 
 int Vessel_ExecInit(Tcl_Interp* interp)
