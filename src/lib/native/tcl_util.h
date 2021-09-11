@@ -16,6 +16,9 @@ void unref_tclobj(Tcl_Obj* obj);
 template<class T>
 void tclalloc_free(T* arg);
 
+template<class T>
+void tclalloc_destruct(T* arg);
+
 using tclobj_ptr = std::unique_ptr<Tcl_Obj, decltype(&unref_tclobj)>;
 
 template<class T>
@@ -70,6 +73,13 @@ struct fd_guard
 template<class T>
 void vessel::tclalloc_free(T* arg)
 {
+    Tcl_Free(reinterpret_cast<char*>(arg));
+}
+
+template<class T>
+void vessel::tclalloc_destruct(T* arg)
+{
+    arg->~T();
     Tcl_Free(reinterpret_cast<char*>(arg));
 }
 
