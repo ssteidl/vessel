@@ -1,16 +1,18 @@
-# FBSDAppContainers
+# Vessel
 Application containers for FreeBSD.
 
-## Goals
-* Provide a simple and powerful interface to the plethora of underutilized FreeBSD features, including:
-    * Jails (Heirarchical)
-    * pf
-    * zfs
-    * capsicum
-    * rctl
-    * mandatory access control
-    * Security Level
-* Deeply integrate with FreeBSD system, preferring system libraries to fork/exec.  This project has 0 concern with being portable.
+
+
+## Goal
+The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps (operations) and test engineers.  These features include but are not limited to:
+ 
+ * Jails (Heirarchical)
+ * pf
+ * zfs
+ * capsicum
+ * rctl
+ * mandatory access control
+ * Security Level
 
 ## Vocabulary
 * **Image**: A directory or mounted filesystem that the container will use as a root directory.
