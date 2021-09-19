@@ -50,7 +50,7 @@ namespace
               m_chan(nullptr)
         {
             int pipe_fds[2];
-            int ret = pipe2(pipe_fds, O_NONBLOCK);
+            int ret = pipe2(pipe_fds, 0);
             if(ret)
             {
                 std::ostringstream msg;
@@ -627,7 +627,7 @@ int Vessel_ExecInit(Tcl_Interp* interp)
 
     (void)Tcl_CreateObjCommand(interp, "vessel::exec_set_signal_handler", Vessel_Exec_SetSignalHandler, nullptr, nullptr);
     (void)Tcl_CreateObjCommand(interp, "vessel::exec", Vessel_Exec, nullptr, nullptr);
-    (void)Tcl_CreateObjCommand(interp, "vessel::client_get_ctrl_channel", Vessel_Channel_From_Fd, nullptr, nullptr);
+    (void)Tcl_CreateObjCommand(interp, "vessel::get_supervisor_ctrl_channel", Vessel_Get_Supervisor_Ctrl_Channel, nullptr, nullptr);
 
     return TCL_OK;
 }

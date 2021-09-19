@@ -44,17 +44,28 @@ namespace eval vessel::supervisor {
         set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} ${image}:${tag}"
         lappend vessel_cmd {*}$command
         puts stderr "$vessel_cmd"
+
+        #TODO: stdin should be mapped to dev/null.  We should add this functionality into
+        # the exec module.
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
 
 
         dict set monitored_containers_dict $jail_name $deploy_dict
 
-        # Execute the vessel command which calls back this coroutine when it is done
-        puts "coroutine [info coroutine]"
-        set ret [yieldto vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}]
-        puts "ret: $ret"
+        # Execute the vessel command which calls back this coroutine at various stages
+        set exec_ret [yieldto vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}]
+        set ctrl_channel [lindex $exec_ret 1]
+
+        #TODO: make ctrl channel non-blocking and create a run loop that manages the different events
+        # for a running container.
+        while {true} {
+            set start_message [gets $ctrl_channel]
+            puts stderr "Received: $start_message"
+        }   
+
         #Yield until the command finishes
         # NOTE: We should return the exit code as well
+        # TODO: This yield will be replaced by the run loop
         yield
 
         #TODO: The jail 'name' should be read and set from the supervisor.  then
