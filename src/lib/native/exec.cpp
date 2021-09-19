@@ -104,7 +104,9 @@ namespace
             close(m_parent_fd);
 
             m_initialized = true;
-            return setenv("VESSEL_CTRL_FD", std::to_string(m_child_fd).c_str(), 1 /*override*/);
+            tclobj_ptr vessel_ctrl_env = create_tclobj_ptr(Tcl_ObjPrintf("VESSEL_CTRL_FD=%d", m_child_fd));
+            Tcl_IncrRefCount(vessel_ctrl_env.get());
+            return Tcl_PutEnv(Tcl_GetStringFromObj(vessel_ctrl_env.get(), nullptr));
         }
 
         int parent_fd()
@@ -625,6 +627,7 @@ int Vessel_ExecInit(Tcl_Interp* interp)
 
     (void)Tcl_CreateObjCommand(interp, "vessel::exec_set_signal_handler", Vessel_Exec_SetSignalHandler, nullptr, nullptr);
     (void)Tcl_CreateObjCommand(interp, "vessel::exec", Vessel_Exec, nullptr, nullptr);
+    (void)Tcl_CreateObjCommand(interp, "vessel::client_get_ctrl_channel", Vessel_Channel_From_Fd, nullptr, nullptr);
 
     return TCL_OK;
 }
@@ -662,6 +665,43 @@ int Vessel_Exec_SetSignalHandler(void *clientData, Tcl_Interp *interp,
         EV_SET(&ev, sig, EVFILT_SIGNAL, EV_ADD, 0, 0, nullptr);
         Kqueue_Add_Event(interp, ev, interp_state->signal_factory);
     }
+
+    return TCL_OK;
+}
+
+
+/**
+ * @brief Vessel_Get_Supervisor_Ctrl_Channel Can be called by the child
+ * spawned in exec.  The channel can be used to implement a protocol.
+ */
+int Vessel_Get_Supervisor_Ctrl_Channel(void *clientData, Tcl_Interp *interp,
+                                       int objc, struct Tcl_Obj *const *objv)
+{
+    if(objc != 1)
+    {
+        Tcl_WrongNumArgs(interp, objc, objv, "no arguments are expected");
+        return TCL_ERROR;
+    }
+
+    char* fd_str = ::getenv("VESSEL_CTRL_FD");
+    if(fd_str == nullptr)
+    {
+        Tcl_SetResult(interp, "No 'VESSEL_CTRL_FD' found in environment", TCL_STATIC);
+        return TCL_ERROR;
+    }
+
+    int fd = -1;
+    int tcl_ret = Tcl_GetInt(interp, fd_str, &fd);
+    if(tcl_ret) return tcl_ret;
+
+    /*Read and write because that is what we have defined the supervisor
+     * channel to be.  FreeBSD supports bi-directional pipes */
+    Tcl_Channel ctrl_channel = Tcl_MakeFileChannel((ClientData)fd, TCL_READABLE | TCL_WRITABLE);
+    Tcl_RegisterChannel(interp, ctrl_channel);
+
+    const char* channel_name = Tcl_GetChannelName(ctrl_channel);
+    /*Set to volatile so tcl makes a copy of the channel name*/
+    Tcl_SetResult(interp, (char*)channel_name, TCL_VOLATILE);
 
     return TCL_OK;
 }
@@ -857,7 +897,6 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
             tcl_error = Tcl_NREvalObj(interp, cmd_started_callback.get(), TCL_EVAL_GLOBAL);
             if(tcl_error) return tcl_error;
 
-            /*TODO: cpipe needs to be scoped to an mpg*/
             std::shared_ptr<monitored_process_group> mpg = std::make_shared<monitored_process_group>(pid, std::move(cpipe));
             auto factory = vessel_exec->add_mpg(mpg, callback_prefix);
 

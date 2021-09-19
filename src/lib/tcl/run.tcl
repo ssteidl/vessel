@@ -28,7 +28,8 @@ namespace eval vessel::run {
 
             set dataset [lindex $arg_list 0]
             set jail_mntpoint [lindex $arg_list 1]
-
+            debug.run "dataset: $dataset"
+            debug.run "jail_mntpoint: $jail_mntpoint"
             if {![vessel::zfs::dataset_exists $dataset]} {
                 vessel::zfs::create_dataset $dataset
             }

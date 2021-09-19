@@ -8,7 +8,7 @@ package require struct::set
 namespace eval vessel::deploy {
 
     debug define deploy
-    debug on deploy 0 stderr
+    debug on deploy 1 stderr
 
     namespace export poll_deploy_dir
 
@@ -116,6 +116,10 @@ namespace eval vessel::deploy {
         set known_deploy_files [list]
         struct::set add known_deploy_files [dict keys $deploy_files_dict]
         set deleted_files [struct::set difference $known_deploy_files $ini_files]
+
+        debug.deploy "Known deploy files: $known_deploy_files"
+        debug.deploy "ini files: $ini_files"
+        debug.deploy "deleted files: $deleted_files"
         
         #Remove the deleted files from the deploy_files_dict
         foreach filename $deleted_files {            
