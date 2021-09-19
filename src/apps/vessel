@@ -48,7 +48,7 @@ file mkdir [vessel::env::jail_confs_dir]
 
 set run_done_flag [expr false]
 
-
+parray env
 #TODO: This belongs in the 'vessel init' command whenever
 # we decide to implement that..
 proc create_workdir {} {

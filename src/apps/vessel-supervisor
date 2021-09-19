@@ -19,11 +19,12 @@ namespace eval vessel::supervisor {
     variable monitored_containers_dict [dict create]
     
     proc start_container_coro {deploy_file} {
+        variable monitored_containers_dict
 
-        puts stderr "starting container"
+        puts stderr "starting container: $deploy_file"
         set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
 
-        puts $deploy_dict
+        puts stderr $deploy_dict
         set image [dict get $deploy_dict vessel-supervisor image]
         set tag [dict get $deploy_dict vessel-supervisor tag]
 
@@ -36,52 +37,65 @@ namespace eval vessel::supervisor {
             return -code error -errorcode {SUPERVISOR PULL NYI} "Supervisor pull NYI"
         }
 
-        #TODO: We should make vessel communicate with the supervisor with whatever
-        #info is needed.  We can create a new pipe for that with an environment
-        #variable to specify the descriptor maybe.
         set command [dict get $deploy_dict vessel-supervisor command]
 
-        #TODO: Name should be mandatory
+        # TODO: Name should be mandatory
         set jail_name [dict get $deploy_dict vessel-supervisor name]
         set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} ${image}:${tag}"
         lappend vessel_cmd {*}$command
-        puts "$vessel_cmd"
+        puts stderr "$vessel_cmd"
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
 
-        # Execute the vessel command which calls back this coroutine when it is done
-        vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}
 
+        dict set monitored_containers_dict $jail_name $deploy_dict
+
+        # Execute the vessel command which calls back this coroutine when it is done
+        puts "coroutine [info coroutine]"
+        set ret [yieldto vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}]
+        puts "ret: $ret"
         #Yield until the command finishes
         # NOTE: We should return the exit code as well
         yield
 
         #TODO: The jail 'name' should be read and set from the supervisor.  then
         # it has a good way of finding and managing the jails
-        puts "Container finished executing.  Cleaning up..."
+        puts stderr "Container finished executing.  Cleaning up..."
 
         #TODO: Handle restart
     }
 
-    proc shutdown_container_coro {} {
+    proc shutdown_container_coro {deploy_file} {
 
-        yield        
+
+        puts stderr "stopping container: $deploy_file"
+        set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
+
+        puts stderr $deploy_dict
+        set jail_name [dict get $deploy_dict vessel-supervisor image]
     }
 
-    proc poll_deploy_dir {deploy_dir} {
+    proc poll_deploy_dir {_deploy_dir} {
+        # Periodically poll the deployment dir
+        # and apply the changes to the managed containers.  
+        # Start, Stop or Restart the containers.
 
+        # The path must be normalized when calling deploy::deploy_dir
+        set deploy_dir [file normalize $_deploy_dir]
+
+        # The next poll will be 2 seconds after this coroutine exits.
         defer::defer after 2000 [namespace current]::poll_deploy_dir $deploy_dir
 
         set changed_dict [vessel::deploy::poll_deploy_dir $deploy_dir]
 
         puts stderr "changed dict: $changed_dict"
+        
         #Queue up the containers that need to be 
         foreach deploy_file [dict getnull $changed_dict "start"] {
             #TODO: make a queue or figure out how to do this synchronously.  We don't
             #want to be starting some containers while the same container is still starting.
             #There needs to be some safe guards in place.
 
-
-            set container_coro_name [file tail [file rootname ${deploy_file}]]
+            set container_coro_name "start-[file tail [file rootname ${deploy_file}]]"
             coroutine  $container_coro_name start_container_coro $deploy_file
             after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
         }
@@ -96,7 +110,10 @@ namespace eval vessel::supervisor {
         # set a callback when the read side has closed.  Or we could just note
         # when the vessel process closes.
         foreach deploy_file [dict getnull $changed_dict "stop"] {
-            puts stderr "stop: $deploy_file"
+            
+            set container_coro_name "stop-[file tail [file rootname ${deploy_file}]]"
+            coroutine  $container_coro_name stop_container_coro $deploy_file
+            after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
         }
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {
