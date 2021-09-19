@@ -49,6 +49,15 @@ file mkdir [vessel::env::jail_confs_dir]
 set run_done_flag [expr false]
 
 parray env
+
+set ctrl_channel {}
+if {[info exists env(VESSEL_CTRL_FD)]} {
+    set ctrl_channel [vessel::get_supervisor_ctrl_channel]
+}
+
+puts stderr "ctrl channel: $ctrl_channel"
+puts $ctrl_channel "Testing ctrl channel"
+flush $ctrl_channel
 #TODO: This belongs in the 'vessel init' command whenever
 # we decide to implement that..
 proc create_workdir {} {
