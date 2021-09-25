@@ -77,7 +77,7 @@ namespace
             close(m_child_fd);
 
             /*We use the freebsd specific bi-directional pipe*/
-            m_chan = Tcl_MakeFileChannel((ClientData)m_parent_fd, TCL_READABLE|TCL_WRITABLE);
+            m_chan = Tcl_MakeFileChannel((ClientData)((long)m_parent_fd), TCL_READABLE|TCL_WRITABLE);
 
             if(m_chan == nullptr)
             {
@@ -686,12 +686,12 @@ int Vessel_Get_Supervisor_Ctrl_Channel(void *clientData, Tcl_Interp *interp,
     char* fd_str = ::getenv("VESSEL_CTRL_FD");
     if(fd_str == nullptr)
     {
-        Tcl_SetResult(interp, "No 'VESSEL_CTRL_FD' found in environment", TCL_STATIC);
+        Tcl_SetResult(interp, (char*)"No 'VESSEL_CTRL_FD' found in environment", TCL_STATIC);
         return TCL_ERROR;
     }
 
-    int fd = -1;
-    int tcl_ret = Tcl_GetInt(interp, fd_str, &fd);
+    long fd = -1;
+    int tcl_ret = Tcl_ExprLong(interp, fd_str, &fd);
     if(tcl_ret) return tcl_ret;
 
     /*Read and write because that is what we have defined the supervisor
