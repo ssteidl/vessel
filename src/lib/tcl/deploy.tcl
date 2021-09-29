@@ -8,7 +8,7 @@ package require struct::set
 namespace eval vessel::deploy {
 
     debug define deploy
-    debug on deploy 1 stderr
+    debug on deploy 0 stderr
 
     namespace export poll_deploy_dir
 

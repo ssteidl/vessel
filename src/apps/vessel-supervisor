@@ -10,7 +10,9 @@ package require vessel::metadata_db
 package require dicttool
 
 proc bgerror {message} {
-    puts "bgerror: $message"
+    global errorInfo
+    global errorCode
+    puts "bgerror: $message, $errorInfo, $errorCode"
 }
 
 namespace eval vessel::supervisor {
@@ -18,7 +20,84 @@ namespace eval vessel::supervisor {
     #Dictionary of containers that we are monitoring
     variable monitored_containers_dict [dict create]
     
-    proc start_container_coro {deploy_file} {
+    proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
+        # Monitors the ctrl_channel for a specific container.
+
+        puts stderr "Configuring run_loop($ctrl_channel)"
+        chan configure $ctrl_channel -blocking false -buffering none
+
+        chan event $ctrl_channel readable [list [info coroutine] "ctrl_read"]
+
+        while {true} {
+            
+            #Yield until an event is received
+            set event_type [yield]
+
+            switch -exact $event_type {
+                "ctrl_read" {
+                    #NOTE: Currently we don't process any messages but we can in the future.
+                    set msg {}
+                    gets $ctrl_channel msg
+                    if {[eof $ctrl_channel]} {
+                        #ctrl_channel closed.  Assume the process exited.
+                        close $ctrl_channel
+                        puts stderr "Closed ctrl_channel($container_name)"
+
+                        if {$exit_callback ne {}} {                        
+                            after idle [list {*}$exit_callback "ctrl_closed"]
+                        }
+                        break
+                    } elseif {![fblocked $ctrl_channel]} {
+                        if {$msg_callback ne {}} {
+                            after idle [list {*}$msg_callback "ctrl_msg" $msg]
+                        }
+                    }
+                }
+                default {
+                    puts stderr "Unknown event received for run loop($container_name): $event_type"
+                }
+            }
+        } 
+
+        puts stderr "Exiting run_loop($container_name)"
+    }
+
+    proc start_container {deploy_dict deploy_file_path image tag callback_coro} {
+
+        set command [dict get $deploy_dict vessel-supervisor command]
+
+        # TODO: Name should be mandatory
+        set jail_name [dict get $deploy_dict vessel-supervisor name]
+        #NOTE: We might want to implement a detach or keep-attached option.  The difference
+        #is really signal processing when running the supervisor in the foreground.
+        set vessel_cmd "daemon vessel run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
+        lappend vessel_cmd {*}$command
+        puts stderr "$vessel_cmd"
+
+        #TODO: stdin should be mapped to dev/null.  TODO: We need to support piping
+        #standard out and standard in to files or other channels
+        set devnull [open /dev/null w]
+        set chan_dict [dict create stdin $devnull stdout stdout stderr stderr]
+
+        dict set monitored_containers_dict $jail_name $deploy_dict
+
+        # Execute the vessel command.  vessel::exec will send lifecycle events to the
+        # coroutine.
+        vessel::exec $chan_dict [list {*}$callback_coro $jail_name] {*}${vessel_cmd}
+    }
+
+    proc container_started {event} {
+        if {[llength $event] < 3 || [lindex $event 1] ne "start"} {
+            error "Unexpected event while waiting for container to start: $event"
+        }
+        set ctrl_channel [lindex $event 2]
+        set jail_name [lindex $event 0]
+        coroutine "msg_loop_$jail_name" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}
+        return $ctrl_channel
+    }
+
+    proc container_coro {deploy_file main_coro} {
+        
         variable monitored_containers_dict
 
         puts stderr "starting container: $deploy_file"
@@ -37,55 +116,64 @@ namespace eval vessel::supervisor {
             return -code error -errorcode {SUPERVISOR PULL NYI} "Supervisor pull NYI"
         }
 
-        set command [dict get $deploy_dict vessel-supervisor command]
+        #TODO: Fix up this loop.  Validate the start event callback and finish implementation
+        # Execute the vessel command which calls back this coroutine at various stages.
+        set container_started_event [yieldto start_container $deploy_dict $deploy_file $image $tag  [info coroutine]]
+        set ctrl_channel [container_started $container_started_event]
 
-        # TODO: Name should be mandatory
-        set jail_name [dict get $deploy_dict vessel-supervisor name]
-        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file} ${image}:${tag}"
-        lappend vessel_cmd {*}$command
-        puts stderr "$vessel_cmd"
-
-        #TODO: stdin should be mapped to dev/null.  We should add this functionality into
-        # the exec module.
-        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
-
-
-        dict set monitored_containers_dict $jail_name $deploy_dict
-
-        # Execute the vessel command which calls back this coroutine at various stages
-        set exec_ret [yieldto vessel::exec $chan_dict [info coroutine] {*}${vessel_cmd}]
-        set ctrl_channel [lindex $exec_ret 1]
-
-        #TODO: make ctrl channel non-blocking and create a run loop that manages the different events
-        # for a running container.
+        #container monitoring event loop
         while {true} {
-            set start_message [gets $ctrl_channel]
-            puts stderr "Received: $start_message"
-        }   
+            set event_args [yieldto return -level 0]
+            if {[llength $event_args] < 1} {
+                puts stderr "Event with no event_type received"
+                continue
+            }      
+            set event_type [lindex $event_args 0]
+            puts stderr "eventargs: $event_args"
+            switch -exact $event_type {
+                
+                "ctrl_msg" {
+                    set msg [lindex $event_args 1]
+                    puts stderr "control message received: $msg"
+                }
+                "ctrl_closed" {
+                    puts stderr "Unexpected ctrl_closed found"
+                }
+                "stop_requested" {
+                    puts $ctrl_channel "stop"
+                }
 
-        #Yield until the command finishes
-        # NOTE: We should return the exit code as well
-        # TODO: This yield will be replaced by the run loop
-        yield
-
+                default {
+                    puts stderr "Unexpected event when monitoring container: $event_args"
+                }
+            }
+        }
         #TODO: The jail 'name' should be read and set from the supervisor.  then
         # it has a good way of finding and managing the jails
         puts stderr "Container finished executing.  Cleaning up..."
 
+        #TODO: 
         #TODO: Handle restart
     }
 
     proc shutdown_container_coro {deploy_file} {
 
+        #TODO: Create an ensemble to manage the monitored_containers_dict.
+        # We should be able to get the deploy_dict given the deploy file from
+        # this ensemble.
+        #
+        # Also, to shutdown, we should only need to send the shutdown command and 
+        # then exit so we don't really need a coroutine.  Or we can create our own message
+        # loop for the shutdown coroutine.  I wonder if chan readable works for multiple
+        # script callbacks. It seems like we should only use one.
 
-        puts stderr "stopping container: $deploy_file"
-        set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
-
-        puts stderr $deploy_dict
-        set jail_name [dict get $deploy_dict vessel-supervisor image]
+        # NOTE: I think we take the strategy that the start_coro is the main loop and
+        # the other coroutines (or procs) control the main loop by invoking it with control events.
+        # Other co-routines should 
+        yield
     }
 
-    proc poll_deploy_dir {_deploy_dir} {
+    proc poll_deploy_dir {_deploy_dir event_callback} {
         # Periodically poll the deployment dir
         # and apply the changes to the managed containers.  
         # Start, Stop or Restart the containers.
@@ -93,12 +181,9 @@ namespace eval vessel::supervisor {
         # The path must be normalized when calling deploy::deploy_dir
         set deploy_dir [file normalize $_deploy_dir]
 
-        # The next poll will be 2 seconds after this coroutine exits.
-        defer::defer after 2000 [namespace current]::poll_deploy_dir $deploy_dir
-
         set changed_dict [vessel::deploy::poll_deploy_dir $deploy_dir]
 
-        puts stderr "changed dict: $changed_dict"
+        #puts stderr "changed dict: $changed_dict"
         
         #Queue up the containers that need to be 
         foreach deploy_file [dict getnull $changed_dict "start"] {
@@ -106,20 +191,9 @@ namespace eval vessel::supervisor {
             #want to be starting some containers while the same container is still starting.
             #There needs to be some safe guards in place.
 
-            set container_coro_name "start-[file tail [file rootname ${deploy_file}]]"
-            coroutine  $container_coro_name start_container_coro $deploy_file
-            after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
+            after idle [list {*}$event_callback poll_start $deploy_file]
         }
 
-        #TODO: We need to send a message via pipe for stop and modify.
-        #This is because shutdown needs to happen from inside of the process.
-        #Modify should be a stop within the process and when the process exits
-        #(the pipe closes) then we'll start it again.
-        #
-        # Create a command that returns pipe file descriptors and a channel
-        # can be created that integrates with kqueue.  We should be able to 
-        # set a callback when the read side has closed.  Or we could just note
-        # when the vessel process closes.
         foreach deploy_file [dict getnull $changed_dict "stop"] {
             
             set container_coro_name "stop-[file tail [file rootname ${deploy_file}]]"
@@ -129,6 +203,57 @@ namespace eval vessel::supervisor {
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {
             puts stderr "modified: $deploy_file"
+        }
+    }
+
+    proc poll_start {deploy_file} {
+        # Creates a container monitoring coroutine
+
+        set container_coro_name "start-[file tail [file rootname ${deploy_file}]]"
+        coroutine  $container_coro_name container_coro $deploy_file [info coroutine]
+        after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
+    }
+
+    proc poll_stop {deploy_file} {
+
+        #TODO: Get coroutine name and send stop message
+    }
+
+    proc poll_timer {deploy_dir} {
+        after idle [list poll_deploy_dir $deploy_dir [info coroutine]]
+    }
+
+    proc start_poll_timer {deploy_dir} {
+        after 2000 [list [info coroutine] poll_timer $deploy_dir]
+    }
+
+    proc main_event_loop_coro {deploy_dir} {
+
+        #Initialization yield
+        yield
+
+        while {true} {
+            start_poll_timer $deploy_dir
+            
+            set event_args [yieldto return -level 0]
+            if {[llength $event_args] <= 0} {
+                puts stderr "Ignoring event without event type"
+                continue
+            }
+
+            #Add the main coroutine so sub-coroutines can generate events on the main coroutine
+            switch -exact [lindex $event_args 0] {
+
+                "poll_timer" -
+                "poll_start" -
+                "poll_stop" {
+                    {*}$event_args
+                }
+
+                default {
+                    puts stderr "Unexpected event type: $event_args"
+                }
+            }
         }
     }
 }
@@ -153,7 +278,8 @@ parray params
 
 set deploy_dir $params(d)
 
-after idle [list vessel::supervisor::poll_deploy_dir $deploy_dir]
+coroutine vessel::supervisor::main_event_loop vessel::supervisor::main_event_loop_coro $deploy_dir
+after idle vessel::supervisor::main_event_loop
 
 set running true
-vwait  running
+vwait running
