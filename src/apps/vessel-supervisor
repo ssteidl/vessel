@@ -17,9 +17,97 @@ proc bgerror {message} {
 
 namespace eval vessel::supervisor {
 
-    #Dictionary of containers that we are monitoring
-    variable monitored_containers_dict [dict create]
-    
+    namespace eval mc {
+        namespace ensemble create
+        namespace export container_key \
+            get_deploy_dict \
+            get_container_name \
+            get_coro_name \
+            is_monitored \
+            monitor_container \
+            add_ctrl_channel \
+            ctrl_channel
+
+
+        #Array of containers that we are monitoring
+        variable _containers
+        array set _containers {}
+
+        proc container_key {deploy_file} {
+            return [file tail [file rootname ${deploy_file}]]
+        }
+
+
+        proc get_deploy_dict {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+            if {[info exists _containers($key)]} {
+                return _containers("$key,ini")
+            }
+
+            set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
+            set _containers("$key,ini") $deploy_dict
+            return $deploy_dict
+        }
+
+        proc get_container_name {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+            set deploy_dict [get_deploy_dict $deploy_file]
+
+            set container_name [dict getnull $deploy_dict vessel-supervisor name]
+            if {$container_name eq {}} {
+                set container_name $key
+            }
+
+            return $container_name
+        }
+
+        proc get_coro_name {deploy_file} {
+
+            return "monitor-[get_container_name $deploy_file]"            
+        }
+
+        proc is_monitored {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+            return [info exists _containers("$key,coro")]
+        }
+
+        proc monitor_container {deploy_file} {
+            variable _containers
+
+            if {[is_monitored $deploy_file]} {
+                error "The container is already being monitored: [get_container_name $deploy_file]"
+            }
+
+            return [get_deploy_dict $deploy_file]
+        }
+
+        proc add_ctrl_channel {deploy_file ctrl_chan} {
+            variable _containers
+            set key [container_key $deploy_file]
+
+            set _containers("$key,ctrlchan") $ctrl_chan
+        }
+
+        proc ctrl_channel {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+
+            if {[is_monitored $deploy_file]} {
+                error "Attempted to retrieve control channel for unmonitored container"
+            }
+
+            if {![info exists _containers("$key,ctrlchan")]} {
+                error "Attempted to retrieve control channel on monitored container before it is set: $key"
+            }
+
+            return _containers("$key,ctrlchan")
+        }
+    }
+
+
     proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
         # Monitors the ctrl_channel for a specific container.
 
@@ -62,22 +150,21 @@ namespace eval vessel::supervisor {
         puts stderr "Exiting run_loop($container_name)"
     }
 
-    proc start_container {deploy_dict deploy_file_path image tag callback_coro} {
+    proc start_container {deploy_file_path image tag callback_coro} {
 
+        set deploy_dict [mc get_deploy_dict $deploy_file_path]
         set command [dict get $deploy_dict vessel-supervisor command]
 
-        # TODO: Name should be mandatory
-        set jail_name [dict get $deploy_dict vessel-supervisor name]
+        set jail_name [mc get_container_name $deploy_file_path]
         #NOTE: We might want to implement a detach or keep-attached option.  The difference
         #is really signal processing when running the supervisor in the foreground.
         set vessel_cmd "daemon vessel run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
         lappend vessel_cmd {*}$command
         puts stderr "$vessel_cmd"
 
-        #TODO: stdin should be mapped to dev/null.  TODO: We need to support piping
-        #standard out and standard in to files or other channels
-        set devnull [open /dev/null w]
-        set chan_dict [dict create stdin $devnull stdout stdout stderr stderr]
+        # TODO: We need to support piping
+        # standard out and standard in to files or other channels
+        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
 
         dict set monitored_containers_dict $jail_name $deploy_dict
 
@@ -92,6 +179,8 @@ namespace eval vessel::supervisor {
         }
         set ctrl_channel [lindex $event 2]
         set jail_name [lindex $event 0]
+        
+        # TODO: The name needs to come from the mc ensemble
         coroutine "msg_loop_$jail_name" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}
         return $ctrl_channel
     }
@@ -101,8 +190,7 @@ namespace eval vessel::supervisor {
         variable monitored_containers_dict
 
         puts stderr "starting container: $deploy_file"
-        set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
-
+        set deploy_dict [mc get_deploy_dict $deploy_file]
         puts stderr $deploy_dict
         set image [dict get $deploy_dict vessel-supervisor image]
         set tag [dict get $deploy_dict vessel-supervisor tag]
@@ -118,7 +206,7 @@ namespace eval vessel::supervisor {
 
         #TODO: Fix up this loop.  Validate the start event callback and finish implementation
         # Execute the vessel command which calls back this coroutine at various stages.
-        set container_started_event [yieldto start_container $deploy_dict $deploy_file $image $tag  [info coroutine]]
+        set container_started_event [yieldto start_container $deploy_file $image $tag  [info coroutine]]
         set ctrl_channel [container_started $container_started_event]
 
         #container monitoring event loop
@@ -142,17 +230,16 @@ namespace eval vessel::supervisor {
                 "stop_requested" {
                     puts $ctrl_channel "stop"
                 }
-
                 default {
                     puts stderr "Unexpected event when monitoring container: $event_args"
                 }
             }
         }
         #TODO: The jail 'name' should be read and set from the supervisor.  then
-        # it has a good way of finding and managing the jails
+        # it has a good way of finding and managing the jails.  If name is not provided
+        # then use the basename of the file.
         puts stderr "Container finished executing.  Cleaning up..."
 
-        #TODO: 
         #TODO: Handle restart
     }
 
@@ -161,15 +248,6 @@ namespace eval vessel::supervisor {
         #TODO: Create an ensemble to manage the monitored_containers_dict.
         # We should be able to get the deploy_dict given the deploy file from
         # this ensemble.
-        #
-        # Also, to shutdown, we should only need to send the shutdown command and 
-        # then exit so we don't really need a coroutine.  Or we can create our own message
-        # loop for the shutdown coroutine.  I wonder if chan readable works for multiple
-        # script callbacks. It seems like we should only use one.
-
-        # NOTE: I think we take the strategy that the start_coro is the main loop and
-        # the other coroutines (or procs) control the main loop by invoking it with control events.
-        # Other co-routines should 
         yield
     }
 
@@ -185,15 +263,19 @@ namespace eval vessel::supervisor {
 
         #puts stderr "changed dict: $changed_dict"
         
+        #TODO: I think we need to have a coroutine per deploy file and a list of actions
+        # to take.  Actions are either, start, stop or stop,start
+
         #Queue up the containers that need to be 
         foreach deploy_file [dict getnull $changed_dict "start"] {
-            #TODO: make a queue or figure out how to do this synchronously.  We don't
+            #TODO: make a queue or figure out how to do this synchronously (probably another coroutine).  We don't
             #want to be starting some containers while the same container is still starting.
             #There needs to be some safe guards in place.
 
             after idle [list {*}$event_callback poll_start $deploy_file]
         }
 
+        #Note I think this needs to go first and have an event that occurs when it has stopped everything it needs to
         foreach deploy_file [dict getnull $changed_dict "stop"] {
             
             set container_coro_name "stop-[file tail [file rootname ${deploy_file}]]"
@@ -209,7 +291,7 @@ namespace eval vessel::supervisor {
     proc poll_start {deploy_file} {
         # Creates a container monitoring coroutine
 
-        set container_coro_name "start-[file tail [file rootname ${deploy_file}]]"
+        set container_coro_name [mc get_coro_name $deploy_file]
         coroutine  $container_coro_name container_coro $deploy_file [info coroutine]
         after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
     }
@@ -220,7 +302,7 @@ namespace eval vessel::supervisor {
     }
 
     proc poll_timer {deploy_dir} {
-        after idle [list poll_deploy_dir $deploy_dir [info coroutine]]
+        after idle [list vessel::supervisor::poll_deploy_dir $deploy_dir [info coroutine]]
     }
 
     proc start_poll_timer {deploy_dir} {
