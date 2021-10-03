@@ -48,16 +48,6 @@ file mkdir [vessel::env::jail_confs_dir]
 
 set run_done_flag [expr false]
 
-parray env
-
-set ctrl_channel {}
-if {[info exists env(VESSEL_CTRL_FD)]} {
-    set ctrl_channel [vessel::get_supervisor_ctrl_channel]
-}
-
-puts stderr "ctrl channel: $ctrl_channel"
-puts $ctrl_channel "Testing ctrl channel"
-flush $ctrl_channel
 #TODO: This belongs in the 'vessel init' command whenever
 # we decide to implement that..
 proc create_workdir {} {
@@ -71,14 +61,31 @@ proc create_workdir {} {
     }
 }
 
+proc create_ctrl_channel_from_env {} {
+
+    set ctrl_channel {}
+    if {[info exists env(VESSEL_CTRL_FD)]} {
+        set ctrl_channel [vessel::get_supervisor_ctrl_channel]
+    }
+
+    return $ctrl_channel
+}
+
 proc run_container_coro {options} {
     global run_done_flag
 
     set interactive [dict get $options args interactive]
     
+    set ctrl_channel [create_ctrl_channel_from_env]
     #Initialization yield
     yield
     
+    if {$ctrl_channel ne {}} {
+        puts stderr "ctrl channel: $ctrl_channel"
+        puts $ctrl_channel "Testing ctrl channel"
+        flush $ctrl_channel
+    }
+
     if {$interactive} {
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
     } else {
