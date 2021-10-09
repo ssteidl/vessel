@@ -40,7 +40,7 @@ namespace
         std::ostringstream msg;
         /*Probably not great design to output help from the library but
          * it's simple and good enough for now*/
-        msg << "vesseld build <--file=vesseld_file> <--name=image-name> <--tag=tag>" << std::endl
+        msg << "vessel build <--file=vesseld_file> <--name=image-name> <--tag=tag>" << std::endl
             << "--file    Path to the vessel file used to build the image" << std::endl
             << "--name    Name of the image" << std::endl
             << "--tag     Tag for the image.  Only one tag is accepted.  Default is 'latest'" << std::endl;
@@ -96,6 +96,58 @@ namespace
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
+            case ':':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
+                return TCL_ERROR;
+            case '?':
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown option for optind: %d", optind));
+                return TCL_ERROR;
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
+        return tcl_error;
+    }
+
+    std::string rm_options_help()
+    {
+        std::ostringstream msg;
+
+        msg << "vessel rm <image:tag>" << std::endl;
+
+        return msg.str();
+    }
+
+    int parse_rm_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"help", no_argument, nullptr, 'h'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "h", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'h':
+            {
+                std::string help_msg = rm_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                break;
+            }
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -448,8 +500,9 @@ namespace
     {
         std::ostringstream msg;
         msg << "vesseld image <options>" << std::endl
-            << "--list    List all images available in the vessel dataset" << std::endl
-            << "--help    Print this help message" << std::endl;
+            << "--list           List all images available in the vessel dataset" << std::endl
+            << "--rm=<image:tag> Remove the tagged version of the image" << std::endl
+            << "--help           Print this help message" << std::endl;
 
         return msg.str();
     }
@@ -461,6 +514,7 @@ namespace
 
         static const struct option long_opts[] = {
             {"list", no_argument, nullptr, 'l'},
+            {"rm", required_argument, nullptr, 'r'},
             {"help", no_argument, nullptr, 'h'},
             {nullptr, 0, nullptr, 0}
         };
@@ -476,9 +530,10 @@ namespace
         int ch = -1;
 
         bool list = false;
+        std::string image_tag;
         vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "hl", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "hlr:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -502,6 +557,9 @@ namespace
             case 'l':
                 list = true;
                 break;
+            case 'r':
+                image_tag = optarg;
+                break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -517,6 +575,11 @@ namespace
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                        Tcl_NewStringObj("list", -1),
                        Tcl_NewBooleanObj(list));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                       Tcl_NewStringObj("rm", -1),
+                       Tcl_NewStringObj(image_tag.c_str(), image_tag.length()));
         if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, options_dict,
@@ -697,6 +760,10 @@ namespace
             //parse args if any remaining.  shift to first non-command argument
             tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
+        }
+        if(command == "delete")
+        {
+
         }
         else if(command == "run")
         {

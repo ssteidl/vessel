@@ -8,11 +8,38 @@ package require json
 package require json::write
 package require struct::matrix
 
+namespace eval vessel::imageutil {
+
+    proc parse_image_name {image_name {default_tag {latest}}} {
+        # Parse an image name with the optional tag format.
+        # A dict will be returned with both "name" and "tag"
+        # set to the appropriate values.
+        #
+        # Params:
+        #
+        # image_name str <image>[:tag]
+        #
+        # default_tag str Optional parameter to specify the default tag if
+        # none is given. 
+
+        set tag $default_tag
+        set image_parts_d [dict create]
+
+        set image_components [split $image_name :]
+        dict set image_parts_d "name" [lindex $image_components 0]
+      
+        if {[llength $image_components] > 1} {
+            dict set image_parts_d "tag" [lindex $image_components 1]
+        }
+
+        return $image_parts_d
+    }
+}
+
 #NOTE: The metadata db was going to be an sqlite database that
 # held metadata for images and containers.  That may still happen but
 # initially it makes more sense to just have a directory of json files
 # that can be easily transformed into jail files.
-
 
 namespace eval vessel::metadata_db {
     #The matadata_db module is an interface to get all metadata from
@@ -187,10 +214,24 @@ namespace eval vessel::metadata_db {
 
     proc image_command {args_dict} {
 
-        puts stderr "args_dict: $args_dict"
-        _::list_images stdout
+        set do_list [_::dict_get_value $args_dict "list" false]
+        if {$do_list} { 
+            _::list_images stdout
+            return
+        }
 
-        #TODO: Delete image and json file.
+        set rm_image [_::dict_get_value $args_dict "rm" {}]
+        if {$rm_image ne {}} {
+            # Get the dataset from the environment module
+            # recursively destroy the dataset with the zfs module
+            set image_parts [vessel::imageutil::parse_image_name $rm_image]
+            set image_name [dict get $image_parts "name"]
+            set tag [dict get $image_parts "tag"]
+            set dataset [vessel::env::get_dataset_from_image_name $image_name $tag]
+
+            catch {vessel::zfs::destroy_recursive $dataset}
+            catch {file delete [metadata_file_path $image_name $tag]}
+        }
     }
 }
 
