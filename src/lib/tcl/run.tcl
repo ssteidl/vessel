@@ -132,17 +132,18 @@ namespace eval vessel::run {
         }
     }
 
+    # The callback for the devctl module to call when a devd string
+    # is read from the socket.  
+    #
+    # param user_limits_list: List of dictionaries that potentially contain actions to
+    # perform when the jail exceeds a limit
+    #
+    # param jail_name: The name of the jail being executed by this instance of vessel
+    #
+    # param rctl_str: The string read from devd socket.  It could be from any subsystem
+    # not just rctl.
     proc resource_limits_cb {user_limits_list jail_name jail_file devd_str} {
-        # The callback for the devctl module to call when a devd string
-        # is read from the socket.  
-        #
-        # param user_limits_list: List of dictionaries that potentially contain actions to
-        # perform when the jail exceeds a limit
-        #
-        # param jail_name: The name of the jail being executed by this instance of vessel
-        #
-        # param rctl_str: The string read from devd socket.  It could be from any subsystem
-        # not just rctl.
+        
         set rctl_dict [vessel::bsd::parse_devd_rctl_str $devd_str]
 
         #If it's not an rctl string then return
@@ -184,10 +185,48 @@ namespace eval vessel::run {
         }
     }
 
+    # signal_handler processes received signals and shutsdowns/removes the jail.
     proc signal_handler {jail_name jail_file signal active_pid_groups} {
 
         puts stderr "SIG${signal} received.  Removing jail: $jail_name"
         vessel::jail::remove $jail_name $jail_file stderr
+    }
+
+    # supervisor_event_handler Processes readable events from the
+    # supervisor_handler.
+    proc supervisor_event_handler {cpipe jail_name jail_file} {
+        
+        set line {}
+        gets $cpipe line
+        debug.run "ctrl_pipe: $line"
+        if {[eof $cpipe]} {
+            close $cpipe
+            return
+        } elseif {[fblocked $cpipe]} {
+            return
+        }
+
+        switch -exact $line {
+            stop {
+                vessel::jail::remove $jail_name $jail_file
+            }
+
+            default {
+                puts stderr "Unknown supervisor command: $line"
+            }
+        }
+    }
+
+
+    # setup_supervisor_chan configures the supervisor control channel
+    # to properly handle the protocol from the supervisor
+    proc setup_supervisor_chan {cpipe jail_name jail_conf_path} {
+        
+        debug.run "Setting up supervisor control channel: $cpipe"
+        if {$cpipe ne {}} {
+            chan configure $cpipe -blocking 0 -buffering line 
+            chan event $cpipe readable [list [namespace current]::supervisor_event_handler $cpipe $jail_name $jail_conf_path]
+        }
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
@@ -196,6 +235,7 @@ namespace eval vessel::run {
             after idle $cb_coro
         }
 
+        set supervisor_ctrl_chan [dict getnull $chan_dict ctrl]
         set args_dict [_::create_run_dict $args_dict]
         set jail_options_dict [dict get $args_dict jail]
         
@@ -285,22 +325,13 @@ namespace eval vessel::run {
             
             debug.run "jail_start_params: $jail_start_params"
             set tmp_jail_conf [lindex $jail_start_params 0]
-            set ctrl_pipe [lindex $jail_start_params 2]
+            set spawn_ctrl_chan [lindex $jail_start_params 2]
         } error_msg info_dict]
         if {$error} {
             return -code error -errorcode {VESSEL JAIL EXEC} "Error running jail: $error_msg"
         }
         
-        #NOTE: I'm leaving this bit of code in for now.  vessel proper doesn't
-        #actually use the control pipe.
-        chan configure $ctrl_pipe -blocking 0 -buffering none 
-        chan event $ctrl_pipe readable [list apply {{cpipe} {
-            set val [chan read $cpipe]
-            debug.run "ctrl_pipe: $val"
-            if {[eof $cpipe]} {
-                close $cpipe
-            }
-        }} $ctrl_pipe]
+        setup_supervisor_chan $supervisor_ctrl_chan $jail_name $tmp_jail_conf
 
         debug.run "Setting devctl callback"
         if {$limits ne {}} {

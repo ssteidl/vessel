@@ -62,6 +62,7 @@ proc create_workdir {} {
 }
 
 proc create_ctrl_channel_from_env {} {
+    global env
 
     set ctrl_channel {}
     if {[info exists env(VESSEL_CTRL_FD)]} {
@@ -87,10 +88,10 @@ proc run_container_coro {options} {
     }
 
     if {$interactive} {
-        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
+        set chan_dict [dict create stdin stdin stdout stdout stderr stderr ctrl $ctrl_channel]
     } else {
         set devnull [open /dev/null w]
-        set chan_dict [dict create stdin $devnull stdout stdout stderr stderr]
+        set chan_dict [dict create stdin $devnull stdout stdout stderr stderr ctrl $ctrl_channel]
         defer::with [list devnull] {
             close $devnull
         }

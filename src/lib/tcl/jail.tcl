@@ -66,7 +66,7 @@ namespace eval vessel::jail {
 
                     [set jail_options_string {}
                      dict for {option value} $jail_options {
-                         set option_string [subst {${option}=${value};\n}]
+                         set option_string [subst {${option}+=${value};\n}]
                          append jail_options_string $option_string
                      }
                      set jail_options_string]
@@ -96,7 +96,13 @@ namespace eval vessel::jail {
 
     proc remove {jid jail_file {output_chan stderr}} {
 
-        return [exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan]
+        try {
+            exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan
+        } trap {CHILDSTATUS} {} {
+            return -code error -errorcode {JAIL RUN REMOVE} "Error removing jail"
+        }
+
+        return
     }
     
     proc run_jail {name mountpoint volume_datasets chan_dict network limits jail_options_dict \

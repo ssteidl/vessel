@@ -1,5 +1,4 @@
-# -*- mode: tcl; -*-
-
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 package require tcltest
 
 package require vessel::native
@@ -10,44 +9,59 @@ namespace eval deploy::test {
     namespace import ::tcltest::*
 
     test run-dict {Test validation of valid deploy file} -setup {
-	set ini_chan [file tempfile inifilename]
-	set ini_data {
-	    [vessel-supervisor]
-	    # The name of the image without the tag in the repository
-	    repository=s3://reapp/
-	    image=supercooldjangoapp
-	    tag=1.3.1
-	    command=sh /etc/rc
+        set ini_chan [file tempfile inifilename]
+        set ini_data {
+            [vessel-supervisor]
+            # The name of the image without the tag in the repository
+            repository=s3://reapp/
+            image=supercooldjangoapp
+            tag=1.3.1
+            command=sh /etc/rc
 
-	    [dataset:upload-images]
-	    dataset=upload-images
-	    mount=/var/db/uploaded-images
+            [dataset:upload-images]
+            dataset=upload-images
+            mount=/var/db/uploaded-images
 
-	    [jail]
-	    # anything in this section is treated as a jail parameter and will
-	    # be added to the generated jail file.
-	    sysvshm=new
-	    host.hostname=re.zeta.investments
-	}
-	puts $ini_chan [string trim $ini_data]
-	flush $ini_chan
+            [jail]
+            # anything in this section is treated as a jail parameter and will
+            # be added to the generated jail file.
+            sysvshm=new
+            host.hostname=re.zeta.investments
+        }
+        puts $ini_chan [string trim $ini_data]
+        flush $ini_chan
 
-	set options_dict [vessel::parse_options \
-			   [list run --interactive \
-				-v [pwd]:/mnt \
-				--ini=$inifilename \
-				--rm \
-			        --dataset=reappdata:/var/re/data \
-			       testimage:1.0]]
+        set options_dict [vessel::parse_options \
+            [list run --interactive \
+            -v [pwd]:/mnt \
+            --ini=$inifilename \
+            --rm \
+            --dataset=reappdata:/var/re/data \
+            testimage:1.0]]
     } -body {
-	set d [vessel::run::_::create_run_dict [dict get $options_dict args]]
+        set d [vessel::run::_::create_run_dict [dict get $options_dict args]]
 
-	#ini_file is random so just set it to a known value for comparison
-	dict set d ini_file {}
-	return $d
-    } -match exact -result {datasets {reappdata:/var/re/data upload-images:/var/db/uploaded-images} volumes /usr/home/shane/FBSDAppContainers/test:/mnt remove 1 interactive 1 network inherit ini_file {} image testimage:1.0 jail {sysvshm new host.hostname re.zeta.investments}} \
-	-cleanup {
-	close $ini_chan
-	file delete $inifilename
+        #ini_file is random so just set it to a known value for comparison
+        dict set d ini_file {}
+        return $d
+    } -match exact -result {datasets {reappdata:/var/re/data upload-images:/var/db/uploaded-images} volumes /usr/home/shane/FBSDAppContainers/test:/mnt resources {} remove 1 interactive 1 network inherit ini_file {} image testimage:1.0 jail {sysvshm new host.hostname re.zeta.investments} limits {}} \
+    -cleanup {
+            close $ini_chan
+            file delete $inifilename
     }
+
+    test supervisor-ctrl-chan-stop {test the stop supervisor cmd} -setup {
+        set supervisor_chan_list [chan pipe]
+        set supervisor_chan_read [lindex $supervisor_chan_list 0]
+        set supervisor_chan_write [lindex $supervisor_chan_list 1]
+
+        chan configure $supervisor_chan_write -buffering line
+    } -cleanup {
+       close $supervisor_chan_read
+       close $supervisor_chan_write 
+    } -body {
+
+        puts $supervisor_chan_write "stop"
+        vessel::run::supervisor_event_handler $supervisor_chan_read "test_jail" "/tmp/test_jail.conf"
+    } -errorCode {JAIL RUN REMOVE} -match glob -result "*"
 }

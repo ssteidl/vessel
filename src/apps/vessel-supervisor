@@ -65,7 +65,7 @@ namespace eval vessel::supervisor {
 
         proc get_coro_name {deploy_file} {
 
-            return "monitor-[get_container_name $deploy_file]"            
+            return "monitor-[container_key $deploy_file]"            
         }
 
         proc is_monitored {deploy_file} {
@@ -158,7 +158,7 @@ namespace eval vessel::supervisor {
         set jail_name [mc get_container_name $deploy_file_path]
         #NOTE: We might want to implement a detach or keep-attached option.  The difference
         #is really signal processing when running the supervisor in the foreground.
-        set vessel_cmd "daemon vessel run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
+        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
         lappend vessel_cmd {*}$command
         puts stderr "$vessel_cmd"
 
@@ -204,8 +204,6 @@ namespace eval vessel::supervisor {
             return -code error -errorcode {SUPERVISOR PULL NYI} "Supervisor pull NYI"
         }
 
-        #TODO: Fix up this loop.  Validate the start event callback and finish implementation
-        # Execute the vessel command which calls back this coroutine at various stages.
         set container_started_event [yieldto start_container $deploy_file $image $tag  [info coroutine]]
         set ctrl_channel [container_started $container_started_event]
 
@@ -229,6 +227,7 @@ namespace eval vessel::supervisor {
                 }
                 "stop_requested" {
                     puts $ctrl_channel "stop"
+                    flush $ctrl_channel
                 }
                 default {
                     puts stderr "Unexpected event when monitoring container: $event_args"
@@ -243,14 +242,6 @@ namespace eval vessel::supervisor {
         #TODO: Handle restart
     }
 
-    proc shutdown_container_coro {deploy_file} {
-
-        #TODO: Create an ensemble to manage the monitored_containers_dict.
-        # We should be able to get the deploy_dict given the deploy file from
-        # this ensemble.
-        yield
-    }
-
     proc poll_deploy_dir {_deploy_dir event_callback} {
         # Periodically poll the deployment dir
         # and apply the changes to the managed containers.  
@@ -262,9 +253,6 @@ namespace eval vessel::supervisor {
         set changed_dict [vessel::deploy::poll_deploy_dir $deploy_dir]
 
         #puts stderr "changed dict: $changed_dict"
-        
-        #TODO: I think we need to have a coroutine per deploy file and a list of actions
-        # to take.  Actions are either, start, stop or stop,start
 
         #Queue up the containers that need to be 
         foreach deploy_file [dict getnull $changed_dict "start"] {
@@ -277,10 +265,7 @@ namespace eval vessel::supervisor {
 
         #Note I think this needs to go first and have an event that occurs when it has stopped everything it needs to
         foreach deploy_file [dict getnull $changed_dict "stop"] {
-            
-            set container_coro_name "stop-[file tail [file rootname ${deploy_file}]]"
-            coroutine  $container_coro_name stop_container_coro $deploy_file
-            after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
+            after idle [list {*}$event_callback poll_stop $deploy_file]
         }
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {
@@ -298,7 +283,8 @@ namespace eval vessel::supervisor {
 
     proc poll_stop {deploy_file} {
 
-        #TODO: Get coroutine name and send stop message
+        set coro_name [mc get_coro_name $deploy_file]
+        $coro_name "stop_requested"
     }
 
     proc poll_timer {deploy_dir} {
