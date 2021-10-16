@@ -107,7 +107,6 @@ namespace eval vessel::supervisor {
         }
     }
 
-
     proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
         # Monitors the ctrl_channel for a specific container.
 
@@ -189,7 +188,8 @@ namespace eval vessel::supervisor {
         
         variable monitored_containers_dict
 
-        puts stderr "starting container: $deploy_file"
+        set container_name [mc get_container_name $deploy_file]
+        puts stderr "starting container: $container_name"
         set deploy_dict [mc get_deploy_dict $deploy_file]
         puts stderr $deploy_dict
         set image [dict get $deploy_dict vessel-supervisor image]
@@ -207,6 +207,8 @@ namespace eval vessel::supervisor {
         set container_started_event [yieldto start_container $deploy_file $image $tag  [info coroutine]]
         set ctrl_channel [container_started $container_started_event]
 
+        set restart false
+        set exited false
         #container monitoring event loop
         while {true} {
             set event_args [yieldto return -level 0]
@@ -214,7 +216,7 @@ namespace eval vessel::supervisor {
                 puts stderr "Event with no event_type received"
                 continue
             }      
-            set event_type [lindex $event_args 0]
+            set event_type [lindex $event_args end]
             puts stderr "eventargs: $event_args"
             switch -exact $event_type {
                 
@@ -227,19 +229,31 @@ namespace eval vessel::supervisor {
                 }
                 "stop_requested" {
                     puts $ctrl_channel "stop"
-                    flush $ctrl_channel
+                }
+                "restart_requested" {
+                    puts $ctrl_channel "stop"
+                    set restart true
+                }
+                "exit" {
+                    set exited true
                 }
                 default {
                     puts stderr "Unexpected event when monitoring container: $event_args"
                 }
             }
+            if {$exited} {
+                break
+            }
         }
-        #TODO: The jail 'name' should be read and set from the supervisor.  then
-        # it has a good way of finding and managing the jails.  If name is not provided
-        # then use the basename of the file.
-        puts stderr "Container finished executing.  Cleaning up..."
 
-        #TODO: Handle restart
+        puts stderr "$container_name finished executing.  Cleaning up..."
+
+        if {$restart} {
+            puts stderr "Restarting($container_name)"
+            after idle [list [namespace current]::poll_start $deploy_file]
+        } else {
+            puts stderr "No restart requested"
+        }
     }
 
     proc poll_deploy_dir {_deploy_dir event_callback} {
@@ -263,13 +277,12 @@ namespace eval vessel::supervisor {
             after idle [list {*}$event_callback poll_start $deploy_file]
         }
 
-        #Note I think this needs to go first and have an event that occurs when it has stopped everything it needs to
         foreach deploy_file [dict getnull $changed_dict "stop"] {
             after idle [list {*}$event_callback poll_stop $deploy_file]
         }
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {
-            puts stderr "modified: $deploy_file"
+            after idle [list {*}$event_callback poll_modified $deploy_file]
         }
     }
 
@@ -285,6 +298,12 @@ namespace eval vessel::supervisor {
 
         set coro_name [mc get_coro_name $deploy_file]
         $coro_name "stop_requested"
+    }
+
+    proc poll_modified {deploy_file} {
+
+        set coro_name [mc get_coro_name $deploy_file]
+        $coro_name "restart_requested"
     }
 
     proc poll_timer {deploy_dir} {
@@ -314,7 +333,8 @@ namespace eval vessel::supervisor {
 
                 "poll_timer" -
                 "poll_start" -
-                "poll_stop" {
+                "poll_stop" -
+                "poll_modified" {
                     {*}$event_args
                 }
 
