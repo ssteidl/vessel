@@ -1,4 +1,5 @@
-#Run from top level directory
+# - Run from top level directory
+# - Set DISTDIR=/tmp in environment
 COMMIT!= git rev-parse HEAD
 VERSION?=1.1.2-${COMMIT}
 DISTDIR?=/tmp

@@ -47,4 +47,5 @@ install(DIRECTORY src/network
         DESTINATION lib/tclvessel
         PATTERN *.md EXCLUDE)
 
-install(PROGRAMS src/apps/vessel DESTINATION bin)
+install(PROGRAMS src/apps/vessel src/apps/vessel-supervisor
+        DESTINATION bin)

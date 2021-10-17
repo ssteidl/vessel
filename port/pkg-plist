@@ -1,4 +1,5 @@
 bin/vessel
+bin/vessel-supervisor
 lib/tclvessel/bsd.tcl
 lib/tclvessel/build.tcl
 lib/tclvessel/definition_file.tcl
