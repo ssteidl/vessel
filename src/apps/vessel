@@ -31,9 +31,14 @@ if {[dict exists $args help]} {
 
 set pool [vessel::env::get_pool]
 if {![vessel::zfs::is_mounted $pool]} {
-    puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
-    if {[catch {vessel::zfs::mount $pool} msg]} {
-        puts stderr "Failed to mount pool: ${msg}.  Moving on..."
+
+    if {[vessel::zfs::can_mount $pool]} {
+        puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+        if {[catch {vessel::zfs::mount $pool} msg]} {
+            puts stderr "Failed to mount pool: ${msg}.  Moving on..."
+        }
+    } else {
+        puts stderr "ZFS pool '$pool' is not mounted and canmount is off... moving on"
     }
 }
 

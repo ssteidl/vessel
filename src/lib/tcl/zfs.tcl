@@ -86,6 +86,21 @@ namespace eval vessel::zfs {
         return [expr [lindex $mounted_line 2] eq {yes}]
     }
 
+    proc can_mount {dataset} {
+        set canmount false
+
+        try {
+            #zroot  canmount  off       local
+            set canmount_line [exec zfs get -H canmount $dataset]
+            set canmount_text [lindex $canmount_line 2]
+            if {$canmount_text eq {on}} {
+                set canmount true
+            }
+        } trap {} {} {}
+
+        return $canmount
+    }
+
     proc mount {dataset} {
         exec zfs mount $dataset
     }
@@ -224,7 +239,7 @@ namespace eval vessel::zfs {
     }
 
     proc destroy_recursive {dataset} {
-        exec zfs destroy -r $dataset
+        exec zfs destroy -rf $dataset
     }
 
     proc set_jailed_attr {dataset} {
