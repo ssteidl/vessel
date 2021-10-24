@@ -6,6 +6,7 @@ package require vessel::env
 package require vessel::export
 package require vessel::native
 package require vessel::import
+package require logger
 package require vessel::metadata_db
 package require vessel::repo
 package require vessel::run
@@ -19,6 +20,7 @@ package require fileutil
 debug define vessel
 debug on vessel 1 stderr
 
+logger::setlevel debug
 set options [vessel::parse_options $argv]
 
 set command [dict get $options command]

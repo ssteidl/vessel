@@ -3,6 +3,7 @@
 package require debug
 package require dicttool
 package require fileutil
+package require logger
 package require uuid
 
 package require vessel::bsd
@@ -13,14 +14,14 @@ package require vessel::zfs
 
 namespace eval vessel::run {
 
-    debug define run
-    debug on run 1 stderr
+    logger::initNamespace [namespace current] debug
+    variable log [logger::servicecmd [string trimleft [namespace current] :]]
     
     namespace eval _ {
 
         proc handle_dataset_argument {dataset_arg} {
-
-            debug.run "dataset_arg: $dataset_arg"
+            variable log
+            ${log}::debug "dataset_arg: $dataset_arg"
             set arg_list [split $dataset_arg ":"]
             if {[llength $arg_list] != 2} {
                 return -code error -errorcode {DATASET ARGS} "dataset requires a value in the format <source>:<dest>"
@@ -28,14 +29,14 @@ namespace eval vessel::run {
 
             set dataset [lindex $arg_list 0]
             set jail_mntpoint [lindex $arg_list 1]
-            debug.run "dataset: $dataset"
-            debug.run "jail_mntpoint: $jail_mntpoint"
+            ${log}::debug "dataset: $dataset"
+            ${log}::debug "jail_mntpoint: $jail_mntpoint"
             if {![vessel::zfs::dataset_exists $dataset]} {
                 vessel::zfs::create_dataset $dataset
             }
 
             if {[catch {vessel::zfs::set_mountpoint_attr $dataset $jail_mntpoint} error_msg]} {
-                debug.run "Failed to set mountpoint attribute on $dataset.  Ignoring: $error_msg"
+                ${log}::error "Failed to set mountpoint attribute on $dataset.  Ignoring: $error_msg"
             }
             vessel::zfs::set_jailed_attr $dataset
 
@@ -143,7 +144,7 @@ namespace eval vessel::run {
     # param rctl_str: The string read from devd socket.  It could be from any subsystem
     # not just rctl.
     proc resource_limits_cb {user_limits_list jail_name jail_file devd_str} {
-        
+        variable log
         set rctl_dict [vessel::bsd::parse_devd_rctl_str $devd_str]
 
         #If it's not an rctl string then return
@@ -153,7 +154,7 @@ namespace eval vessel::run {
 
         set jail [dict get $rctl_dict "jail"]
 
-        debug.run "Jail exceeded resource: $jail"
+        ${log}::info "Jail exceeded resource: $jail"
 
         if {$jail eq $jail_name} {
 
@@ -165,20 +166,20 @@ namespace eval vessel::run {
                 set user_resource [lindex [split $user_rctl_rule :] 0]
                 
                 set rctl_resource [dict get $rctl_dict "rule" "resource"]
-                debug.run "User resource: $user_resource"
-                debug.run "rctl resource: $rctl_resource"
+                ${log}::debug "User resource: $user_resource"
+                ${log}::debug "rctl resource: $rctl_resource"
                 if {$user_resource eq $rctl_resource} {
                     #The user provided resource matches the resource provided by the devd rctl string
                     set user_action [dict get $user_limit_dict "devctl-action"]
-                    debug.run "User action: $user_action"
+                    ${log}::debug "User action: $user_action"
                     if {$user_action eq "shutdown"} {
-                        debug.run "Resource limit exceeded.  shutting down"
+                        ${log}::debug "Resource limit exceeded.  shutting down"
                         if {[catch {vessel::jail::shutdown $jail_name $jail_file} msg]} {
-                            debug.run "Error shutting down after resource limit exceeded: $msg"
+                            ${log}::debug "Error shutting down after resource limit exceeded: $msg"
                         }
                     } else {
                         #TODO: Implement exec subprocess
-                        debug.run "Resource limit exceeded.  Executing some other action"
+                        ${log}::debug "Resource limit exceeded.  Executing some other action"
                     }
                 }
             }
@@ -187,18 +188,19 @@ namespace eval vessel::run {
 
     # signal_handler processes received signals and shutsdowns/removes the jail.
     proc signal_handler {jail_name jail_file signal active_pid_groups} {
-
-        puts stderr "SIG${signal} received.  Removing jail: $jail_name"
+        variable log
+        ${log}::info "SIG${signal} received.  Removing jail: $jail_name"
         vessel::jail::remove $jail_name $jail_file stderr
     }
 
     # supervisor_event_handler Processes readable events from the
     # supervisor_handler.
     proc supervisor_event_handler {cpipe jail_name jail_file} {
-        
+        variable log
+
         set line {}
         gets $cpipe line
-        debug.run "ctrl_pipe: $line"
+        ${log}::debug "ctrl_pipe: $line"
         if {[eof $cpipe]} {
             close $cpipe
             return
@@ -212,7 +214,7 @@ namespace eval vessel::run {
             }
 
             default {
-                puts stderr "Unknown supervisor command: $line"
+                ${log}::error "Unknown supervisor command: $line"
             }
         }
     }
@@ -221,8 +223,8 @@ namespace eval vessel::run {
     # setup_supervisor_chan configures the supervisor control channel
     # to properly handle the protocol from the supervisor
     proc setup_supervisor_chan {cpipe jail_name jail_conf_path} {
-        
-        debug.run "Setting up supervisor control channel: $cpipe"
+        variable log
+        ${log}::debug "Setting up supervisor control channel: $cpipe"
         if {$cpipe ne {}} {
             chan configure $cpipe -blocking 0 -buffering line 
             chan event $cpipe readable [list [namespace current]::supervisor_event_handler $cpipe $jail_name $jail_conf_path]
@@ -230,7 +232,7 @@ namespace eval vessel::run {
     }
 
     proc run_command {chan_dict args_dict cb_coro} {
-
+        variable log
         defer::with [list cb_coro] {
             after idle $cb_coro
         }
@@ -273,7 +275,7 @@ namespace eval vessel::run {
             set tag {local}
         }
         set image_dataset [vessel::env::get_dataset_from_image_name $image_name $tag]
-        debug.run "RUN COMMAND image dataset: $image_dataset"
+        ${log}::debug "RUN COMMAND image dataset: $image_dataset"
 
         if {![dict exists $mountpoints_dict $image_dataset]} {
             #TODO: retrieve and unpack layer
@@ -282,13 +284,13 @@ namespace eval vessel::run {
         }
 
         set b_snapshot_exists [vessel::zfs::snapshot_exists "${image_dataset}@b"]
-        debug.run "RUN COMMAND b snapshot exists: $b_snapshot_exists"
+        ${log}::debug "RUN COMMAND b snapshot exists: $b_snapshot_exists"
         if {$b_snapshot_exists && $tag ne {local}} {
 
             set container_dataset [vessel::env::get_dataset_from_image_name $image_name ${tag}/${jail_name}]
 
             if {![dict exists $mountpoints_dict $container_dataset]} {
-                debug.run "Cloning b snapshot: ${image_dataset}@b $container_dataset"
+                ${log}::debug "Cloning b snapshot: ${image_dataset}@b $container_dataset"
                 vessel::zfs::clone_snapshot "${image_dataset}@b" $container_dataset
             }
         } else {
@@ -323,7 +325,7 @@ namespace eval vessel::run {
             set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
                 $network $limits $jail_options_dict $coro_name {*}$command]
             
-            debug.run "jail_start_params: $jail_start_params"
+            ${log}::debug "jail_start_params: $jail_start_params"
             set tmp_jail_conf [lindex $jail_start_params 0]
             set spawn_ctrl_chan [lindex $jail_start_params 2]
         } error_msg info_dict]
@@ -333,7 +335,7 @@ namespace eval vessel::run {
         
         setup_supervisor_chan $supervisor_ctrl_chan $jail_name $tmp_jail_conf
 
-        debug.run "Setting devctl callback"
+        ${log}::debug "Setting devctl callback"
         if {$limits ne {}} {
             vessel::devctl_set_callback [list vessel::run::resource_limits_cb $limits $jail_name $tmp_jail_conf]
         }
@@ -343,23 +345,23 @@ namespace eval vessel::run {
 
         #Wait for the exit callback 
         set exit_params [yieldto return -level 0 {}]
-        debug.run "exit params: $exit_params"
+        ${log}::debug "exit params: $exit_params"
 
         #TODO: Now that we can use the jail file we need to:
         # 1. Move jail cleanup to the jail file commands
 
-        debug.run "Container exited. Cleaning up..."
+        ${log}::info "Container exited. Cleaning up..."
 
         # TODO: Do a check to see if cleanup is needed.  If so run this command and
         #ideally do all of the cleanup in the jail.conf.
-        debug.run "Removing jail: $jail_name, $tmp_jail_conf"
+        ${log}::debug "Removing jail: $jail_name, $tmp_jail_conf"
         if {[catch {vessel::jail::shutdown $jail_name $tmp_jail_conf} error_msg]} {
             puts stderr "Unable to remove jail: $error_msg"
         }
 
         file delete $tmp_jail_conf
 
-        debug.run "Unmounting nullfs volumes"
+        ${log}::debug "Unmounting nullfs volumes"
         foreach volume_mount $jailed_mount_paths {
             set error [catch {vessel::bsd::umount $volume_mount} error_msg]
             if {$error} {
@@ -367,18 +369,18 @@ namespace eval vessel::run {
             }
         }
 
-        debug.run "Unjailing jailed datasets"
+        ${log}::debug "Unjailing jailed datasets"
         foreach volume_dataset $volume_datasets {
             catch {exec zfs set jailed=off $volume_dataset >&@ stderr}
             catch {exec zfs umount $volume_dataset >&@ stderr}
         }
         
         if {[dict get $args_dict "remove"]} {
-            debug.run "Destroying container dataset: $container_dataset"
+            ${log}::debug "Destroying container dataset: $container_dataset"
             vessel::zfs::destroy $container_dataset
         }
 
-        debug.run "Finished running container: $jail_name"
+        ${log}::debug "Finished running container: $jail_name"
     }
 }
 

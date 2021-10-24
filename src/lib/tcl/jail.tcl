@@ -2,9 +2,15 @@
 
 package require vessel::native
 package require vessel::env
+
+package require logger
 package require textutil::expander
 
+
 namespace eval vessel::jail {
+
+    logger::initNamespace [namespace current] debug
+    variable log [logger::servicecmd [string trimleft [namespace current] :]]
 
     namespace eval _ {
 
@@ -107,6 +113,7 @@ namespace eval vessel::jail {
     
     proc run_jail {name mountpoint volume_datasets chan_dict network limits jail_options_dict \
                        callback args} {
+        variable log
 
         #Create the conf file
         set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network $limits \
@@ -117,9 +124,14 @@ namespace eval vessel::jail {
         puts $jail_conf_file_chan $jail_conf
         close $jail_conf_file_chan
         
-        set jail_command [list jail -v -f $jail_conf_file -c $name]
+        set debug_args {}
+        if {[${log}::currentloglevel] eq "debug"} {
+            set debug_args "-v"
+        }
+
+        set jail_command [list jail {*}$debug_args -f $jail_conf_file -c $name]
         
-        puts stderr "JAIL CONF: $jail_conf"
+        ${log}::debug "JAIL CONF: $jail_conf"
 
         #If callback is empty, that implies blocking mode.  non-empty callback implies
         #async mode.  If async, make sure the callback has the jail conf file to cleanup
