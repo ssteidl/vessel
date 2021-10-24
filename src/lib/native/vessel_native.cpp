@@ -728,6 +728,11 @@ namespace
                                    Tcl_NewBooleanObj(0));
         if(tcl_error) return tcl_error;
 
+        tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                   Tcl_NewStringObj("debug", -1),
+                                   Tcl_NewBooleanObj(0));
+        if(tcl_error) return tcl_error;
+
         /*Parse pre command options like --local*/
         int command_index = 0; /*Index of the command in the options list*/
         for (int i=0; i < arg_count; i++)
@@ -737,6 +742,12 @@ namespace
             {
                 tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
                                            Tcl_NewStringObj("local", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
+            else if (pre_command_option == "--debug")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("debug", -1),
                                            Tcl_NewBooleanObj(1));
             }
             else
@@ -750,7 +761,6 @@ namespace
         argument_objs += command_index;
         std::string command(Tcl_GetString(argument_objs[0]));
 
-        /*TODO: Make command lookup table for commands.*/
         tcl_error = Tcl_DictObjPut(interp, command_options.get(), Tcl_NewStringObj("args", -1),
                                    Tcl_NewStringObj("", 0));
         if(tcl_error) return tcl_error;
@@ -760,10 +770,6 @@ namespace
             //parse args if any remaining.  shift to first non-command argument
             tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
-        }
-        if(command == "delete")
-        {
-
         }
         else if(command == "run")
         {

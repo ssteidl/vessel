@@ -187,10 +187,10 @@ namespace
                 std::cerr << "Waiting for child process: " << pid << std::endl;
                 int status = 0;
                 pid_t waitedpid = waitpid(pid, &status, 0);
-                std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
-                          << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
-                          << WIFSTOPPED(status)<< std::endl;
-                std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
+//                std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
+//                          << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
+//                          << WIFSTOPPED(status)<< std::endl;
+//                std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
                 /*TODO: Have a background error here if waitpid fails.*/
             }
             else
@@ -906,13 +906,13 @@ int Vessel_Exec(void *clientData, Tcl_Interp *interp,
         }
         else
         {
-            std::cerr << "Blocking wait for child process: " << pid << std::endl;
+//            std::cerr << "Blocking wait for child process: " << pid << std::endl;
             int status = 0;
             pid_t waitedpid = waitpid(pid, &status, 0);
-            std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
-                      << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
-                      << WIFSTOPPED(status)<< std::endl;
-            std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
+//            std::cerr << "Waited on: " << waitedpid << ": " << WIFEXITED(status) << ","
+//                      << WIFCONTINUED(status) << "," << WIFSIGNALED(status) << ","
+//                      << WIFSTOPPED(status)<< std::endl;
+//            std::cerr << "Signal: " << WTERMSIG(status) << std::endl;
         }
         break;
     }

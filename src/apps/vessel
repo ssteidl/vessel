@@ -20,8 +20,12 @@ package require fileutil
 debug define vessel
 debug on vessel 1 stderr
 
-logger::setlevel debug
+logger::setlevel info
 set options [vessel::parse_options $argv]
+
+if {[dict get $options pre_command_flags debug]} {
+    logger::setlevel debug
+}
 
 set command [dict get $options command]
 set args [dict get $options args]
