@@ -12,13 +12,11 @@ package require vessel::repo
 package require vessel::run
 package require vessel::zfs
 
-package require debug
 package require defer
 
 package require fileutil
 
-debug define vessel
-debug on vessel 1 stderr
+set log [logger::init vessel]
 
 logger::setlevel info
 set options [vessel::parse_options $argv]
@@ -39,17 +37,17 @@ set pool [vessel::env::get_pool]
 if {![vessel::zfs::is_mounted $pool]} {
 
     if {[vessel::zfs::can_mount $pool]} {
-        puts stderr "ZFS pool '$pool' is not mounted.  Attempting to mount now"
+        ${log}::debug "ZFS pool '$pool' is not mounted.  Attempting to mount now"
         if {[catch {vessel::zfs::mount $pool} msg]} {
-            puts stderr "Failed to mount pool: ${msg}.  Moving on..."
+            ${log}::debug "Failed to mount pool: ${msg}.  Moving on..."
         }
     } else {
-        puts stderr "ZFS pool '$pool' is not mounted and canmount is off... moving on"
+        ${log}::debug "ZFS pool '$pool' is not mounted and canmount is off... moving on"
     }
 }
 
 if {![vessel::bsd::is_mountpoint /proc]} {
-    debug.vessel "Mounting /proc"
+    ${log}::info "Mounting /proc"
     vessel::bsd::mount_procfs
 }
 
@@ -93,7 +91,7 @@ proc run_container_coro {options} {
     yield
     
     if {$ctrl_channel ne {}} {
-        puts stderr "ctrl channel: $ctrl_channel"
+        ${log}::debug "ctrl channel: $ctrl_channel"
         puts $ctrl_channel "Testing ctrl channel"
         flush $ctrl_channel
     }
@@ -117,7 +115,7 @@ proc run_container_coro {options} {
 
 proc handle_repo_cmd {cmd args_dict} {
 
-    debug.vessel "repo args: $args_dict"
+    ${log}::debug "repo args: $args_dict"
     set image [dict get $args_dict image]
 
     set tag [dict get $args_dict tag]
@@ -169,7 +167,7 @@ switch -regexp -matchvar parsed_cmd $command {
         vwait run_done_flag
     }
     publish|pull {
-        debug.vessel "push pull args: $args"
+        ${log}::debug "push pull args: $args"
         handle_repo_cmd $parsed_cmd $args
     }
     image {
@@ -179,7 +177,7 @@ switch -regexp -matchvar parsed_cmd $command {
         vessel::export::export_command $args
     }
     default {
-        puts stderr "Unknown command: $command"
+        ${log}::debug "Unknown command: $command"
         exit 1
     }
 
