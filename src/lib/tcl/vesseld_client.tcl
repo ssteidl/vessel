@@ -1,3 +1,6 @@
+#NOTE: This module is not used for anything, it should be 
+#removed.  It was written when vessel was going to be a daemon.
+
 #Client support for communicating with vesseld
 package require debug
 package require vessel::native

@@ -23,8 +23,8 @@ set status_channel stderr
 set command_queue [list]
 
 namespace eval vessel::file_commands::_ {
-    proc fetch_image {image_dataset name version status_channel} {
 
+    proc fetch_image {image_dataset name version status_channel} {
         #Download an image.  Ideally we just pull from a repo like
         #any other image.  For now we have a special function because
         #it's not an actual vessel image.  Just a tarball
@@ -36,9 +36,6 @@ namespace eval vessel::file_commands::_ {
         }
 
         set mountpoint [vessel::zfs::get_mountpoint $image_dataset]
-
-        #TODO: Support a registry.  For now only support
-        #freebsd base.txz
 
         #We require the image to be the same as the
         #host architecture

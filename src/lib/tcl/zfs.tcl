@@ -45,11 +45,7 @@ namespace eval vessel::zfs {
 
         variable snapshots_dict
         if {![snapshot_exists $snapshot]} {
-
-            puts stderr "Attempted to clone a non existent snapshot: $snapshot"
-            puts stderr "${snapshots_dict}"
-            #TODO: Raise error instead of exit
-            exit 1
+            error "Attempted to clone a non existent snapshot: $snapshot -- ${snapshots_dict}"
         }
 
         exec zfs clone $snapshot $new_dataset >&@ stderr
