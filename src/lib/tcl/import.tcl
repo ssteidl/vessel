@@ -6,6 +6,7 @@ package require vessel::native
 package require defer
 package require fileutil
 package require json
+package require logger
 package require uri
 package require TclOO
 

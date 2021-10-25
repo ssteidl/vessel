@@ -7,6 +7,7 @@ package require inifile
 package require vessel::native
 package require vessel::deploy
 package require vessel::metadata_db
+package require vessel::syslog
 package require dicttool
 
 package require logger
@@ -118,7 +119,7 @@ namespace eval vessel::supervisor {
     # Monitors the ctrl_channel for messages from a given container.
     proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
         global log
-        
+
         ${log}::debug "Configuring run_loop($ctrl_channel)"
         chan configure $ctrl_channel -blocking false -buffering none
 
@@ -365,6 +366,7 @@ namespace eval vessel::supervisor {
 set options {
     {d.arg "/usr/local/etc/vessel/configs"   "deployment file directory to monitor"}
     {debug}
+    {syslog}
 }
 set usage ":  \[options] filename ...\noptions:"
 
@@ -382,6 +384,10 @@ set deploy_dir $params(d)
 
 if {$params(debug)} {
     logger::setlevel debug
+}
+
+if {$params(syslog)} {
+    vessel::syslog::enable
 }
 
 coroutine vessel::supervisor::main_event_loop vessel::supervisor::main_event_loop_coro $deploy_dir

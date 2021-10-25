@@ -15,6 +15,7 @@ package ifneeded vessel::network 1.0.0 [list source [file join $dir network netw
 package ifneeded vessel::pty_shell 1.0.0 [list source [file join $dir pty_shell.tcl]]
 package ifneeded vessel::repo 1.0.0 [list source [file join $dir repos.tcl]]
 package ifneeded vessel::run 1.0.0 [list source [file join $dir run.tcl]]
+package ifneeded vessel::syslog 1.0.0 [list source [file join $dir syslog.tcl]]
 package ifneeded vessel::zfs 1.0.0 [list source [file join $dir zfs.tcl]]
 
 package ifneeded VesselFileCommands 1.0.0 [list source [file join $dir vessel_file_commands.tcl]]

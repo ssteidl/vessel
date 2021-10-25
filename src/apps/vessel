@@ -9,6 +9,7 @@ package require vessel::import
 package require vessel::metadata_db
 package require vessel::repo
 package require vessel::run
+package require vessel::syslog
 package require vessel::zfs
 
 package require logger
@@ -23,6 +24,10 @@ set options [vessel::parse_options $argv]
 
 if {[dict get $options pre_command_flags debug]} {
     logger::setlevel debug
+}
+
+if {[dict get $options pre_command_flags syslog]} {
+    vessel::syslog::enable
 }
 
 set command [dict get $options command]

@@ -1,6 +1,5 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-package require debug
 package require dicttool
 package require fileutil
 package require logger

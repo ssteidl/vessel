@@ -19,7 +19,7 @@ namespace eval vessel::shane {
 logger::setlevel debug
 
 proc logtosyslog_debug {txt} {
-    syslog -facility news -ident [lindex $txt 1] notice [lindex $txt 2]
+    syslog -facility local1 -ident [lindex $txt 1] debug [lindex $txt 2]
 }
 
 ${glog}::logproc debug logtosyslog_debug

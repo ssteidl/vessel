@@ -15,7 +15,7 @@ GH_PROJECT=	FBSDAppContainers
 GH_TAGNAME!=	git rev-parse HEAD
 
 LIB_DEPENDS+=	libcurl.so:ftp/curl libtcl86.so:lang/tcl86 
-RUN_DEPENDS+=   zip:archivers/zip tcllib>=1.2:devel/tcllib s3cmd:net/py-s3cmd
+RUN_DEPENDS+=   zip:archivers/zip tcllib>=1.2:devel/tcllib s3cmd:net/py-s3cmd tclsyslog>=2.1:sysutils/tclsyslog
 #MAKE_ENV=	CC="cc"
 
 # USE_RC_SUBR=	${PORTNAME}

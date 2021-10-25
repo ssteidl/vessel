@@ -733,6 +733,12 @@ namespace
                                    Tcl_NewBooleanObj(0));
         if(tcl_error) return tcl_error;
 
+
+        tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                   Tcl_NewStringObj("syslog", -1),
+                                   Tcl_NewBooleanObj(0));
+        if(tcl_error) return tcl_error;
+
         /*Parse pre command options like --local*/
         int command_index = 0; /*Index of the command in the options list*/
         for (int i=0; i < arg_count; i++)
@@ -748,6 +754,12 @@ namespace
             {
                 tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
                                            Tcl_NewStringObj("debug", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
+            else if (pre_command_option == "--syslog")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("syslog", -1),
                                            Tcl_NewBooleanObj(1));
             }
             else
