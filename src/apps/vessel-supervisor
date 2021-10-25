@@ -9,10 +9,18 @@ package require vessel::deploy
 package require vessel::metadata_db
 package require dicttool
 
+package require logger
+
+
+set log [logger::init vessel]
+logger::setlevel info
+
 proc bgerror {message} {
     global errorInfo
     global errorCode
-    puts "bgerror: $message, $errorInfo, $errorCode"
+    global log
+
+    ${log}::error "bgerror: $message, $errorInfo, $errorCode"
 }
 
 namespace eval vessel::supervisor {
@@ -107,10 +115,11 @@ namespace eval vessel::supervisor {
         }
     }
 
+    # Monitors the ctrl_channel for messages from a given container.
     proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
-        # Monitors the ctrl_channel for a specific container.
-
-        puts stderr "Configuring run_loop($ctrl_channel)"
+        global log
+        
+        ${log}::debug "Configuring run_loop($ctrl_channel)"
         chan configure $ctrl_channel -blocking false -buffering none
 
         chan event $ctrl_channel readable [list [info coroutine] "ctrl_read"]
@@ -122,13 +131,13 @@ namespace eval vessel::supervisor {
 
             switch -exact $event_type {
                 "ctrl_read" {
-                    #NOTE: Currently we don't process any messages but we can in the future.
+                    #NOTE: Currently we don't expect any messages but we can in the future.
                     set msg {}
                     gets $ctrl_channel msg
                     if {[eof $ctrl_channel]} {
                         #ctrl_channel closed.  Assume the process exited.
                         close $ctrl_channel
-                        puts stderr "Closed ctrl_channel($container_name)"
+                        ${log}::debug "Closed ctrl_channel($container_name)"
 
                         if {$exit_callback ne {}} {                        
                             after idle [list {*}$exit_callback "ctrl_closed"]
@@ -141,14 +150,16 @@ namespace eval vessel::supervisor {
                     }
                 }
                 default {
-                    puts stderr "Unknown event received for run loop($container_name): $event_type"
+                    ${log}::warn "Unknown event received for run loop($container_name): $event_type"
                 }
             }
         } 
 
-        puts stderr "Exiting run_loop($container_name)"
+        ${log}::debug "Exiting run_loop($container_name)"
     }
 
+    #Start a container by using the vessel::exec procedure to setup and invoke
+    #vessel.  All of the exec lifecycle events will be sent to the callback_coro
     proc start_container {deploy_file_path image tag callback_coro} {
 
         set deploy_dict [mc get_deploy_dict $deploy_file_path]
@@ -161,7 +172,6 @@ namespace eval vessel::supervisor {
         lappend vessel_cmd {*}$command
         puts stderr "$vessel_cmd"
 
-        # TODO: We need to support piping
         # standard out and standard in to files or other channels
         set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
 
@@ -172,6 +182,8 @@ namespace eval vessel::supervisor {
         vessel::exec $chan_dict [list {*}$callback_coro $jail_name] {*}${vessel_cmd}
     }
 
+    #Handle the container started event by configuring the ctrl channel
+    #provided in the event and starting the msg_loop coroutine for the container.
     proc container_started {event} {
         if {[llength $event] < 3 || [lindex $event 1] ne "start"} {
             error "Unexpected event while waiting for container to start: $event"
@@ -184,12 +196,13 @@ namespace eval vessel::supervisor {
         return $ctrl_channel
     }
 
+    #The main event processing coroutine for a container.
     proc container_coro {deploy_file main_coro} {
-        
+        global log
         variable monitored_containers_dict
 
         set container_name [mc get_container_name $deploy_file]
-        puts stderr "starting container: $container_name"
+        ${log}::debug "starting container: $container_name"
         set deploy_dict [mc get_deploy_dict $deploy_file]
         puts stderr $deploy_dict
         set image [dict get $deploy_dict vessel-supervisor image]
@@ -213,19 +226,19 @@ namespace eval vessel::supervisor {
         while {true} {
             set event_args [yieldto return -level 0]
             if {[llength $event_args] < 1} {
-                puts stderr "Event with no event_type received"
+                ${log}::warn "Event with no event_type received"
                 continue
             }      
             set event_type [lindex $event_args end]
-            puts stderr "eventargs: $event_args"
+            ${log}::debug "eventargs: $event_args"
             switch -exact $event_type {
                 
                 "ctrl_msg" {
                     set msg [lindex $event_args 1]
-                    puts stderr "control message received: $msg"
+                    ${log}::debug "control message received: $msg"
                 }
                 "ctrl_closed" {
-                    puts stderr "Unexpected ctrl_closed found"
+                    ${log}::debug "Unexpected ctrl_closed found"
                 }
                 "stop_requested" {
                     puts $ctrl_channel "stop"
@@ -238,7 +251,7 @@ namespace eval vessel::supervisor {
                     set exited true
                 }
                 default {
-                    puts stderr "Unexpected event when monitoring container: $event_args"
+                    ${log}::warn "Unexpected event when monitoring container: $event_args"
                 }
             }
             if {$exited} {
@@ -246,27 +259,25 @@ namespace eval vessel::supervisor {
             }
         }
 
-        puts stderr "$container_name finished executing.  Cleaning up..."
+        ${log}::info "$container_name finished executing.  Cleaning up..."
 
         if {$restart} {
-            puts stderr "Restarting($container_name)"
+            ${log}::info "Restarting($container_name)"
             after idle [list [namespace current]::poll_start $deploy_file]
         } else {
-            puts stderr "No restart requested"
+            ${log}::debug "No restart requested"
         }
     }
 
+    # Periodically poll the deployment dir
+    # and apply the changes to the managed containers.  
+    # Start, Stop or Restart the containers.
     proc poll_deploy_dir {_deploy_dir event_callback} {
-        # Periodically poll the deployment dir
-        # and apply the changes to the managed containers.  
-        # Start, Stop or Restart the containers.
-
+        
         # The path must be normalized when calling deploy::deploy_dir
         set deploy_dir [file normalize $_deploy_dir]
 
         set changed_dict [vessel::deploy::poll_deploy_dir $deploy_dir]
-
-        #puts stderr "changed dict: $changed_dict"
 
         #Queue up the containers that need to be 
         foreach deploy_file [dict getnull $changed_dict "start"] {
@@ -286,8 +297,9 @@ namespace eval vessel::supervisor {
         }
     }
 
+
+    # Creates a container monitoring coroutine
     proc poll_start {deploy_file} {
-        # Creates a container monitoring coroutine
 
         set container_coro_name [mc get_coro_name $deploy_file]
         coroutine  $container_coro_name container_coro $deploy_file [info coroutine]
@@ -314,7 +326,10 @@ namespace eval vessel::supervisor {
         after 2000 [list [info coroutine] poll_timer $deploy_dir]
     }
 
+    #Highest level coroutine, manages the polling of the deployment directory.
     proc main_event_loop_coro {deploy_dir} {
+        global log
+
 
         #Initialization yield
         yield
@@ -324,7 +339,7 @@ namespace eval vessel::supervisor {
             
             set event_args [yieldto return -level 0]
             if {[llength $event_args] <= 0} {
-                puts stderr "Ignoring event without event type"
+                ${log}::debug "Ignoring event without event type"
                 continue
             }
 
@@ -339,7 +354,7 @@ namespace eval vessel::supervisor {
                 }
 
                 default {
-                    puts stderr "Unexpected event type: $event_args"
+                    ${log}::debug "Unexpected event type: $event_args"
                 }
             }
         }
@@ -349,6 +364,7 @@ namespace eval vessel::supervisor {
 
 set options {
     {d.arg "/usr/local/etc/vessel/configs"   "deployment file directory to monitor"}
+    {debug}
 }
 set usage ":  \[options] filename ...\noptions:"
 
@@ -362,9 +378,11 @@ try {
     exit 1
 }
 
-parray params
-
 set deploy_dir $params(d)
+
+if {$params(debug)} {
+    logger::setlevel debug
+}
 
 coroutine vessel::supervisor::main_event_loop vessel::supervisor::main_event_loop_coro $deploy_dir
 after idle vessel::supervisor::main_event_loop

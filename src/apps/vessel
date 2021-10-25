@@ -6,12 +6,12 @@ package require vessel::env
 package require vessel::export
 package require vessel::native
 package require vessel::import
-package require logger
 package require vessel::metadata_db
 package require vessel::repo
 package require vessel::run
 package require vessel::zfs
 
+package require logger
 package require defer
 
 package require fileutil
@@ -81,8 +81,11 @@ proc create_ctrl_channel_from_env {} {
     return $ctrl_channel
 }
 
+#Creates the necessary constructs like channel dictionary
+# to invoke the run_command coroutine.
 proc run_container_coro {options} {
     global run_done_flag
+    global log
 
     set interactive [dict get $options args interactive]
     
