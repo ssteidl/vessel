@@ -2,6 +2,9 @@
 
 package require logger
 
+package require Syslog
+
+set glog [logger::init vessel]
 
 namespace eval vessel::shane {
     logger::initNamespace [namespace current] debug
@@ -14,4 +17,11 @@ namespace eval vessel::shane {
 }
 
 logger::setlevel debug
+
+proc logtosyslog_debug {txt} {
+    syslog -facility news -ident [lindex $txt 1] notice [lindex $txt 2]
+}
+
+${glog}::logproc debug logtosyslog_debug
+
 vessel::shane::joe
