@@ -174,24 +174,46 @@ namespace eval vessel::supervisor {
         puts stderr "$vessel_cmd"
 
         # standard out and standard in to files or other channels
-        set chan_dict [dict create stdin stdin stdout stdout stderr stderr]
+        set pipe_list [chan pipe]
+        set read_side [lindex $pipe_list 0]
+        set write_side [lindex $pipe_list 1]
+        set chan_dict [dict create stdin stdin stdout $write_side stderr $write_side]
 
         dict set monitored_containers_dict $jail_name $deploy_dict
 
         # Execute the vessel command.  vessel::exec will send lifecycle events to the
         # coroutine.
-        vessel::exec $chan_dict [list {*}$callback_coro $jail_name] {*}${vessel_cmd}
+        vessel::exec $chan_dict [list {*}$callback_coro $jail_name $read_side] {*}${vessel_cmd}
+        
+        #The child process has been forked.  We can close the write side.
+        close $write_side
     }
 
     #Handle the container started event by configuring the ctrl channel
     #provided in the event and starting the msg_loop coroutine for the container.
     proc container_started {event} {
-        if {[llength $event] < 3 || [lindex $event 1] ne "start"} {
+        #Expected Event format as configured from start_container: 
+        # <jail_name> <read_pipe> start <ctrl_pipe>
+
+        if {[llength $event] < 4 || [lindex $event end-1] ne "start"} {
             error "Unexpected event while waiting for container to start: $event"
         }
-        set ctrl_channel [lindex $event 2]
+        set ctrl_channel [lindex $event end]
         set jail_name [lindex $event 0]
         
+        set child_stdout [lindex $event 1]
+        chan configure $child_stdout -blocking 0 -buffering none -translation binary
+        fileevent $child_stdout readable [list apply {{child_stdout} {
+            puts stderr "data ready"
+            set data [read $child_stdout]
+            if {[eof $child_stdout]} {
+                    
+                close $child_stdout
+            } else {
+                puts -nonewline stderr "CHILD DATA: $data"
+            }
+	    }} $child_stdout]
+
         # TODO: The name needs to come from the mc ensemble
         coroutine "msg_loop_$jail_name" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}
         return $ctrl_channel
@@ -219,12 +241,17 @@ namespace eval vessel::supervisor {
         }
 
         set container_started_event [yieldto start_container $deploy_file $image $tag  [info coroutine]]
+
+        ${log}::debug "Container started event: $container_started_event"
+
         set ctrl_channel [container_started $container_started_event]
 
         set restart false
         set exited false
         #container monitoring event loop
         while {true} {
+
+            #Wait for next event
             set event_args [yieldto return -level 0]
             if {[llength $event_args] < 1} {
                 ${log}::warn "Event with no event_type received"
