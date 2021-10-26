@@ -40,6 +40,7 @@ install(FILES src/lib/tcl/vessel_file_commands.tcl
               src/lib/tcl/pkgIndex.tcl
               src/lib/tcl/repos.tcl
               src/lib/tcl/run.tcl
+              src/lib/tcl/syslog.tcl
               src/lib/tcl/zfs.tcl
         DESTINATION lib/tclvessel)
 
