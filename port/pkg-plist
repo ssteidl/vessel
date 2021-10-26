@@ -15,5 +15,6 @@ lib/tclvessel/network/network.tcl
 lib/tclvessel/pkgIndex.tcl
 lib/tclvessel/repos.tcl
 lib/tclvessel/run.tcl
+lib/tclvessel/syslog.tcl
 lib/tclvessel/vessel_file_commands.tcl
 lib/tclvessel/zfs.tcl
