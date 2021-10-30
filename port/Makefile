@@ -1,5 +1,5 @@
 PORTNAME=	vessel
-DISTVERSION=	1.1.2
+DISTVERSION=	1.2.0
 CATEGORIES=	sysutils
 
 MAINTAINER=	ssteidley@gnsoftwarelabs.com
@@ -11,7 +11,7 @@ USES=		cmake:noninja
 
 USE_GITHUB=	yes
 GH_ACCOUNT=	ssteidl
-GH_PROJECT=	FBSDAppContainers
+GH_PROJECT=	vessel
 GH_TAGNAME!=	git rev-parse HEAD
 
 LIB_DEPENDS+=	libcurl.so:ftp/curl libtcl86.so:lang/tcl86 
