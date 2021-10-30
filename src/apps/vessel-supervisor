@@ -13,7 +13,7 @@ package require dicttool
 package require logger
 
 
-set log [logger::init vessel]
+set log [logger::init vessel-supervisor]
 logger::setlevel info
 
 proc bgerror {message} {
@@ -116,7 +116,7 @@ namespace eval vessel::supervisor {
         }
     }
 
-    # Monitors the ctrl_channel for messages from a given container.
+    # Monitors the ctrl_channel for control messages from a given container.
     proc msg_loop_coro {container_name ctrl_channel msg_callback exit_callback} {
         global log
 
@@ -146,7 +146,7 @@ namespace eval vessel::supervisor {
                         break
                     } elseif {![fblocked $ctrl_channel]} {
                         if {$msg_callback ne {}} {
-                            after idle [list {*}$msg_callback "ctrl_msg" $msg]
+                            after idle [list {*}$msg_callback $msg "ctrl_msg"]
                         }
                     }
                 }
@@ -162,6 +162,7 @@ namespace eval vessel::supervisor {
     #Start a container by using the vessel::exec procedure to setup and invoke
     #vessel.  All of the exec lifecycle events will be sent to the callback_coro
     proc start_container {deploy_file_path image tag callback_coro} {
+        global log
 
         set deploy_dict [mc get_deploy_dict $deploy_file_path]
         set command [dict get $deploy_dict vessel-supervisor command]
@@ -169,14 +170,19 @@ namespace eval vessel::supervisor {
         set jail_name [mc get_container_name $deploy_file_path]
         #NOTE: We might want to implement a detach or keep-attached option.  The difference
         #is really signal processing when running the supervisor in the foreground.
-        set vessel_cmd "vessel run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
+        set vessel_cmd "vessel --no-annotate-log run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
         lappend vessel_cmd {*}$command
-        puts stderr "$vessel_cmd"
+        ${log}::debug "$vessel_cmd"
 
-        # standard out and standard in to files or other channels
+        # Create a pipe to forward stdout and stderr
         set pipe_list [chan pipe]
         set read_side [lindex $pipe_list 0]
         set write_side [lindex $pipe_list 1]
+        ::defer::with {write_side} {
+            #The child process has been forked before the procedure exits. Therefore,  
+            #We can close the write side.
+            close $write_side
+        }
         set chan_dict [dict create stdin stdin stdout $write_side stderr $write_side]
 
         dict set monitored_containers_dict $jail_name $deploy_dict
@@ -184,9 +190,46 @@ namespace eval vessel::supervisor {
         # Execute the vessel command.  vessel::exec will send lifecycle events to the
         # coroutine.
         vessel::exec $chan_dict [list {*}$callback_coro $jail_name $read_side] {*}${vessel_cmd}
+    }
+
+    #Forward data from pipe (generally stdout of a child process) to the logging system.
+    proc forward_logs_coro {pipe ident} {
         
-        #The child process has been forked.  We can close the write side.
-        close $write_side
+        set log [::logger::init ::vessel-supervisor::${ident}]
+        defer::with {log ident} {
+            ${log}::debug "Exiting forward_logs_coro($ident)"
+            ${log}::delete
+        }
+
+        #Configure the channel to read raw bytes without buffering.  No translation needed
+        chan configure $pipe -blocking 0 -buffering none -translation binary
+        
+        #Call this coroutine anytime data is available
+        fileevent $pipe readable [info coroutine]
+
+        while {true} {
+
+            yield
+
+            #Read all available bytes
+            set data [read $pipe]
+            if {[eof $pipe]} {
+                    
+                ${log}::debug "log forwarding pipe closed"
+                
+                #Eof on pipe means time to close and exit the coroutine.
+                close $pipe
+                break
+            } else {
+                try {
+                    vessel::syslog::set_ident $ident
+                    ${log}::info $data
+                } finally {
+                    #Reset the log ident
+                    vessel::syslog::set_ident {}
+                }
+            }
+	    }
     }
 
     #Handle the container started event by configuring the ctrl channel
@@ -202,17 +245,10 @@ namespace eval vessel::supervisor {
         set jail_name [lindex $event 0]
         
         set child_stdout [lindex $event 1]
-        chan configure $child_stdout -blocking 0 -buffering none -translation binary
-        fileevent $child_stdout readable [list apply {{child_stdout} {
-            puts stderr "data ready"
-            set data [read $child_stdout]
-            if {[eof $child_stdout]} {
-                    
-                close $child_stdout
-            } else {
-                puts -nonewline stderr "CHILD DATA: $data"
-            }
-	    }} $child_stdout]
+        
+        #Create the output forwarding coroutine.  It will exit when the pipe closes.
+        coroutine "${jail_name}-stdout" forward_logs_coro $child_stdout $jail_name
+
 
         # TODO: The name needs to come from the mc ensemble
         coroutine "msg_loop_$jail_name" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}

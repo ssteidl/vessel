@@ -733,6 +733,10 @@ namespace
                                    Tcl_NewBooleanObj(0));
         if(tcl_error) return tcl_error;
 
+        tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                   Tcl_NewStringObj("no-annotate-log", -1),
+                                   Tcl_NewBooleanObj(0));
+        if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
                                    Tcl_NewStringObj("syslog", -1),
@@ -754,6 +758,12 @@ namespace
             {
                 tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
                                            Tcl_NewStringObj("debug", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
+            else if (pre_command_option == "--no-annotate-log")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("no-annotate-log", -1),
                                            Tcl_NewBooleanObj(1));
             }
             else if (pre_command_option == "--syslog")

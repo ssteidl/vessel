@@ -80,9 +80,9 @@ namespace eval vessel::deploy {
         variable _::deploy_files_dict
 
         set ini_files [glob -nocomplain [file join $deploy_dir]/*.ini]
-        ${log}::debug "Polling ini files: ${ini_files}"
+        #${log}::debug "Polling ini files: ${ini_files}"
 
-        ${log}::debug "Deploy files dict: [dict keys $deploy_files_dict]"
+        #${log}::debug "Deploy files dict: [dict keys $deploy_files_dict]"
         foreach f $ini_files {
 
             set deploy_file [file normalize $f]
@@ -97,9 +97,9 @@ namespace eval vessel::deploy {
                     if {$existing_mtime < $statbuf(mtime)} {
                         dict lappend change_dict "modified" $deploy_file
                     } elseif {$existing_mtime == $statbuf(mtime)} {
-                        ${log}::debug "File exists but hasn't changed"
+                        #${log}::debug "File exists but hasn't changed"
                     } else {
-                        ${log}::debug "Existing statbuf is newer then updated modification time... ignoring."
+                        ${log}::warn "Existing statbuf is newer then updated modification time... ignoring."
                     }
                 } else {
 
