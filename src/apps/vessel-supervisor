@@ -377,9 +377,15 @@ namespace eval vessel::supervisor {
     }
 
     proc poll_modified {deploy_file} {
-
+        global log
         set coro_name [mc get_coro_name $deploy_file]
-        $coro_name "restart_requested"
+
+        try {
+            $coro_name "restart_requested"
+        } trap {TCL LOOKUP COMMAND} {} {
+            ${log}::warn "$coro_name not found"
+            tailcall poll_start $deploy_file
+        }
     }
 
     proc poll_timer {deploy_dir} {

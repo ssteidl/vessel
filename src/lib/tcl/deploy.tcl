@@ -119,9 +119,9 @@ namespace eval vessel::deploy {
         struct::set add known_deploy_files [dict keys $deploy_files_dict]
         set deleted_files [struct::set difference $known_deploy_files $ini_files]
 
-        ${log}::debug "Known deploy files: $known_deploy_files"
-        ${log}::debug "ini files: $ini_files"
-        ${log}::debug "deleted files: $deleted_files"
+        #${log}::debug "Known deploy files: $known_deploy_files"
+        #${log}::debug "ini files: $ini_files"
+        #${log}::debug "deleted files: $deleted_files"
         
         #Remove the deleted files from the deploy_files_dict
         foreach filename $deleted_files {            

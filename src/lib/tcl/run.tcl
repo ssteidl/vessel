@@ -19,7 +19,7 @@ namespace eval vessel::run {
     namespace eval _ {
 
         proc handle_dataset_argument {dataset_arg} {
-            variable log
+            variable ::vessel::run::log
             ${log}::debug "dataset_arg: $dataset_arg"
             set arg_list [split $dataset_arg ":"]
             if {[llength $arg_list] != 2} {
