@@ -29,6 +29,7 @@ namespace eval vessel::supervisor {
     namespace eval mc {
         namespace ensemble create
         namespace export container_key \
+            get_active_deploy_files \
             get_deploy_dict \
             get_container_name \
             get_coro_name \
@@ -51,19 +52,30 @@ namespace eval vessel::supervisor {
             return [file tail [file rootname ${deploy_file}]]
         }
 
+        proc get_active_deploy_files {} {
+            
+            variable _containers
+            set deploy_files {}
+            foreach {key deploy_file} [array get _containers "*,file"] {
+                lappend deploy_files $deploy_file
+            }
+
+            return $deploy_files
+        }
+
         #Checks if a cached deploy dict exists if so returns it.
         #Otherwise parse and cache the deploy_file into a deploy_dict
         #and return it.
         proc get_deploy_dict {deploy_file {cache true}} {
             variable _containers
             set key [container_key $deploy_file]
-            if {[info exists _containers("$key,ini")]} {
-                return $_containers("$key,ini")
+            if {[info exists _containers($key,ini)]} {
+                return $_containers($key,ini)
             }
 
             set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
             if {$cache} {
-                set _containers("$key,ini") $deploy_dict
+                set _containers($key,ini) $deploy_dict
             }
             return $deploy_dict
         }
@@ -73,8 +85,8 @@ namespace eval vessel::supervisor {
         proc update_deploy_dict {deploy_file} {
             variable _containers
             set key [container_key $deploy_file]
-            if {[info exists _containers("$key,ini")]} {
-                unset _containers("$key,ini")
+            if {[info exists _containers($key,ini)]} {
+                unset _containers($key,ini)
             }
 
             #Re-add the ini key with a newly parsed value.
@@ -105,7 +117,7 @@ namespace eval vessel::supervisor {
         proc is_monitored {deploy_file} {
             variable _containers
             set key [container_key $deploy_file]
-            return [info exists _containers("$key,coro")]
+            return [info exists _containers($key,coro)]
         }
 
         proc monitor_container {deploy_file} {
@@ -117,14 +129,15 @@ namespace eval vessel::supervisor {
 
             set key [container_key $deploy_file]
             set coro_name [get_coro_name $deploy_file]
-            set _containers("$key,coro") $coro_name
+            set _containers($key,coro) $coro_name
+            set _containers($key,file) $deploy_file
+            update_deploy_dict $deploy_file
             return [get_deploy_dict $deploy_file]
         }
 
         proc stop_monitor_container {deploy_file} {
             variable _containers
             set key [container_key $deploy_file]
-
             if {[is_monitored $deploy_file]} {
                 array unset _containers "$key,*"
             }
@@ -134,7 +147,7 @@ namespace eval vessel::supervisor {
             variable _containers
             set key [container_key $deploy_file]
 
-            set _containers("$key,ctrlchan") $ctrl_chan
+            set _containers($key,ctrlchan) $ctrl_chan
         }
 
         proc ctrl_channel {deploy_file} {
@@ -145,11 +158,11 @@ namespace eval vessel::supervisor {
                 error "Attempted to retrieve control channel for unmonitored container"
             }
 
-            if {![info exists _containers("$key,ctrlchan")]} {
+            if {![info exists _containers($key,ctrlchan)]} {
                 error "Attempted to retrieve control channel on monitored container before it is set: $key"
             }
 
-            return _containers("$key,ctrlchan")
+            return _containers($key,ctrlchan)
         }
     }
 
@@ -207,7 +220,7 @@ namespace eval vessel::supervisor {
         set jail_name [mc get_container_name $deploy_file_path]
         #NOTE: We might want to implement a detach or keep-attached option.  The difference
         #is really signal processing when running the supervisor in the foreground.
-        set vessel_cmd "vessel --no-annotate-log run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
+        set vessel_cmd "daemon vessel --no-annotate-log run --name=${jail_name} --ini=${deploy_file_path} ${image}:${tag}"
         lappend vessel_cmd {*}$command
         ${log}::debug "$vessel_cmd"
 
@@ -299,7 +312,7 @@ namespace eval vessel::supervisor {
         variable monitored_containers_dict
 
         ::defer::with {deploy_file} {
-            mc stop_monitor_container $deploy_file
+            vessel::supervisor::mc stop_monitor_container $deploy_file
         }
 
         set container_name [mc get_container_name $deploy_file]
@@ -438,13 +451,35 @@ namespace eval vessel::supervisor {
         after 2000 [list [info coroutine] poll_timer $deploy_dir]
     }
 
+    proc signal_received {signal active_pid_groups} {
+        global log
+
+        set deploy_files [mc get_active_deploy_files]
+        if {[llength $deploy_files] > 0} {
+            ${log}::info "Stopping deploy files: $deploy_files"
+        } else {
+            ${log}::info "No jails running"
+        }
+
+        foreach deploy_file $deploy_files {
+            poll_stop $deploy_file
+        }
+
+        if {$signal eq "TERM"} {
+            ${log}::info "Exiting due to SIGTERM.  Jails may still be shutting down"
+            exit 0
+        }
+    }
+
     #Highest level coroutine, manages the polling of the deployment directory.
     proc main_event_loop_coro {deploy_dir} {
         global log
 
-
         #Initialization yield
         yield
+
+        #Signal handler to intelligently shutdown jails from received signals.
+        vessel::exec_set_signal_handler [list [info coroutine] "signal_received"]
 
         while {true} {
             start_poll_timer $deploy_dir
@@ -461,8 +496,14 @@ namespace eval vessel::supervisor {
                 "poll_timer" -
                 "poll_start" -
                 "poll_stop" -
-                "poll_modified" {
-                    {*}$event_args
+                "poll_modified" -
+                "signal_received" {
+                    try {
+                        {*}$event_args
+                    } trap {} {msg o} {
+                        ${log}::warn $msg
+                        ${log}::debug "Caught error in main even loop.... ignoring"
+                    }
                 }
 
                 default {
