@@ -37,7 +37,8 @@ namespace eval vessel::supervisor {
             monitor_container \
             stop_monitor_container \
             add_ctrl_channel \
-            ctrl_channel
+            ctrl_channel \
+            update_deploy_dict
 
 
         #Array of containers that we are monitoring.
@@ -419,10 +420,21 @@ namespace eval vessel::supervisor {
 
     # Creates a container monitoring coroutine
     proc poll_start {deploy_file} {
+        global log
 
         set container_coro_name [mc get_coro_name $deploy_file]
+        set deploy_dict [mc get_deploy_dict $deploy_file]
+        set start_delay [dict getnull $deploy_dict {vessel-supervisor} {start-delay-ms}]
+        
+        if {$start_delay eq {}} {
+            ${log}::debug "No restart delay found.  Setting to immediate"
+            set start_delay {idle}
+        } else {
+            ${log}::debug "restart delay found.  Delaying start for: $start_delay"
+        }
+
         coroutine  $container_coro_name container_coro $deploy_file [info coroutine]
-        after idle [list vessel::supervisor::$container_coro_name ${deploy_file}]
+        after $start_delay [list vessel::supervisor::$container_coro_name ${deploy_file}]
     }
 
     proc poll_stop {deploy_file} {
