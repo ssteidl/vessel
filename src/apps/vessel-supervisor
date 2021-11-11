@@ -34,11 +34,16 @@ namespace eval vessel::supervisor {
             get_coro_name \
             is_monitored \
             monitor_container \
+            stop_monitor_container \
             add_ctrl_channel \
             ctrl_channel
 
 
-        #Array of containers that we are monitoring
+        #Array of containers that we are monitoring.
+        #The keys are as follows:
+        # key == deployment file basename.  This key is never set in the array
+        # key,ini == Parsed ini file cached.  This can be used to see if we are already monitoring a container.
+        # key,coro == The name of the monitored coroutine.  At some point this will be useful when we support multiple instances
         variable _containers
         array set _containers {}
 
@@ -46,19 +51,39 @@ namespace eval vessel::supervisor {
             return [file tail [file rootname ${deploy_file}]]
         }
 
-
-        proc get_deploy_dict {deploy_file} {
+        #Checks if a cached deploy dict exists if so returns it.
+        #Otherwise parse and cache the deploy_file into a deploy_dict
+        #and return it.
+        proc get_deploy_dict {deploy_file {cache true}} {
             variable _containers
             set key [container_key $deploy_file]
-            if {[info exists _containers($key)]} {
-                return _containers("$key,ini")
+            if {[info exists _containers("$key,ini")]} {
+                return $_containers("$key,ini")
             }
 
             set deploy_dict [vessel::deploy::ini::get_deployment_dict $deploy_file]
-            set _containers("$key,ini") $deploy_dict
+            if {$cache} {
+                set _containers("$key,ini") $deploy_dict
+            }
             return $deploy_dict
         }
 
+        #Used to invalidate the deploy file when changes have
+        #been detected
+        proc update_deploy_dict {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+            if {[info exists _containers("$key,ini")]} {
+                unset _containers("$key,ini")
+            }
+
+            #Re-add the ini key with a newly parsed value.
+            return [get_deploy_dict $deploy_file]
+        }
+
+        #Given the deployment file get the name for the container.
+        # The container name either comes from the ini file or if that
+        # doesn't exist we use the basename of the ini file.
         proc get_container_name {deploy_file} {
             variable _containers
             set key [container_key $deploy_file]
@@ -90,7 +115,19 @@ namespace eval vessel::supervisor {
                 error "The container is already being monitored: [get_container_name $deploy_file]"
             }
 
+            set key [container_key $deploy_file]
+            set coro_name [get_coro_name $deploy_file]
+            set _containers("$key,coro") $coro_name
             return [get_deploy_dict $deploy_file]
+        }
+
+        proc stop_monitor_container {deploy_file} {
+            variable _containers
+            set key [container_key $deploy_file]
+
+            if {[is_monitored $deploy_file]} {
+                array unset _containers "$key,*"
+            }
         }
 
         proc add_ctrl_channel {deploy_file ctrl_chan} {
@@ -234,7 +271,7 @@ namespace eval vessel::supervisor {
 
     #Handle the container started event by configuring the ctrl channel
     #provided in the event and starting the msg_loop coroutine for the container.
-    proc container_started {event} {
+    proc container_started {event deploy_file} {
         #Expected Event format as configured from start_container: 
         # <jail_name> <read_pipe> start <ctrl_pipe>
 
@@ -246,12 +283,13 @@ namespace eval vessel::supervisor {
         
         set child_stdout [lindex $event 1]
         
+        mc monitor_container $deploy_file
+        set coro_name [mc get_coro_name $deploy_file]
+
         #Create the output forwarding coroutine.  It will exit when the pipe closes.
-        coroutine "${jail_name}-stdout" forward_logs_coro $child_stdout $jail_name
-
-
-        # TODO: The name needs to come from the mc ensemble
-        coroutine "msg_loop_$jail_name" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}
+        coroutine "${coro_name}-stdout" forward_logs_coro $child_stdout $jail_name
+        
+        coroutine "msg_loop_${coro_name}" msg_loop_coro $jail_name $ctrl_channel [info coroutine] {}
         return $ctrl_channel
     }
 
@@ -260,10 +298,14 @@ namespace eval vessel::supervisor {
         global log
         variable monitored_containers_dict
 
+        ::defer::with {deploy_file} {
+            mc stop_monitor_container $deploy_file
+        }
+
         set container_name [mc get_container_name $deploy_file]
         ${log}::debug "starting container: $container_name"
         set deploy_dict [mc get_deploy_dict $deploy_file]
-        puts stderr $deploy_dict
+        ${log}::debug stderr "deploy dict: $deploy_dict"
         set image [dict get $deploy_dict vessel-supervisor image]
         set tag [dict get $deploy_dict vessel-supervisor tag]
 
@@ -280,7 +322,7 @@ namespace eval vessel::supervisor {
 
         ${log}::debug "Container started event: $container_started_event"
 
-        set ctrl_channel [container_started $container_started_event]
+        set ctrl_channel [container_started $container_started_event $deploy_file]
 
         set restart false
         set exited false
@@ -357,10 +399,10 @@ namespace eval vessel::supervisor {
         }
 
         foreach deploy_file [dict getnull $changed_dict "modified"] {
+            mc update_deploy_dict $deploy_file
             after idle [list {*}$event_callback poll_modified $deploy_file]
         }
     }
-
 
     # Creates a container monitoring coroutine
     proc poll_start {deploy_file} {
@@ -383,7 +425,7 @@ namespace eval vessel::supervisor {
         try {
             $coro_name "restart_requested"
         } trap {TCL LOOKUP COMMAND} {} {
-            ${log}::warn "$coro_name not found"
+            ${log}::warn "$coro_name not found... starting the container"
             tailcall poll_start $deploy_file
         }
     }
