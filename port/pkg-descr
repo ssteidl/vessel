@@ -1,1 +1,4 @@
-FreeBSD specifc container manager
+Vessel is another freebsd container manager.  It contains
+some unique features like process tracing to detect jail
+status.  rctl integration including custom actions.
+A jail supervisor to manage jails etc.

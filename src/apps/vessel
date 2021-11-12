@@ -1,4 +1,4 @@
-#!/usr/bin/env tclsh8.6
+#!/usr/local/bin/tclsh8.6
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 # vim: set ft=tcl
 package require vessel::build

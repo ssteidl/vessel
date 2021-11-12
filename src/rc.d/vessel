@@ -1,0 +1,49 @@
+#!/bin/sh
+
+# vessel startup script
+#
+# PROVIDE: vessel
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+#
+# Add the following to /etc/rc.conf[.local] to enable this service
+#
+# vessel_enable="YES"
+#
+# You can fine tune others variables too:
+# vessel_directory="/usr/local/etc/vessel/"
+
+. /etc/rc.subr
+
+name="vessel"
+rcvar=vessel_enable
+load_rc_config $name
+pidprefix="/var/run/vessel/vessel-supervisor"
+pidfile="${pidprefix}.pid"
+
+procname="/usr/local/bin/vessel-supervisor"
+command="/usr/sbin/daemon"
+command_interpreter="/usr/local/bin/tclsh8.6"
+start_precmd="vessel_precmd"
+stop_postcmd="vessel_postcmd"
+
+vessel_enable=${vessel_enable:-"NO"}
+vessel_directory=${vessel_directory:-"/usr/local/etc/vessel/deploy"}
+
+export PATH=$PATH:/usr/local/bin
+env
+
+command_args="-S -T ${name} -p ${pidfile} ${procname} -d ${vessel_directory}"
+
+vessel_precmd()
+{
+    install -d -o root -g wheel -m 1777 /var/run/vessel
+    install -d -o root -g wheel -m 1777 ${vessel_directory}
+}
+
+vessel_postcmd()
+{
+	rm -rf /var/run/vessel
+}
+
+run_rc_command "$1"
