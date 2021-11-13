@@ -123,43 +123,6 @@ proc run_container_coro {options} {
     set run_done_flag [expr true]
 }
 
-proc handle_repo_cmd {cmd args_dict} {
-
-    ${log}::debug "repo args: $args_dict"
-    set image [dict get $args_dict image]
-
-    set tag [dict get $args_dict tag]
-    if {$tag eq {}} {
-        set tag {latest}
-    }
-
-    set repo [vessel::repo::repo_factory [vessel::env::get_repo_url]]
-    defer::with [list repo] {
-        $repo destroy
-    }
-
-    set downloaddir [vessel::env::image_download_dir]
-    
-    switch -exact $cmd {
-
-        publish {
-            #NOTE: We may want to make export directories something separate
-            #from download directories.  For now, we'll keep it separate.
-            #
-            #vessel publish --tag=local kafka
-            set image_file [vessel::export::export_image $image $tag $downloaddir]
-            if {![$repo image_exists $image $tag]} {
-                $repo put_image $image_file
-            }
-        }
-        pull {
-            #Pulls the command.  Basically a GET and an import.
-            $repo pull_image $image $tag $downloaddir
-            vessel::import::import $image $tag $downloaddir stderr
-        }
-    }
-}
-
 create_workdir
 
 switch -regexp -matchvar parsed_cmd $command {
@@ -178,7 +141,7 @@ switch -regexp -matchvar parsed_cmd $command {
     }
     publish|pull {
         ${log}::debug "push pull args: $args"
-        handle_repo_cmd $parsed_cmd $args
+        vessel::repo::repo_cmd $parsed_cmd $args
     }
     image {
         vessel::metadata_db::image_command $args

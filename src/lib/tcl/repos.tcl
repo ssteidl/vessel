@@ -1,7 +1,10 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require vessel::env
+package require vessel::export
+package require vessel::import
 package require vessel::native
+
 package require defer
 package require fileutil
 package require uri
@@ -167,7 +170,7 @@ namespace eval vessel::repo {
         method _get_s3_image_url {image tag} {
             #TODO: this is everywhere
             set image_name "${image}:${tag}.zip"
-
+            puts "image_name: $image_name -> $image,$tag"
             set image_url [join [list [my get_url] $image_name] /]
         }
 
@@ -223,6 +226,58 @@ namespace eval vessel::repo {
             }
         }
 
+    }
+
+    #Execute a repo command, either push or pull.
+    # Args:
+    # 
+    # cmd: publish|pull
+    # 
+    # args_dict: image - The image name
+    #            tag (optional) - The image tag [default: latest]
+    # 
+    proc repo_cmd {cmd args_dict} {
+        variable log
+
+        ${log}::debug "repo args: $args_dict"
+        set image [dict get $args_dict image]
+
+        set tag [dict get $args_dict tag]
+        if {$tag eq {}} {
+            set tag {latest}
+        }
+
+        set repo [vessel::repo::repo_factory [vessel::env::get_repo_url]]
+        defer::with [list repo] {
+            $repo destroy
+        }
+
+        set downloaddir [vessel::env::image_download_dir]
+        
+        switch -exact $cmd {
+
+            publish {
+                #NOTE: We may want to make export directories something separate
+                #from download directories.  For now, we'll keep it separate.
+                #
+                #vessel publish --tag=local kafka
+                set image_file [vessel::export::export_image $image $tag $downloaddir]
+                if {![$repo image_exists $image $tag]} {
+                    $repo put_image $image_file
+                }
+            }
+            pull {
+                #Pulls the command.  Basically a GET and an import.
+                $repo pull_image $image $tag $downloaddir
+                vessel::import::import $image $tag $downloaddir stderr
+            }
+        }
+    }
+
+    # Proxy a pull request to the repo_cmd proc.
+    proc pull_repo_image {image tag} {
+        set args_dict [dict create image $image tag $tag]
+        tailcall repo_cmd pull $args_dict
     }
 }
 

@@ -21,6 +21,7 @@ namespace eval vessel::import {
     namespace eval _ {
 
         proc create_layer {image tag extracted_path status_channel} {
+            variable ::vessel::import::log
 
             # We don't know the uuid so we glob in the image_dir and
             # use what should be the only thing there
@@ -101,14 +102,16 @@ namespace eval vessel::import {
         import_image_metadata $name $tag $cwd $command $parent_images
     }
 
+    # Import an image into the vessel environment.
+    #
+    # params:
+    #
+    # image_w_tag: The name of the image without tag appended
+    # tag: The tag of the image
+    # image_dir: The directory where the image file resides
     proc import {image tag image_dir status_channel} {
-        # Import an image into the vessel environment.
-        #
-        # params:
-        #
-        # image_w_tag: The name of the image without tag appended
-        # tag: The tag of the image
-        # image_dir: The directory where the image file resides
+        variable log
+
         ${log}::debug "import{}: ${image},${tag}"
 
         set extracted_path [file join $image_dir "${image}:${tag}"]

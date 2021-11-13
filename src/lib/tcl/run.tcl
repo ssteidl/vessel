@@ -9,6 +9,7 @@ package require vessel::bsd
 package require vessel::env
 package require vessel::deploy
 package require vessel::jail
+package require vessel::repo
 package require vessel::zfs
 
 namespace eval vessel::run {
@@ -277,9 +278,8 @@ namespace eval vessel::run {
         ${log}::debug "RUN COMMAND image dataset: $image_dataset"
 
         if {![dict exists $mountpoints_dict $image_dataset]} {
-            #TODO: retrieve and unpack layer
-            return -code error -errorcode {VESSEL RUN NYI} \
-                "Automatically pulling images is NYI"
+            ${log}::info "Pulling $image from repo"
+            vessel::repo::pull_repo_image $image_name $tag
         }
 
         set b_snapshot_exists [vessel::zfs::snapshot_exists "${image_dataset}@b"]
