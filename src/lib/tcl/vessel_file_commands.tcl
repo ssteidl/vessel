@@ -75,7 +75,6 @@ proc FROM {image} {
     }
 
     set parent_image $image
-    puts stderr "FROM: $image"
 
     set pool [vessel::env::get_pool]
 

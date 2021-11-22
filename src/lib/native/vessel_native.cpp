@@ -35,6 +35,56 @@ namespace
         return argv;
     }
 
+    std::string init_options_help()
+    {
+        std::ostringstream msg;
+
+        msg << "vessel init" << std::endl;
+        return msg.str();
+    }
+
+    int parse_init_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+
+            {"help", no_argument, nullptr, 'h'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
+        int tcl_error = TCL_OK;
+
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "f:hn:t:", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 'h':
+            {
+                std::string help_msg = init_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
+                break;
+            }
+
+            default:
+            {
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
+                return TCL_ERROR;
+            }
+            }
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
+        return tcl_error;
+    }
+
     std::string build_options_help()
     {
         std::ostringstream msg;
@@ -47,6 +97,7 @@ namespace
 
         return msg.str();
     }
+
 
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
@@ -96,58 +147,6 @@ namespace
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
-            case ':':
-                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
-                return TCL_ERROR;
-            case '?':
-                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Unknown option for optind: %d", optind));
-                return TCL_ERROR;
-            default:
-                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
-                return TCL_ERROR;
-            }
-        }
-
-        tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
-        return tcl_error;
-    }
-
-    std::string rm_options_help()
-    {
-        std::ostringstream msg;
-
-        msg << "vessel rm <image:tag>" << std::endl;
-
-        return msg.str();
-    }
-
-    int parse_rm_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
-    {
-        assert(argc > 0);
-
-        static const struct option long_opts[] = {
-            {"help", no_argument, nullptr, 'h'},
-            {nullptr, 0, nullptr, 0}
-        };
-
-        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
-
-        int ch = -1;
-
-        vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
-        int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "h", long_opts, nullptr)) != -1)
-        {
-            switch(ch)
-            {
-            case 'h':
-            {
-                std::string help_msg = rm_options_help();
-                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                           Tcl_NewStringObj("help", -1),
-                                           Tcl_NewStringObj(help_msg.c_str(), help_msg.size()));
-                break;
-            }
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -787,7 +786,12 @@ namespace
                                    Tcl_NewStringObj("", 0));
         if(tcl_error) return tcl_error;
 
-        if(command == "build")
+        if (command == "init")
+        {
+            tcl_error = parse_init_options(interp, arg_count, argument_objs, command_options.get());
+            if(tcl_error) return tcl_error;
+        }
+        else if(command == "build")
         {
             //parse args if any remaining.  shift to first non-command argument
             tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());

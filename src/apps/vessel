@@ -127,6 +127,18 @@ create_workdir
 
 switch -regexp -matchvar parsed_cmd $command {
 
+    init {
+        #TODO: Make an initialize module
+        set from_version [vessel::bsd::host_version_without_patch]
+        set minimal_build_file {}
+        set minimal_build_file_chan [file tempfile minimal_build_file]
+        puts $minimal_build_file_chan "FROM FreeBSD:${from_version}"
+        flush $minimal_build_file_chan
+
+        set build_dict [dict create name minimal tag $from_version file $minimal_build_file]
+        vessel::build::build_command $build_dict stderr
+        
+    }
     build {
         #Building creates the image as a tagged dataset.
         #TODO: currently it doesn't tag the dataset

@@ -3,7 +3,7 @@
 # vessel startup script
 #
 # PROVIDE: vessel
-# REQUIRE: DAEMON
+# REQUIRE: DAEMON cleanvar
 # KEYWORD: shutdown
 #
 # Add the following to /etc/rc.conf[.local] to enable this service
@@ -11,7 +11,21 @@
 # vessel_enable="YES"
 #
 # You can fine tune others variables too:
-# vessel_directory="/usr/local/etc/vessel/"
+# vessel_directory (str):    Path the the vessel deploy directory
+#
+# Environment Variables
+#
+# Can be set with vessel_env
+#
+# VESSEL_POOL Set the zpool used by vessel.
+#
+# VESSEL_DATASET Set the dataset used for jails within VESSEL_POOL
+#
+# VESSEL_WORKDIR Set the directory used for managing artifacts
+#
+# VESSEL_REPO_URL The repo to be used to push and pull artifacts
+#
+# VESSEL_S3CMD_CONFIG The path to the s3cmd configuration file
 
 . /etc/rc.subr
 
@@ -30,8 +44,9 @@ stop_postcmd="vessel_postcmd"
 vessel_enable=${vessel_enable:-"NO"}
 vessel_directory=${vessel_directory:-"/usr/local/etc/vessel/deploy"}
 
+#I feel like there is a better way to do this. Maybe as part of user
+#config or with an env file.
 export PATH=$PATH:/usr/local/bin
-env
 
 command_args="-S -T ${name} -p ${pidfile} ${procname} -d ${vessel_directory}"
 

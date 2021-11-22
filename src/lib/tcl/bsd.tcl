@@ -15,6 +15,19 @@ namespace eval vessel::bsd {
         return [exec uname -r]
     }
 
+    proc host_version_without_patch {} {
+
+        #Example: 12.2-RELEASE-p3
+        set complete_version [host_version]
+
+        if {![string match *-*-p* $complete_version]} {
+            return -code error -errorcode {SYS VERSION INVALID}
+        }
+
+        set last_hyphen [string last - $complete_version]
+        return [string range $complete_version 0 [expr $last_hyphen - 1]]
+    }
+
     proc null_mount {source_dir dest_dir} {
 
         if {$source_dir eq {}} {
