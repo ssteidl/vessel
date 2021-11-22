@@ -146,9 +146,17 @@ namespace eval vessel::repo {
 
     oo::class create s3repo {
         superclass repo
+        variable _config_file
+        variable _s3_cmd
 
-        constructor {url} {
+        constructor {url {config_file {}}} {
             next $url
+            
+            if {$config_file ne {}} {
+                set _s3_cmd [list s3cmd -c $config_file]
+            } else {
+                set _s3_cmd [list s3cmd]
+            }
 
             if {[my get_scheme] ne {s3}} {
                 return -code error -errorcode {REPO SCHEME ENOTSUPPORTED} \
@@ -171,7 +179,8 @@ namespace eval vessel::repo {
         }
 
         method put_image {image_path} {
-            exec s3cmd put $image_path [my get_url] >&@stderr
+            my variable _s3_cmd
+            exec {*}${_s3_cmd} put $image_path [my get_url] >&@stderr
         }
 
         method reconfigure {} {
@@ -185,8 +194,10 @@ namespace eval vessel::repo {
         }
 
         method image_exists {image tag} {
+            my variable _s3_cmd
+            
             set image_url [my _get_s3_image_url $image $tag]
-            set ls_data [exec s3cmd ls $image_url]
+            set ls_data [exec {*}${_s3_cmd} ls $image_url]
             return [expr [string length $ls_data] > 0]
         }
     }
@@ -204,7 +215,7 @@ namespace eval vessel::repo {
                 return [vessel::repo::file_repo new $repo_url]
             }
             s3 {
-                return [vessel::repo::s3repo new $repo_url]
+                return [vessel::repo::s3repo new $repo_url [vessel::env::s3cmd_config_file]]
             }
             default {
                 return -code error -errorcode {PUBLISH SCHEME ENOTSUPPORTED } \

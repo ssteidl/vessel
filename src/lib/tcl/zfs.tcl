@@ -1,4 +1,5 @@
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+package require dicttool
 
 namespace eval vessel::zfs {
     #TODO: Make ensemble
@@ -210,8 +211,8 @@ namespace eval vessel::zfs {
             }
         }
 
-        set modified_file_list [list {*}[dict get $diff_dict {M}] \
-                                    {*}[dict get $diff_dict {+}]]
+        set modified_file_list [list {*}[dict getnull $diff_dict {M}] \
+                                    {*}[dict getnull $diff_dict {+}]]
 
         set output_dict [dict create]
         foreach path $modified_file_list {
