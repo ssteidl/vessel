@@ -1,7 +1,12 @@
 # -*- mode: tcl; -*-
 
-package require appc::repo
-package require appc::zfs
+package require vessel::bsd
+package require vessel::env
+package require vessel::metadata_db
+package require vessel::repo
+package require vessel::zfs
+package require defer
+package require logger
 package require tcltest
 
 namespace eval file_repo::test {
@@ -11,33 +16,76 @@ namespace eval file_repo::test {
     variable test_image_dataset_name {test_minimal}
 
     variable repo_dir_path [file join [pwd] test_repo]
-    
-    proc create_test_image_dataset {} {
-	variable test_image_dataset_name
-	set appc_file [file join .. examples MinimalVesselFile]
-	exec appc build --file=${appc_file} --tag=test --name=testimage >&@ stderr
+
+    variable test_dir [file normalize testrun]
+
+    proc create_test_image_dataset {tag} {
+        
+        #TODO: this was stolen from the vessel init command and needs to be
+        #extracted into an initializaation module
+        set from_version [vessel::bsd::host_version_without_patch]
+        set minimal_build_file {}
+        set minimal_build_file_chan [file tempfile minimal_build_file]
+        defer::defer close $minimal_build_file_chan
+        puts $minimal_build_file_chan "FROM FreeBSD:${from_version}"
+        flush $minimal_build_file_chan
+
+        set build_dict [dict create name minimal tag $from_version file $minimal_build_file]
+
+        exec -ignorestderr vessel build --name=minimal --tag=${tag} --file=$minimal_build_file >&@ stderr 
     }
 
-    #Create the image for testing
-    create_test_image_dataset
+    logger::setlevel debug
 
     #Create the repository directory
     file mkdir [file join [pwd] $repo_dir_path]
 
     #Repository tests
-    
     test publish-file-repo-1 {Test file repo publish} -setup {
 
-	set env(VESSEL_REPO_URL) "file://${repo_dir_path}"
+        variable test_dir
+        set test_tag {publishtest}
+
+        #Create the image for testing
+        create_test_image_dataset $test_tag
+        
+        set tmp_repo_path [file normalize [makeDirectory {publish_file_repo_1} $test_dir]]
+        puts stderr $tmp_repo_path
+        set env(VESSEL_REPO_URL) "file://${tmp_repo_path}"
+
     } -body {
 
-	exec -ignorestderr appc publish --tag=test testimage >&@ stderr
-	
-    } -returnCodes ok -cleanup {
-	set env(VESSEL_REPO_URL) {}
-    } 
+        vessel::repo::repo_cmd publish [dict create image minimal tag $test_tag]
 
+    } -returnCodes ok -cleanup {
+        set env(VESSEL_REPO_URL) {}
+        vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
+    }
+
+    test pull-file-repo-1 {Test file repo pull} -setup {
+        variable test_dir
+        set test_tag {pulltest}
+
+        set env(VESSEL_REPO_URL) "file://${tmp_repo_path}"
+        set env(VESSEL_WORKDIR) [makeDirectory {workdir_pull_file_repo_1} $test_dir]
+
+        makeDirectory [vessel::env::metadata_db_dir]
+        makeDirectory [vessel::env::image_download_dir]
+        set tmp_repo_path [file normalize [makeDirectory {pull_file_repo_1} $test_dir]]
+        create_test_image_dataset $test_tag
+
+        
+        vessel::repo::repo_cmd publish [dict create image minimal tag $test_tag]
+        vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
+
+    } -body {
+
+        vessel::repo::repo_cmd pull [dict create image minimal tag $test_tag]        
+        set result {}
+    } -returnCodes ok -cleanup {
+        set env(VESSEL_REPO_URL) {}
+    }
     # TODO: hook into cleanup all tests to delete the image
-    
+
     cleanupTests
 }

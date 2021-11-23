@@ -1,4 +1,4 @@
-# -*- mode: tcl; -*-
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require appc::env
 package require appc::metadata_db
@@ -7,128 +7,120 @@ package require json
 package require json::write
 package require tcltest
 
-#NOTE: It would be nice to not need an sqlite database and just use
-# jail.conf files.  However, the parser may be a pain in the ass.  I
-# could steal the lex/yacc parser from the jail util but then I'd have
-# to keep it up with any releases.  I think since we are creating the
-# jail definitions from the appc files.  I think I can probably just
-# use a json file and generate a temporary jail file to execute the
-# jail.
-
 
 #TODO: This is a random side note here but the FreeBSD/<Version>
 # dataset should actually be FreeBSD:<Version>.  That would make it
 # align with the rest of the datasets.
 
 namespace eval metadata_db::test {
-    namespace import ::tcltest::*
-    
-    #Use a specific dataset for testing
-    set env(VESSEL_DATASET) appc-test
-    #set env(VESSEL_METADATA_DB_DIR) {/tmp/appc-test/metadata_db}
-    proc clean_dataset {} {
+	namespace import ::tcltest::*
 
-	set appc_dataset [appc::env::get_dataset]
+	#Use a specific dataset for testing
+	set env(VESSEL_DATASET) appc-test
+	#set env(VESSEL_METADATA_DB_DIR) {/tmp/appc-test/metadata_db}
+	proc clean_dataset {} {
 
-	set dataset_children [appc::zfs::dataset_children $appc_dataset]
+		set appc_dataset [appc::env::get_dataset]
 
-	set child_datasets_list [lrange $dataset_children 1 end]
+		set dataset_children [appc::zfs::dataset_children $appc_dataset]
 
-	set appc_children [list]
-	#Destroy all child datasets except for the base FBSD dataset 
-	foreach dataset_props $child_datasets_list {
-	    set dataset_name [dict get $dataset_props name]
-	    set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset_name 0]
-	    if {$freebsd_index == 0} {
-		#Skip FreeBSD dataset 
-		continue
-	    }
+		set child_datasets_list [lrange $dataset_children 1 end]
 
-	    lappend appc_children $dataset_name
+		set appc_children [list]
+		#Destroy all child datasets except for the base FBSD dataset
+		foreach dataset_props $child_datasets_list {
+			set dataset_name [dict get $dataset_props name]
+			set freebsd_index [string first "${appc_dataset}/FreeBSD" $dataset_name 0]
+			if {$freebsd_index == 0} {
+				#Skip FreeBSD dataset
+				continue
+			}
+
+			lappend appc_children $dataset_name
+		}
+
+		set sorted_appc_children [lsort -dictionary -unique -decreasing $appc_children]
+
+		foreach ds $sorted_appc_children {
+
+			#It's an appc dataset but not the FreeBSD dataset.
+			appc::zfs::destroy_recursive $ds
+		}
 	}
 
-	set sorted_appc_children [lsort -dictionary -unique -decreasing $appc_children]
+	proc build_image {image tag} {
+		set test_image_appc_file {FROM FreeBSD:12.1-RELEASE
+			CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
+			set test_image_chan [file tempfile appc_file /tmp/TestVesselFile]
+			puts $test_image_chan $test_image_appc_file
+			close $test_image_chan
 
-	foreach ds $sorted_appc_children {
-	    
-	    #It's an appc dataset but not the FreeBSD dataset.
-	    appc::zfs::destroy_recursive $ds
+			exec appc build --file $appc_file --name $image --tag $tag >&@ stderr
+		}
+
+		proc init_runtime_environment {} {
+		# Initialize runtime environment based on environment variables.  This should
+		# probably be a standalone module.
+
+		file mkdir [appc::env::image_download_dir]
+		file mkdir [appc::env::metadata_db_dir]
 	}
-    }
-    
-    proc build_image {image tag} {
-	set test_image_appc_file {FROM FreeBSD:12.1-RELEASE
-	    CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
-	set test_image_chan [file tempfile appc_file /tmp/TestVesselFile]
-	puts $test_image_chan $test_image_appc_file
-	close $test_image_chan
 
-	exec appc build --file $appc_file --name $image --tag $tag >&@ stderr
-    }
 
-    proc init_runtime_environment {} {
-	# Initialize runtime environment based on environment variables.  This should
-	# probably be a standalone module.
+	#configure -skip {image-list-output-1}
 
-	file mkdir [appc::env::image_download_dir]
-	file mkdir [appc::env::metadata_db_dir]
-    }
-    
+	init_runtime_environment
+	test image-list-1 {Verify output from the image iteration proc} {
 
-    #configure -skip {image-list-output-1}
+	}
 
-    init_runtime_environment
-    test image-list-1 {Verify output from the image iteration proc} {
+	#Create a background container
+	test image-list-output-1 {List all available images and their metadata} -setup {
+		clean_dataset
+		build_image list-images-test 1
+	} -body {
 
-    } 
-    
-    #Create a background container
-    test image-list-output-1 {List all available images and their metadata} -setup {
-	clean_dataset
-	build_image list-images-test 1
-    } -body {
+		exec appc image --list >&@ stderr
 
-	exec appc image --list >&@ stderr
-	
-	#ID    PARENT    CMD
-    } -result {ID    PARENT    CMD} -cleanup {
-	
-    }
+		#ID    PARENT    CMD
+	} -result {ID    PARENT    CMD} -cleanup {
 
-    test metadata_db-json-1 {Verify json format} -setup {
-	json::write indented false
-    } -body {
-	appc::metadata_db::_::create_metadata_json \
-	    [dict create \
-		 "name" "test-image" \
-		 "tag" "1.0" \
-		 "command" "bash" \
-		 "cwd" "/home/joe" \
-		 "parent_images" [list FreeBSD:11.1]]
-		 
-    } -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
-	json::write indented true
-    }
+	}
 
-    test metadata_db-json-2 {Verify valid json is written to the metadata file} -body {
-	set metadata_file [appc::metadata_db::write_metadata_file \
-			       test_image test {/} {/etc/rc} [list]]
+	test metadata_db-json-1 {Verify json format} -setup {
+		json::write indented false
+	} -body {
+		appc::metadata_db::_::create_metadata_json \
+			[dict create \
+			"name" "test-image" \
+			"tag" "1.0" \
+			"command" "bash" \
+			"cwd" "/home/joe" \
+			"parent_images" [list FreeBSD:11.1]]
 
-	
-	set d [json::json2dict [fileutil::cat $metadata_file]]
-	expr [dict size $d] > 0
-    } -result [expr 1]
-    
-    test metadata_db-json-2 {Verify json is read correctly} -setup {
-	clean_dataset
-	build_image list-images-test 1	
-    } -body {
+	} -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
+		json::write indented true
+	}
 
-	#NOTE: Working on getting command output right.
-	appc::metadata_db::_::list_images stdout
-    } -output {} -cleanup {
+	test metadata_db-json-2 {Verify valid json is written to the metadata file} -body {
+		set metadata_file [appc::metadata_db::write_metadata_file \
+			test_image test {/} {/etc/rc} [list]]
 
-    }
 
-    cleanupTests
+		set d [json::json2dict [fileutil::cat $metadata_file]]
+		expr [dict size $d] > 0
+	} -result [expr 1]
+
+	test metadata_db-json-2 {Verify json is read correctly} -setup {
+		clean_dataset
+		build_image list-images-test 1
+	} -body {
+
+		#NOTE: Working on getting command output right.
+		appc::metadata_db::_::list_images stdout
+	} -output {} -cleanup {
+
+	}
+
+	cleanupTests
 }

@@ -1,8 +1,8 @@
 PORTNAME=	vessel
-DISTVERSION=	1.2.0
+DISTVERSION=	1.2.1
 CATEGORIES=	sysutils
 
-MAINTAINER=	ssteidley@gnsoftwarelabs.com
+MAINTAINER=	shane@zeta.investments
 COMMENT=	FreeBSD specific container manager
 
 LICENSE=	PD
@@ -16,12 +16,5 @@ GH_TAGNAME!=	git rev-parse HEAD
 
 LIB_DEPENDS+=	libcurl.so:ftp/curl libtcl86.so:lang/tcl86
 RUN_DEPENDS+=   zip:archivers/zip tcllib>=1.2:devel/tcllib s3cmd:net/py-s3cmd@${PY_FLAVOR} tclsyslog>=2.1:sysutils/tclsyslog
-#MAKE_ENV=	CC="cc"
-
-# USE_RC_SUBR=	${PORTNAME}
-
-# post-install:
-# 	${MV} ${STAGEDIR}${ETCDIR}/${PORTNAME}.conf ${STAGEDIR}${ETCDIR}/${PORTNAME}.conf.sample
-# 	${MV} ${STAGEDIR}${ETCDIR}/parsers.conf ${STAGEDIR}${ETCDIR}/parsers.conf.sample
 
 .include <bsd.port.mk>

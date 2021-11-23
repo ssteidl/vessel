@@ -96,7 +96,7 @@ namespace eval vessel::repo {
         }
 
         method pull_image {image tag downloaddir} {
-            global log
+            variable ::vessel::repo::log
 
             set image_path [file join [my get_path] "${image}:${tag}.zip"]
             if {![my image_exists $image $tag]} {
@@ -175,10 +175,9 @@ namespace eval vessel::repo {
         }
 
         method pull_image {image tag downloaddir} {
-
+            my variable _s3_cmd
             set image_url [my _get_s3_image_url $image $tag]
-            puts stderr "$image_url,$downloaddir"
-            exec s3cmd get $image_url $downloaddir >&@ stderr
+            exec {*}${_s3_cmd} get --skip-existing $image_url $downloaddir >&@ stderr
         }
 
         method put_image {image_path} {

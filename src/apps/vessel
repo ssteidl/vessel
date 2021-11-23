@@ -65,7 +65,7 @@ file mkdir [vessel::env::jail_confs_dir]
 set run_done_flag [expr false]
 
 #TODO: This belongs in the 'vessel init' command whenever
-# we decide to implement that..
+# we decide to implement that.. which in turn belongs in the init module
 proc create_workdir {} {
 
     set workdir [vessel::env::get_workdir]
@@ -128,7 +128,6 @@ create_workdir
 switch -regexp -matchvar parsed_cmd $command {
 
     init {
-        #TODO: Make an initialize module
         set from_version [vessel::bsd::host_version_without_patch]
         set minimal_build_file {}
         set minimal_build_file_chan [file tempfile minimal_build_file]

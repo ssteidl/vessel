@@ -1,48 +1,19 @@
-# -*- mode: tcl; -*-
-package require appc::native
-package require appc::env
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+package require vessel::native
+package require vessel::env
 package require tcltest
 
 namespace import tcltest::*
 
 testConstraint aws $env(VESSEL_TEST_AWS)
 
-test s3cmd-init-1 {Test s3cmd --configure is called when needed} -constraint aws -setup {
-    set ::env(VESSEL_REPO_URL) s3://appc-test-1
-    set ::env(VESSEL_S3CMD_CONFIG) [file join / tmp appc_s3cmd_config_test]
-} -body {
-
-    set s3_config_file appc::env::s3cmd_config_file
-
-    if {[file exists $s3_config_file]} {
-	file rm $s3_config_file
-    }
-    
-    set appc_chan [open "| appc publish "]
-    set output [gets $appc_chan]
-    puts stderr "First line: $output"
-    close $appc_chan
-    return $output
-} -cleanup {
-    set ::env(VESSEL_REPO_URL) {}
-    set ::env(VESSEL_S3CMD_CONFIG) {}
-} -result "\nEnter new values or accept defaults in brackets with Enter.*"
-
 test appc-publish-s3-1 {Verify s3cmd put succeeds when publishing} -constraints aws -setup {
     set ::env(VESSEL_REPO_URL) s3://appc-test-1
 } -body {
 
     set minimal_appc_file [file join .. examples MinimalVesselFile]
-    exec --ignorestderr appc build --file=${minimal_appc_file} --tag=test-s3-1 --name={appc-publish-s3-1}
-    set appc_chan [open "| appc publish --tag=test-s3-1 appc-publish-s3-1"]
-    close $appc_chan
-    return -code ok
+    
 } -cleanup {
     set ::env(VESSEL_REPO_URL) {}
 } -returnCodes ok
 
-#TODO: Test for publish/pull --reconfigure.  This is useful to force a reconfigure of s3cmd in case
-#an access control key or something else has changed.
-
-#TODO: Test publish
-#TODO: Test pull

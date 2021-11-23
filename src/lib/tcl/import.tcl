@@ -41,12 +41,15 @@ namespace eval vessel::import {
             #We current only support one layer of parent images.  In
             #the future we can use arbitrarily long chain of parent
             #images.
+            ${log}::debug "parsing metadata file"
             set parent_image [lindex [dict get $metadata_dict parent_images] 0]
             set parent_image_components [split $parent_image :]
             set parent_image_name [lindex $parent_image_components 0]
             set parent_image_version [lindex $parent_image_components 1]
             set parent_image_snapshot [vessel::env::get_dataset_from_image_name $parent_image_name $parent_image_version]
             set parent_image_snapshot "${parent_image_snapshot}@${parent_image_version}"
+
+            ${log}::debug "parent image: $parent_image_snapshot"
 
             #TODO: fetch the parent image if it doesn't exist.  We can
             #move the fetch_image command from the vessel_file_commands
@@ -60,6 +63,8 @@ namespace eval vessel::import {
             if {![vessel::zfs::dataset_exists $new_dataset]} {
                 ${log}::debug "Cloning parent image snapshot: '$parent_image_snapshot' to '$new_dataset'"
                 vessel::zfs::clone_snapshot $parent_image_snapshot $new_dataset
+            } else {
+                ${log}::debug "New dataset already exists: $new_dataset"
             }
 
             if {![vessel::zfs::snapshot_exists ${new_dataset}@a]} {
@@ -119,7 +124,6 @@ namespace eval vessel::import {
         #Extract files into extracted_path overriding files that already exist.
         exec unzip -o -d $extracted_path [file join $image_dir "${image}:${tag}.zip"] >&@ $status_channel
         _::create_layer $image $tag $extracted_path $status_channel
-
     }
 }
 

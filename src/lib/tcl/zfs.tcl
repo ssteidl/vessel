@@ -233,10 +233,16 @@ namespace eval vessel::zfs {
         # Force destroy. We assume that if we are
         # destroying a dataset, we really want to destroy it.
         exec zfs destroy -f $dataset
+
+        update_mountpoints
+        update_snapshots
     }
 
     proc destroy_recursive {dataset} {
         exec zfs destroy -rf $dataset
+
+        update_mountpoints
+        update_snapshots
     }
 
     proc set_jailed_attr {dataset} {
