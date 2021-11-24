@@ -1,7 +1,7 @@
 # - Run from top level directory
 # - Set DISTDIR=/tmp in environment
 COMMIT!= git rev-parse HEAD
-VERSION?=1.2.0-${COMMIT}
+VERSION?=1.2.1-${COMMIT}
 DISTDIR?=/tmp
 STAGEDIR?=FBSD
 
