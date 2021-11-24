@@ -325,12 +325,6 @@ namespace eval vessel::supervisor {
 
         #initialization yield
         yield
-        
-        if {![vessel::metadata_db::image_exists $image $tag]} {
-
-            #Image doesn't exist.  We need to pull it from the repository
-            return -code error -errorcode {SUPERVISOR PULL NYI} "Supervisor pull NYI"
-        }
 
         set container_started_event [yieldto start_container $deploy_file $image $tag  [info coroutine]]
 
