@@ -322,6 +322,10 @@ namespace eval vessel::supervisor {
         ${log}::debug stderr "deploy dict: $deploy_dict"
         set image [dict get $deploy_dict vessel-supervisor image]
         set tag [dict get $deploy_dict vessel-supervisor tag]
+        set restart [dict getnull $deploy_dict vessel-supervisor restart]
+        if {$restart eq {}} {
+            set restart false
+        }
 
         #initialization yield
         yield
@@ -332,7 +336,6 @@ namespace eval vessel::supervisor {
 
         set ctrl_channel [container_started $container_started_event $deploy_file]
 
-        set restart false
         set exited false
         #container monitoring event loop
         while {true} {
@@ -373,7 +376,7 @@ namespace eval vessel::supervisor {
             }
         }
 
-        ${log}::info "$container_name finished executing.  Cleaning up..."
+        ${log}::info "$container_name finished executing.  Cleaning up... $restart"
 
         if {$restart} {
             ${log}::info "Restarting($container_name)"
