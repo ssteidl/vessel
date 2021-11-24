@@ -13,4 +13,6 @@ namespace eval rctl::test {
         set rctl_str {!system=RCTL subsystem=rule type=matched rule=jail:f55687e0-8475-4e3e-ada9-1197ee857536:wallclock:devctl=5 pid=1273 ruid=0 jail=f55687e0-8475-4e3e-ada9-1197ee857536}
         set limit_dict [vessel::bsd::parse_devd_rctl_str $rctl_str]
     } -result {rule {subjectid f55687e0-8475-4e3e-ada9-1197ee857536 resource wallclock action devctl=5} pid 1273 ruid 0 jail f55687e0-8475-4e3e-ada9-1197ee857536}
+
+    cleanupTests
 }

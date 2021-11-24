@@ -84,8 +84,8 @@ namespace eval file_repo::test {
         set result {}
     } -returnCodes ok -cleanup {
         set env(VESSEL_REPO_URL) {}
+        vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
     }
-    # TODO: hook into cleanup all tests to delete the image
 
     cleanupTests
 }

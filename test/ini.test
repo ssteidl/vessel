@@ -1,4 +1,4 @@
-# -*- mode: tcl; -*-
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
 package require tcltest
 
@@ -9,67 +9,51 @@ namespace eval deploy::test {
     namespace import ::tcltest::*
 
     test validate-ini-file-1 {Test validation of valid deploy file} -setup {
-	set ini_chan [file tempfile inifilename]
-	set ini_data {
-	    [vessel-supervisor]
-	    # The name of the image without the tag in the repository
-	    repository=s3://reapp/
-	    image=supercooldjangoapp
-	    tag=1.3.1
-	    command=sh /etc/rc
+        set ini_chan [file tempfile inifilename]
+        set ini_data {
+            [vessel-supervisor]
+            # The name of the image without the tag in the repository
+            repository=s3://reapp/
+            image=supercooldjangoapp
+            tag=1.3.1
+            command=sh /etc/rc
 
-	    [dataset:upload-images]
-	    pool=reappdata
-	    dataset=upload-images
-	    mount=/var/db/uploaded-images
+            [dataset:upload-images]
+            pool=reappdata
+            dataset=upload-images
+            mount=/var/db/uploaded-images
 
-	    [jail]
-	    # anything in this section is treated as a jail parameter and will
-	    # be added to the generated jail file.
-	    sysvshm=new
-	}
-	puts $ini_chan [string trim $ini_data]
-	flush $ini_chan
+            [jail]
+            # anything in this section is treated as a jail parameter and will
+            # be added to the generated jail file.
+            sysvshm=new
+        }
+        puts $ini_chan [string trim $ini_data]
+        flush $ini_chan
 
     } -body {
-	set d [vessel::deploy::ini::get_deployment_dict $inifilename]
-	return $d
+        vessel::deploy::ini::get_deployment_dict $inifilename
     } -match exact -result {jail {sysvshm new} dataset:upload-images {dataset upload-images pool reappdata mount /var/db/uploaded-images} vessel-supervisor {command {sh /etc/rc} image supercooldjangoapp tag 1.3.1 repository s3://reapp/}} -cleanup {
-	close $ini_chan
-	file delete $inifilename
-    }
-
-    test validate-ini-file-2 {vessel-supervisor section required} -setup {
-	set ini_chan [file tempfile inifilename]
-	set ini_data {
-	    [jail]
-	}
-	puts $ini_chan [string trim $ini_data]
-	flush $ini_chan
-
-    } -body {
-	set d [vessel::deploy::ini::get_deployment_dict $inifilename]
-	return $d
-    } -result {Missing vessel-supervisor section} -errorCode {VESSEL INI SECTION MISSING} \
-      -cleanup {
-	close $ini_chan
-	file delete $inifilename
+        close $ini_chan
+        file delete $inifilename
     }
 
     test validate-ini-file-3 {unknown sections rejected} -setup {
-	set ini_chan [file tempfile inifilename]
-	set ini_data {
-	    [gibberish]
-	}
-	puts $ini_chan [string trim $ini_data]
-	flush $ini_chan
+        set ini_chan [file tempfile inifilename]
+        set ini_data {
+            [gibberish]
+        }
+        
+        puts $ini_chan [string trim $ini_data]
+        flush $ini_chan
 
     } -body {
-	set d [vessel::deploy::ini::get_deployment_dict $inifilename]
-	return $d
-    } -result {Unexpected section gibberish} -errorCode {VESSEL INI SECTION UNEXPECTED} \
-      -cleanup {
-	close $ini_chan
-	file delete $inifilename
-    }
+        set d [vessel::deploy::ini::get_deployment_dict $inifilename]
+        } -result {Unexpected section gibberish} -errorCode {VESSEL INI SECTION UNEXPECTED} \
+        -cleanup {
+                close $ini_chan
+            file delete $inifilename
+        }
+
+        cleanupTests
 }
