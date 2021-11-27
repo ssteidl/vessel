@@ -43,7 +43,7 @@ install(FILES src/lib/tcl/vessel_file_commands.tcl
               src/lib/tcl/syslog.tcl
               src/lib/tcl/zfs.tcl
         DESTINATION lib/tclvessel)
-install(FILES src/rc.d/vessel
+install(PROGRAMS src/rc.d/vessel
         DESTINATION etc/rc.d)
 install(DIRECTORY src/network
         DESTINATION lib/tclvessel

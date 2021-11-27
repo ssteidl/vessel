@@ -38,6 +38,10 @@ namespace eval vessel::deploy {
                     return
                 }
 
+                if {[string first {nullfs:} $name] != -1} {
+                    return
+                }
+
                 if {$name eq {jail}} {
                     return
                 }
