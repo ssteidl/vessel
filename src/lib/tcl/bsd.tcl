@@ -20,12 +20,18 @@ namespace eval vessel::bsd {
         #Example: 12.2-RELEASE-p3
         set complete_version [host_version]
 
-        if {![string match *-*-p* $complete_version]} {
-            return -code error -errorcode {SYS VERSION INVALID}
-        }
+        if {[string match *-*-p* $complete_version]} {
 
-        set last_hyphen [string last - $complete_version]
-        return [string range $complete_version 0 [expr $last_hyphen - 1]]
+            set last_hyphen [string last - $complete_version]
+            return [string range $complete_version 0 [expr $last_hyphen - 1]]
+
+        } elseif {[string match *-* $complete_version]} {
+
+            #Patch version is optional.  The equivalent of -p0 is left off the version
+            return $complete_version
+        } else {
+            return -code error -errorcode {SYS VERSION INVALID} "Invalid system version: $complete_version"
+        }
     }
 
     proc null_mount {source_dir dest_dir} {
