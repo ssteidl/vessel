@@ -125,6 +125,23 @@ proc run_container_coro {options} {
 
 create_workdir
 
+proc usage {} {
+    puts stderr \
+{
+ vessel <command> [options]
+
+ COMMANDS
+    
+ init         Initialize the system to work with vessel.  Including the installation of a base image
+ build        Build a container image from a vessel file  
+ run          Run a container that has been built or can be pulled from a repository
+ publish      Export and push a container to a container repository
+ pull         Download and install a container from a container repository
+ image        Output image metadata
+ help         Print this help message
+}
+}
+
 switch -regexp -matchvar parsed_cmd $command {
 
     init {
@@ -160,8 +177,13 @@ switch -regexp -matchvar parsed_cmd $command {
     export {
         vessel::export::export_command $args
     }
+    help {
+        usage
+        exit 0
+    }
     default {
         ${log}::debug "Unknown command: $command"
+        usage
         exit 1
     }
 

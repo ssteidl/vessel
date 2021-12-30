@@ -771,6 +771,12 @@ namespace
                                            Tcl_NewStringObj("syslog", -1),
                                            Tcl_NewBooleanObj(1));
             }
+            else if (pre_command_option == "--help")
+            {
+                tcl_error = Tcl_DictObjPut(interp, pre_command_flags,
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewBooleanObj(1));
+            }
             else
             {
                 break;
@@ -829,6 +835,10 @@ namespace
         {
             tcl_error = parse_export_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
+        }
+        else if(command == "help")
+        {
+            /*'help' command doesn't take any options*/
         }
         else
         {
