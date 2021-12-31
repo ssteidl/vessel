@@ -3,21 +3,28 @@ Application containers for FreeBSD.
 
 The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux docker environment.
 
+Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces.  This differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
+
+* Actively tracing jail processes to monitor when a jail exits.  This allows vessel to stay in the foreground while running a jail with multiple services, which has various management benefits.
+* Monitors and parses `/var/run/devd.seqpacket.pipe` so that custom actions can be taken based on resource control events.
+* Supervisor can monitor and route log output as well as stop, start and reload jails based on configuration file changes.
+
 # Feature Highlights
 
-|Feature                                  | Implemented|
-|-----------------------------------------|------------|
-| VesselFile (similar to Dockerfile)      | Yes        |
-| Volume Management                       | Yes        |
-| Image Import/Export                     | Yes        |
-| Image Push/Pull Repositories (s3)       | Yes        |
-| Jail management                         | Yes        |
-| Container Supervisor                    | Yes        |
-| Resource control                        | Yes        |
-| Internal (Bridged) Networking           | Not yet    |
-| DNS Service Discovery                   | Not yet    |
-| Multi-node container orchestration      | Not yet    |
-| VNET Routing via PF                     | Not yet    |
+|Feature                                               | Implemented|
+|------------------------------------------------------|------------|
+| VesselFile (similar to Dockerfile)                   | Yes        |
+| Run configuration files (ini)                        | Yes        |
+| Volume Management                                    | Yes        |
+| Image Import/Export                                  | Yes        |
+| Image Push/Pull Repositories (s3)                    | Yes        |
+| Jail management                                      | Yes        |
+| Container Supervisor                                 | Yes        |
+| [Resource Control](docs/ResourceControl.md)          | Yes        |
+| Internal (Bridged) Networking                        | Not yet    |
+| DNS Service Discovery                                | Not yet    |
+| Multi-node container orchestration                   | Not yet    |
+| VNET Routing via PF                                  | Not yet    |
 
 
 # Quickstart
