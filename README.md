@@ -16,10 +16,9 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 | VesselFile (similar to Dockerfile)                   | Yes        |
 | Run configuration files (ini)                        | Yes        |
 | Volume Management                                    | Yes        |
-| Image Import/Export                                  | Yes        |
 | Image Push/Pull Repositories (s3)                    | Yes        |
 | Jail management                                      | Yes        |
-| Container Supervisor                                 | Yes        |
+| [Container Supervisor](docs/supervisor.md)           | Yes        |
 | [Resource Control](docs/ResourceControl.md)          | Yes        |
 | Internal (Bridged) Networking                        | Not yet    |
 | DNS Service Discovery                                | Not yet    |
