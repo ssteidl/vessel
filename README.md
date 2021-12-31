@@ -1,69 +1,85 @@
 # Vessel
 Application containers for FreeBSD.
 
+The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux docker environment.
+
+# Feature Highlights
+
+|Feature                                  | Implemented|
+|-----------------------------------------|------------|
+| VesselFile (similar to Dockerfile)      | Yes        |
+| Volume Management                       | Yes        |
+| Image Import/Export                     | Yes        |
+| Image Push/Pull Repositories (s3)       | Yes        |
+| Jail management                         | Yes        |
+| Container Supervisor                    | Yes        |
+| Resource control                        | Yes        |
+| Internal (Bridged) Networking           | Not yet    |
+| DNS Service Discovery                   | Not yet    |
+| Multi-node container orchestration      | Not yet    |
+| VNET Routing via PF                     | Not yet    |
 
 
-## Goal
-The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps (operations) and test engineers.  These features include but are not limited to:
- 
- * Jails (Heirarchical)
- * pf
- * zfs
- * capsicum
- * rctl
- * mandatory access control
- * Security Level
+# Quickstart
 
-## Vocabulary
-* **Image**: A directory or mounted filesystem that the container will use as a root directory.
-* **Image Archive**: A single file (usually a compressed image) that suitable for storing in a registry.
-* **Registry**: A store for image archives (REST, local filesystem, ftp, etc)
-* **Volume**: A filesystem that is mounted to a directory inside of the image.  Bind mount, memory back file mount, disk etc.
-* **Container**: The combination of image, network stack, volumes and jail.
+Initialize your user environment to work with vessel.  The init command will create a minimal image by downloading the base tarball of the currently running container and installing it into a dedicated dataset.
 
-## Environment
+`sudo -E vessel init`
 
-* **APPC_IMAGE_DIR**: Directory for unpacked images
-* **APPC_CONTAINER_DIR**: Directory for containers.  Images are mounted (nullfs mount for directories, mount for vnode fs's) here and
-  containers are run in those images.
-* **APPC_ARCHIVE_DIR**: Directory for archives to be saved (during creation or download).
-* **APPC_REGISTRY_URL**: URL to the appc registry
+Run a shell in an ephemeral container using the previously created minimal image:
 
-## Features
+`sudo -E vessel run --interactive --rm minimal:12.3-RELEASE sh`
 
-* **Image registry**: Pull multiple formats of images that can be used as filesystems for jails.  There could be multiple registry types:
-    * ftp(s)
-    * ssh
-    * zfs: via zsend and zrecv
-    * fs: local fs registry
-    * http(s)
-* **Layered images**: Use unionfs to layer images, similar to docker
-* **Multiple Image Formats**
-    * iso
-    * tarball
-* **Auto Networking**: 
-    * expose ports: Automatically create pf redirect rule.
-    * VIMAGE when supported by kernel
-    * Auto create subnets based on network names
-* **Task Scheduling**:
-    * Support a scheduler passing tasks to different hosts.  Similar to borg or nomad
-    * Perhaps implement a nomad backend.
+## Vessel Files
 
-# Commands needed to be useful for development and deployment
-* **build**: Build an image given spec file.
-* **publish**: Publish a built image into a repository (file and s3)
-* **pull**: Pull an image into the system from a repository (file and s3)
-* **run -t -v <volume> --network=<name>**: Run a container in the foreground with a network on
-  the provided bridge (creating the bridge if necessary).
-* **run**: Run a command in the background monitoring it as needed.  Potentially providing resource limits.
+While quickly running a minimal container can be useful, it's generally more useful to create a customized container.  For this we can use a VesselFile which is similar to a DockerFile.  Let's look at a VesselFile that creates a container to run a custom django application.  Note that the modeline is set to tcl to allow for syntax highlighting
 
-## Thougths
-* It would be useful to integrate with uwsgi in emperor mode.
-    * uwsgi already supports managing daemons.
-    * uwsgi has async processors like mule, signals etc
-    * Building and publishing the daemons would be external to uwsgi
-    * Starting new containers is as simple as dropping new configuration files into a directory.  You could also do it from the command line.
-    * We can still run all the code via tcl, it's just a new plugin.
-    * I think we can still do interactive mode
-    * We'd need to teach uwsgi how to monitor when a jail dies (monitor all the processes in the jail)
-    * I think the development workflow is the same for appc.  Then there is just an appc plugin.
+```
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+FROM FreeBSD:12.3-RELEASE
+
+RUN mkdir -p /usr/local/etc/pkg/repos
+COPY ./deployment/FreeBSD.conf /usr/local/etc/pkg/repos/FreeBSD.conf
+RUN env ASSUME_ALWAYS_YES=yes pkg update -f
+RUN env ASSUME_ALWAYS_YES=yes pkg install python
+RUN env ASSUME_ALWAYS_YES=yes pkg install py37-django-extensions \
+    py37-pandas uwsgi gnuplot-lite mime-support \
+    py37-django-bootstrap4 py37-Jinja2 py37-psycopg2 \
+    nginx
+
+RUN sysrc syslogd_enable=YES
+RUN sysrc uwsgi_enable=YES
+RUN sysrc uwsgi_configfile=/re/freebsd/uwsgi.ini
+RUN sysrc zfs_enable=YES
+RUN sysrc nginx_enable=YES
+RUN sysrc clear_tmp_enable=YES 
+
+# We need to enable this kernel module via ansible first
+# RUN sysrc nginx_http_accept_enable=YES
+
+RUN sh -c "touch /var/log/all.log && chmod 600 /var/log/all.log"
+RUN mkdir -p /var/log/nginx
+COPY ./freebsd/syslog.conf /etc
+COPY ./freebsd/nginx.conf /usr/local/etc/nginx
+COPY . /re
+
+```
+
+To build the above image run:
+
+`sudo -E vessel build --file=./DjangoAppVesselFile --tag=1.0 --name=djangoapp`
+
+Once the image is built, it can be run with:
+
+`sudo -E vessel run --rm djangoapp:1.0 sh /etc/rc`
+
+This will start the init process in a new container running in the foreground.  
+
+# Jail Management
+Unlike docker, vessel is perfectly capable of running "thick containers" in the foreground.  Thus, allowing for multiple system services to be running in a single container.  Including syslog, cron and any other services that may be useful to run along side of the container. 
+
+For those interested, vessel makes up for the lack of system event on jail exit by tracking process creation and exiting using kqueue process tracking.  Therefore, vessel can track when all jail processes have exited.  This is how vessel can shutdown jails cleanly with simple signal handling.  If you have started a jail via vessel, you can simply press ctrl+C to shutdown the jail (and all jailed processes) cleanly.
+
+
+
