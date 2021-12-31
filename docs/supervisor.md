@@ -39,3 +39,12 @@ They are used to, among other things, generate the jail file used to run a conta
    # be added to the generated jail file.
    sysvshm=new
 ```
+
+Vessel deployment files are vessel runtime files which contain a `[vessel-supervisor]` section.  The `[vessel-supervisor]` section contains the following keys:
+
+* **repository:** The repository from which the image will be pulled
+* **image:** The name of the image to be pulled
+* **tag:** The tag or version of the image
+* **command:** The command to run when invoking the container
+* **restart:** Boolean that specifies whether or not the container should be restarted if it exits for any reason or the vessel application exits.
+* **restart-delay:** The amount of time in seconds to wait before restarting the container 
