@@ -1,6 +1,7 @@
 
 
 # Feature Highlights
+This table should go in the main readme file with links to the documentation of each feature
 
 |Feature                                  | Implemented|
 |-----------------------------------------|------------|
@@ -26,11 +27,11 @@ Similar to a DockerFile, a VesselFile allows for defining how a container image 
 ```
 
 ## Volume Management
-There are two types of volume parameters that you can use via the `appc run` command:
 
+### Null Mounting Directories
+It is often useful to null mount (or bind mount) a directory from the host system into the container.  This is particularly useful for development purposes when you want to use an editor or IDE for the source code on the host system but test that code within a running container.  This type of mounting can be done with the -v or --volume flag given to the run command.
 * `vessel run -v <host directory>:<container directory>`
-* `vessel run --dataset=?`
 
--v <host directory>:<container directory> --volume=<host directory>:<container directory>
-   null mount a directory from the host filesystem to the container filesystem at the given paths
+### Jailing ZFS Datasets
+TODO
 
