@@ -44,11 +44,18 @@ This command will always start a jail in a new clone of the minimal:12.3-RELEASE
 
 ### Development Test Container
 
-TODO: Container to nullmount the source directory into a container
+It's often useful to manually create a development environment container and then mount a host folder into the container.  The host would contain the source code being built in the development container.  Thus allowing editors installed on the host system to edit source files in a development container.  Below is an example of how the author develops a django application:
+
+* `sudo -E vessel run --name=uwsgi --volume=$PWD:/development uwsgi:local sh`
+* `# uwsgi --ini=development/uwsgi/dev.ini`
+   * uwsgi is (among other things) WSGI server that can run django.  It has hot reloading functionality
+* Because my source directory ($PWD) contains the source code and is mounted in the container at `/development`; changes to the sourcefile will automatically be noticed by uwsgi running in the container at the application reloaded. 
+
+> 🕵️ When we talk about volumes in vessel terminology, we are simply referring to directories from the host filesystem that are [nullfs](https://www.freebsd.org/cgi/man.cgi?query=nullfs&sektion=&n=1) mounted into the container.
 
 # Runtime File
 
-Quick, ephemeral containers from the commandline can be useful for simple tasks.  The real power in `vessel` comes from exposing the powerful features of the FreeBSD operating system to user workloads.  Containers can be easily defined in a ini file that is referred to as   
+Quick, ephemeral containers from the commandline can be useful for simple tasks.  The real power in `vessel` comes from exposing the powerful features of the FreeBSD operating system to user workloads.  Containers can be easily defined in a ini file that is referred to as a runtime definiton file.
 
 ```
 [dataset:upload-images]
