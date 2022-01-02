@@ -73,6 +73,7 @@ namespace eval vessel::run {
             set run_dict $args_dict
             dict set run_dict jail [dict create]
             dict set run_dict limits [list]
+            dict set run_dict cpuset {}
             
             set ini_file [dict get $args_dict ini_file]
             
@@ -113,6 +114,10 @@ namespace eval vessel::run {
                     dict for {param value} $section_value_dict {
                         dict set run_dict jail $param $value
                     }
+                }
+                
+                if {$section eq {cpuset}} {
+                	dict set run_dict cpuset [dict get $section_value_dict {list}]	
                 }
 
                 if {[string first {resource:} $section] eq 0} {
@@ -319,10 +324,11 @@ namespace eval vessel::run {
 
         set coro_name [info coroutine]
         set limits [dict get $args_dict "limits"]
+        set cpuset [dict get $args_dict "cpuset"]
         set tmp_jail_conf {}
         set error [catch {
             set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
-                $network $limits $jail_options_dict $coro_name {*}$command]
+                $network $limits $cpuset $jail_options_dict $coro_name {*}$command]
             
             ${log}::debug "jail_start_params: $jail_start_params"
             set tmp_jail_conf [lindex $jail_start_params 0]

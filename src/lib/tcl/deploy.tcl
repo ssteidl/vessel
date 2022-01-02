@@ -49,6 +49,10 @@ namespace eval vessel::deploy {
                 if {[string first {resource:} $name] != -1} {
                     return
                 }
+                
+                if {$name eq {cpuset}} {
+                	return	
+                }
 
                 return -code error -errorcode {VESSEL INI SECTION UNEXPECTED} \
                     "Unexpected section $name"

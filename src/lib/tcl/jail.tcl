@@ -27,7 +27,8 @@ namespace eval vessel::jail {
         }
         
         #Build the jail command which can be exec'd
-        proc build_jail_conf {name mountpoint volume_datasets network limits jail_options args} {
+        proc build_jail_conf {name mountpoint volume_datasets network limits \
+        					  cpuset jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
             
@@ -70,6 +71,10 @@ namespace eval vessel::jail {
                          append rctl_string [subst {exec.release="rctl -r jail:$name";}]
                      }]
 
+                     [if {$cpuset ne {}} {
+                     	set cpuset_str [subst {exec.created+="cpuset -c -l $cpuset -j $name";}]
+                     }]
+                     
                     [set jail_options_string {}
                      dict for {option value} $jail_options {
                          set option_string [subst {${option}+=${value};\n}]
@@ -111,13 +116,13 @@ namespace eval vessel::jail {
         return
     }
     
-    proc run_jail {name mountpoint volume_datasets chan_dict network limits jail_options_dict \
-                       callback args} {
+    proc run_jail {name mountpoint volume_datasets chan_dict network limits \
+    	           cpuset jail_options_dict callback args} {
         variable log
 
         #Create the conf file
-        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets $network $limits \
-                           $jail_options_dict {*}$args]
+        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets \
+                      $network $limits $cpuset $jail_options_dict {*}$args]
         set jail_conf_file [file join [vessel::env::jail_confs_dir] "${name}.conf"]
         set jail_conf_file_chan [open  $jail_conf_file w]
 
