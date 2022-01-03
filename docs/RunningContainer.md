@@ -51,8 +51,6 @@ It's often useful to manually create a development environment container and the
    * uwsgi is (among other things) WSGI server that can run django.  It has hot reloading functionality
 * Because my source directory ($PWD) contains the source code and is mounted in the container at `/development`; changes to the sourcefile will automatically be noticed by uwsgi running in the container at the application reloaded. 
 
-> 🕵️ When we talk about volumes in vessel terminology, we are simply referring to directories from the host filesystem that are [nullfs](https://www.freebsd.org/cgi/man.cgi?query=nullfs&sektion=&n=1) mounted into the container.
-
 # Runtime File
 
 Quick, ephemeral containers from the commandline can be useful for simple tasks.  The real power in `vessel` comes from exposing the powerful features of the FreeBSD operating system to user workloads.  Containers can be easily defined in a ini file that is referred to as a runtime definiton file.
@@ -69,6 +67,26 @@ host.hostname=reweb
 ```
 
 ## Volumes and Datasets
+
+Volumes and datasets are different mechanisms to allowing data to persist outside of the lifetime of the container.
+
+> ℹ️ We've found that volumes are generally provided on the commandline and datasets are defined in runtime definition files.
+
+### Volumes
+
+Volumes are directories from the host system that are mounted into one or more containers.   You can add a volume to a container by using the `--volume=` parameter or adding a `[volume:<name>]` section to the runtime definition file. 
+
+> 🕵️ The volume uses [nullfs](https://www.freebsd.org/cgi/man.cgi?query=nullfs&sektion=&n=1) to mount a directory into a container.
+
+### Datasets
+Datasets are useful for providing large amounts of persistent storage to ephemeral containers.  `vessel` datasets are zfs datasets that are configured to be controlled by the container.  You can add a dataset to a container by adding a `--dataset=` parameter or adding a `[dataset:<name>]` section to the runtime definition file.  
+
+**Dataset Example INI Section**
+```
+[dataset:pgdata]
+dataset=zroot/volumes/redata
+mount=/var/db/postgres
+```
 
 ## CPU Sets
 
