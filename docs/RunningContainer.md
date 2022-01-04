@@ -119,5 +119,20 @@ list=0,3
 See [Resource Limits](./ResourceControl.md)
 
 ## Jail Parameters
+Most who have worked with jails know that there are a lot of options and parameters in a jail file.  See [jail(8)](https://www.freebsd.org/cgi/man.cgi?query=jail&apropos=0&sektion=0&manpath=FreeBSD+13.0-RELEASE+and+Ports&arch=default&format=html).  Vessel does not attempt to control or abstract these parameters.  Therefore, a special 'jail' section in the runtime definition file is used to set pass through any of the available configuration parameters through to the jail system.
+
+**Jail Example INI Section**
+
+```
+[jail]
+sysvshm=new
+host.hostname=testhost
+```
+
+# Note On Networking
+
+The current version of vessel uses ipv4 inherited networking (IOW, the host network stack).  In the future a bridged and vlan networking system with VNET will be implemented.  For now, only inherited networking is used.  
+
+> ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a full fletched vnet network would/could have it's uses, inherited network has met all of our use cases so far.
 
 
