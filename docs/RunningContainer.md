@@ -87,6 +87,13 @@ Datasets are useful for providing large amounts of persistent storage to ephemer
 dataset=zroot/volumes/redata
 mount=/var/db/postgres
 ```
+> 🕵️ The following steps are taken to jail datasets:
+> * Create the dataset if necessary
+> * Set the mountpoint to the *mount path within the jail*
+> * Set the jailed attribute
+> * Call `zfs jail` on the dataset
+> * Call `zfs mount` on the dataset after the jail is created.
+
 
 ## CPU Sets
 
