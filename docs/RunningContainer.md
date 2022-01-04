@@ -139,6 +139,6 @@ Vessel has the ability to track when a jail exits and cleanup after the jail.  I
 >   is always set.  Otherwise the jail would exit before vessel could finish system cleanup.
 
 > 🕵️ Jail cleanup is done via:
-> * `jail -r -f </var/run/vessel/jails/<jail_name.conf>`
+> * `jail -r -f </var/run/vessel/jails/<jail_name.conf> <jid>`
 > * Some custom cleanup methods that should be moved to the jail.conf file.
 
