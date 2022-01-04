@@ -1,7 +1,7 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux docker environment.
+The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and Test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux Docker environment.
 
 Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces.  This differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
 
@@ -17,7 +17,7 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 | [Run configuration files (ini)](docs/RunningContainer.md#runtime-file)  | Yes        |
 | [Volume Management](docs/RunningContainer.md#volumes-and-datasets)      | Yes        |
 | Image Push/Pull Repositories (s3)                                       | Yes        |
-| Jail management                                                         | Yes        |
+| [Jail Management](docs/RunningContainer.md#jail-management)             | Yes        |
 | [Container Supervisor](docs/supervisor.md)                              | Yes        |
 | [Resource Control](docs/ResourceControl.md)                             | Yes        |
 | [CPU Sets](docs/RunningContainer.md#cpu-sets)                           | Yes        |
@@ -44,7 +44,7 @@ While quickly running a minimal container can be useful, it's generally more use
 ```
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-FROM FreeBSD:12.3-RELEASE
+FROM FreeBSD:12.2-RELEASE
 
 RUN mkdir -p /usr/local/etc/pkg/repos
 COPY ./deployment/FreeBSD.conf /usr/local/etc/pkg/repos/FreeBSD.conf
@@ -88,9 +88,4 @@ This will start the init process in a new container running in the foreground.
 The current version of vessel uses ipv4 inherited networking (IOW, the host network stack).  In the future a bridged and vlan networking system with VNET will be implemented.  For now, only inherited networking is used.  
 
 > ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a full fletched vnet network would/could have it's uses, inherited network has met all of our use cases so far.
-
-
-
-
-
 
