@@ -104,10 +104,20 @@ mount=/var/db/postgres
 
 
 ## CPU Sets
+CPU sets can be used to pin jails to specific CPUs.  This allows for more fine grained resource management.  See [cpuset(1)](https://www.freebsd.org/cgi/man.cgi?query=cpuset&sektion=1&format=html).  A CPU set for a jail can be configured only in the runtime definition file.
 
+**CPU Set Example INI Section**d
+```
+[cpuset]
+list=0,3
+```
 
+> 🕵️ The cpu set section takes the value of `list` and runs the command `cpuset -c -l <list value> -j <jailid>`
 
 ## Resource Control
 
+See [Resource Limits](./ResourceControl.md)
+
 ## Jail Parameters
+
 
