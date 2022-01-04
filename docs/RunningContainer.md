@@ -51,10 +51,13 @@ It's often useful to manually create a development environment container and the
    * uwsgi is (among other things) WSGI server that can run django.  It has hot reloading functionality
 * Because my source directory ($PWD) contains the source code and is mounted in the container at `/development`; changes to the sourcefile will automatically be noticed by uwsgi running in the container at the application reloaded. 
 
-# Runtime File
+# Runtime Definition File
 
-Quick, ephemeral containers from the commandline can be useful for simple tasks.  The real power in `vessel` comes from exposing the powerful features of the FreeBSD operating system to user workloads.  Containers can be easily defined in a ini file that is referred to as a runtime definiton file.
+Quick, ephemeral containers from the commandline can be useful for simple tasks.  The real power in `vessel` comes from exposing the powerful features of the FreeBSD operating system to user workloads.  Containers can be easily defined in a ini file that is referred to as a runtime definiton file.  
 
+The simplest runtime definition file can be used to set vessel parameters.  Runtime definition files can be used with vessel by providing the `--ini=<path to ini file>`.  If the runtime file contains a `vessel-supervisor` section, it can be used in the supervisor's deployment directory.
+
+**Example Runtime Definition File** 
 ```
 [dataset:upload-images]
 dataset=zroot/upload-images
