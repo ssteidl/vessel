@@ -129,10 +129,16 @@ sysvshm=new
 host.hostname=testhost
 ```
 
-# Note On Networking
+# Jail Management
+Unlike docker, vessel has first class support for running "thick containers" in the foreground.  Thus, allowing for multiple system services to be running in a single container.  Including syslog, cron and any other services that may be useful to run next to an application. 
 
-The current version of vessel uses ipv4 inherited networking (IOW, the host network stack).  In the future a bridged and vlan networking system with VNET will be implemented.  For now, only inherited networking is used.  
+Vessel has the ability to track when a jail exits and cleanup after the jail.  If using the supervisor, it will even restart the jail for you if necessary.
 
-> ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a full fletched vnet network would/could have it's uses, inherited network has met all of our use cases so far.
+> 🕵️ FreeBSD lacks a "jail exit" event.  Therefore, vessel makes up for the lack of this event by tracking process creation/exits using kqueue process tracking.
+>   When all child processes of the start command have exited, vessel closes and cleans up the jail.  For this reason, the `persist=1` argument to the jail 
+>   is always set.  Otherwise the jail would exit before vessel could finish system cleanup.
 
+> 🕵️ Jail cleanup is done via:
+> * `jail -r -f </var/run/vessel/jails/<jail_name.conf>`
+> * Some custom cleanup methods that should be moved to the jail.conf file.
 
