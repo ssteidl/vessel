@@ -40,9 +40,10 @@ Change the current working directory of the jail.  This is a stateful command th
 
 ## 'RUN' Command
 
-Execute a command within the context of an image.
+Execute a command in the new image.
 
-* commands
-* Note on DNS
-* common uses and commands
-* Firstboot jails
+**Example**
+`RUN env ASSUME_ALWAYS_YES=yes pkg install nginx`
+
+> 🕵️ Each run command runs within a separate container (jail) on the new images dataset.  So commands use the dataset of the image not the host filesystem.  The 
+> jail inherits the host networking stack and the resolv.conf file is copied from the host into the jail.
