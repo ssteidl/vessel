@@ -6,8 +6,6 @@ There is an [example VesselFile and invocation](/README.md#quickstart) in the qu
 
 VesselFiles support a small but powerful number of commands.  It is formatted similarly to a DockerFile file.
 
-> 🕵️ Each command is 
-
 > 🕵️ Fun fact... DockerFiles are valid tcl files.  Commands in Vessel are actually implemented using a tcl sub interpreter.
 
 ## 'FROM' Command
