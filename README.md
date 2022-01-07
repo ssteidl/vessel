@@ -13,7 +13,7 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 
 |Feature                                                                  | Implemented|
 |-------------------------------------------------------------------------|------------|
-| VesselFile (similar to Dockerfile)                                      | Yes        |
+| [VesselFile (similar to Dockerfile)](docs/ImageCreation.md)             | Yes        |
 | [Run configuration files (ini)](docs/RunningContainer.md#runtime-file)  | Yes        |
 | [Volume Management](docs/RunningContainer.md#volumes-and-datasets)      | Yes        |
 | Image Push/Pull Repositories (s3)                                       | Yes        |
