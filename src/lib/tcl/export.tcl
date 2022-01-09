@@ -3,6 +3,7 @@ package require vessel::env
 package require vessel::metadata_db
 package require vessel::zfs
 
+package require fileutil
 package require logger
 package require uuid
 
@@ -32,7 +33,7 @@ namespace eval vessel::export {
 
             if {[dict exists $diff_dict {-}]} {
                 foreach deleted_file [dict get $diff_dict {-}] {
-                    puts $whiteout_file $deleted_file
+                    puts $whiteout_file [fileutil::stripPath $mountpoint $deleted_file]
                 }
             }
 

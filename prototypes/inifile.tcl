@@ -9,7 +9,7 @@ puts [ini::sections $handle]
 
 puts [ini::keys $handle vessel-supervisor]
 
-set d [ini::get $handle vessel-supervisor]
+set d [ini::get $handle resource:maxmemoryuse]
 
 dict for {k v} $d {
     puts "$k => $v"

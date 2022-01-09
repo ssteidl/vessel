@@ -221,7 +221,7 @@ namespace
     std::string run_options_help()
     {
         std::ostringstream msg;
-        msg << "vessel run <--name=container_name> {--interactive} {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} \n{--dataset=zfs/dataset:container_mountpoint} image{:tag} {command...}" << std::endl << std::endl
+        msg << "vessel run {--name=container_name} {--interactive} {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} \n{--dataset=zfs/dataset:container_mountpoint} image{:tag} {command...}" << std::endl << std::endl
             << "--name        Name of the new container" << std::endl
             << "--interactive Start an interactive shell via pty" << std::endl
             << "--rm          Remove the image after it exits" << std::endl

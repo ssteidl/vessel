@@ -212,10 +212,8 @@ proc RUN {args} {
             "RUN invoked without arguments"
     }
 
-    puts $status_channel "RUN mountpoint: $mountpoint"
     set channel_dict [dict create stdin stdin stdout $status_channel stderr $status_channel]
     set network "inherit"
-
 
     try {
 
@@ -229,11 +227,11 @@ proc RUN {args} {
         set limits [dict create]
         set jail_options [dict create]
         set jail_name "${name}-buildcmd"
-        set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volumes $channel_dict $network $limits $jail_options $callback {*}$args]
+        set cpuset {}
+        set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volumes $channel_dict $network $limits $cpuset $jail_options $callback {*}$args]
         exec jail -f $tmp_jail_conf -r $jail_name
     } trap {CHILDSTATUS} {results options} {
 
-        puts stderr "Run failed: $results"
         return -code error -errorcode {BUILD RUN}
     } finally {
 

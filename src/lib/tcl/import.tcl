@@ -76,7 +76,23 @@ namespace eval vessel::import {
             exec tar -C $mountpoint -xvf $layer_file >&@ $status_channel
             flush $status_channel
 
-            #TODO: delete files from whitelist
+            #Read whiteout file and delete the listed files.
+            # The whiteout file is the list of files from the base image that
+            # need to be deleted.  It's called whiteouts because that's how
+            # unionfs works as it can't delete files in the lower layers.
+            set whiteouts_file_path [file join ${extracted_path} {whiteouts.txt}]
+            set whiteout_chan [open $whiteouts_file_path RDONLY]
+            while {[gets $whiteout_chan deleteme_path] >= 0} {
+
+                set jailed_path [fileutil::jail $mountpoint $deleteme_path]
+                try {
+                    ${log}::debug "Deleting file $jailed_path"
+                    file delete -force $deleteme_path
+                } on error {msg} {
+                    ${log}::debug "Failed to delete file $jailed_path: $msg"
+                }
+            }
+
             if {[vessel::zfs::snapshot_exists ${new_dataset}@b]} {
                 #If the b snapshot already exists then we need to delete it and
                 #make a new one.
