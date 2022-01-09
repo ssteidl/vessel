@@ -1,4 +1,4 @@
-#VLAN Bridging
+# VLAN Bridging
 
 The strategy for creating network is:
 

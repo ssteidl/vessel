@@ -1,7 +1,7 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux docker environment.
+The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and Test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux Docker environment.
 
 Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces.  This differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
 
@@ -11,19 +11,20 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 
 # Feature Highlights
 
-|Feature                                               | Implemented|
-|------------------------------------------------------|------------|
-| VesselFile (similar to Dockerfile)                   | Yes        |
-| Run configuration files (ini)                        | Yes        |
-| Volume Management                                    | Yes        |
-| Image Push/Pull Repositories (s3)                    | Yes        |
-| Jail management                                      | Yes        |
-| [Container Supervisor](docs/supervisor.md)           | Yes        |
-| [Resource Control](docs/ResourceControl.md)          | Yes        |
-| Internal (Bridged) Networking                        | Not yet    |
-| DNS Service Discovery                                | Not yet    |
-| Multi-node container orchestration                   | Not yet    |
-| VNET Routing via PF                                  | Not yet    |
+|Feature                                                                  | Implemented|
+|-------------------------------------------------------------------------|------------|
+| [VesselFile (similar to Dockerfile)](docs/ImageCreation.md)             | Yes        |
+| [Run configuration files (ini)](docs/RunningContainer.md#runtime-file)  | Yes        |
+| [Volume Management](docs/RunningContainer.md#volumes-and-datasets)      | Yes        |
+| Image Push/Pull Repositories (s3)                                       | Yes        |
+| [Jail Management](docs/RunningContainer.md#jail-management)             | Yes        |
+| [Container Supervisor](docs/supervisor.md)                              | Yes        |
+| [Resource Control](docs/ResourceControl.md)                             | Yes        |
+| [CPU Sets](docs/RunningContainer.md#cpu-sets)                           | Yes        |
+| Internal (Bridged) Networking                                           | Not yet    |
+| DNS Service Discovery                                                   | Not yet    |
+| Multi-node container orchestration                                      | Not yet    |
+| VNET Routing via PF                                                     | Not yet    |
 
 
 # Quickstart
@@ -43,7 +44,7 @@ While quickly running a minimal container can be useful, it's generally more use
 ```
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
 
-FROM FreeBSD:12.3-RELEASE
+FROM FreeBSD:12.2-RELEASE
 
 RUN mkdir -p /usr/local/etc/pkg/repos
 COPY ./deployment/FreeBSD.conf /usr/local/etc/pkg/repos/FreeBSD.conf
@@ -82,10 +83,9 @@ Once the image is built, it can be run with:
 
 This will start the init process in a new container running in the foreground.  
 
-# Jail Management
-Unlike docker, vessel is perfectly capable of running "thick containers" in the foreground.  Thus, allowing for multiple system services to be running in a single container.  Including syslog, cron and any other services that may be useful to run along side of the container. 
+# Note On Networking
 
-For those interested, vessel makes up for the lack of system event on jail exit by tracking process creation and exiting using kqueue process tracking.  Therefore, vessel can track when all jail processes have exited.  This is how vessel can shutdown jails cleanly with simple signal handling.  If you have started a jail via vessel, you can simply press ctrl+C to shutdown the jail (and all jailed processes) cleanly.
+The current version of vessel uses ipv4 inherited networking (IOW, the host network stack).  In the future a bridged and vlan networking system with VNET will be implemented.  For now, only inherited networking is used.  
 
-
+> ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a full fletched vnet network would/could have it's uses, inherited network has met all of our use cases so far.
 
