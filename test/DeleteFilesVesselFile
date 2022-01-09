@@ -1,0 +1,8 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+FROM "FreeBSD:12.3-RELEASE"
+
+RUN env ASSUME_ALWAYS_YES=yes pkg install tcl86
+
+RUN rm -rvf /usr/share/man
+RUN rm -rvf /usr/local/share/man
