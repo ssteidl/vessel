@@ -74,6 +74,19 @@ namespace eval vessel::deploy {
 
             return $deployment_dict
         }
+        
+        #Return a list of parameters to be executed.
+        proc parse_devctl_exec_string {devctl_str} {
+         
+            set matched [regexp {^exec[[:space:]]*=[[:space:]]*(.*)} $devctl_str matched_str cmd]
+            
+            if {!$matched} {
+                return -code error -errorcode {INI DEVCTL PARSE} \
+                "Could not parse rctl exec string: $devctl_str"   
+            }
+            
+            return $cmd
+        }
     }
 
     proc poll_deploy_dir {deploy_dir} {

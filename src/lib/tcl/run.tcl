@@ -159,10 +159,10 @@ namespace eval vessel::run {
 
         set jail [dict get $rctl_dict "jail"]
 
-        ${log}::info "Jail exceeded resource: $jail"
-
         if {$jail eq $jail_name} {
-
+            
+            ${log}::info "Jail exceeded resource: $jail"
+            
             #Iterate through all of the resource definitions provided
             # by the user.
             foreach user_limit_dict $user_limits_list {
@@ -177,14 +177,32 @@ namespace eval vessel::run {
                     #The user provided resource matches the resource provided by the devd rctl string
                     set user_action [dict get $user_limit_dict "devctl-action"]
                     ${log}::debug "User action: $user_action"
-                    if {$user_action eq "shutdown"} {
-                        ${log}::debug "Resource limit exceeded.  shutting down"
-                        if {[catch {vessel::jail::shutdown $jail_name $jail_file} msg]} {
-                            ${log}::debug "Error shutting down after resource limit exceeded: $msg"
+                    
+                    switch -glob $user_action {
+                     
+                        shutdown {
+                            ${log}::debug "Resource limit exceeded.  shutting down"
+                            if {[catch {vessel::jail::shutdown $jail_name $jail_file} msg]} {
+                                ${log}::debug "Error shutting down after resource limit exceeded: $msg"
+                            }    
                         }
-                    } else {
-                        #TODO: Implement exec subprocess
-                        ${log}::debug "Resource limit exceeded.  Executing some other action"
+                        
+                        exec=* {
+                            
+                            set command [vessel::deploy::ini::parse_devctl_exec_string $user_action]
+                           
+                            #Fire and forget the command
+                            if {[catch {exec -ignorestderr {*}$command &} msg]} {
+                                ${log}::error "Error executing rctl exec action, cmd: $command -> $msg"    
+                            }
+                        }
+                        
+                        default {
+                         
+                            return -code error -errorcode {VESSEL RCTL ACTION UNKNOWN}  \
+                            "Unknown user action for resource limit: $user_action"
+                            
+                        }
                     }
                 }
             }
