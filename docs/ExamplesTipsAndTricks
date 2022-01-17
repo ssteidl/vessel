@@ -1,7 +1,0 @@
-
-* How to develop images with --name or --local containers
-* Set start delay when containers need to be started in order.  Later we can implement start messages
-* delete unnecessary folders when building
-* learn the freebsd init system and how to use firstboot jails
-* Debugging and reviewing the jail.conf file
-* Using the generated jail.conf file
