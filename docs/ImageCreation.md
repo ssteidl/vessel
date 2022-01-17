@@ -45,3 +45,34 @@ Execute a command in the new image.
 
 > 🕵️ Each run command runs within a separate container (jail) on the new images dataset.  So commands use the dataset of the image not the host filesystem.  The 
 > jail inherits the host networking stack and the resolv.conf file is copied from the host into the jail.
+
+# Impage Publish and Pull
+
+`vessel` supports `publish` and `pull` commands to transfer images to an image repository.  Vessel's image repositories are configured using the `VESSEL_REPO_URL` environment variable.  Vessel supports the following repository schemas:
+
+* `file://` - The schema of the default repository.
+* `s3://` - Uses an s3 bucket and key prefix for the image repository.
+
+> 🕵️ When a repository uses the s3 schema, The `s3cmd` program is used to interface with the bucket.  Therefore, it's not only amazon's s3 object storage that can
+> be used.  It's any object storage that s3cmd can interface with (including digital ocean).  Note `s3cmd` must be configured outside of the context of vessel
+> before the s3 repository schema can be used.
+
+After an image is published to a repository, it can then be pulled from another machine.
+
+**Example**
+
+```
+env VESSEL_REPO_URL=s3://reweb-1234/images sudo -E vessel publish --tag=1.0 reweb
+```
+
+and from a different machine:
+
+```
+env VESSEL_REPO_URL=s3://reweb-1234/images sudo -E vessel pull --tag=1.0 reweb
+```
+
+or to export an image for manual transfer
+
+```
+env VESSEL_REPO_URL=file:///usr/home/shane/images sudo -E vessel pull --tag=1.0 reweb
+```
