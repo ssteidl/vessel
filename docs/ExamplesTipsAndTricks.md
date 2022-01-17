@@ -62,3 +62,7 @@ run_rc_command "$1"
 
 # Debugging, Reviewing and Using jail.conf file
 
+Vessel attempts to work with existing system tools instead of replacing them.  To work with the `jail` command vessel must generate jail.conf files.  The jail.conf file for a jail is stored in `/var/run/vessel/jails/<jail_name.conf>`.  If your container fails to start, you can see the generated jail.conf file via stderr of vessel by using the `--debug` provided to the vessel command `vessel --debug run ...`
+
+**Example**
+`jail -r -f /var/run/vessel/jails/<name.conf> <name>`
