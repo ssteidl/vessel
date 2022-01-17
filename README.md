@@ -11,20 +11,20 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 
 # Feature Highlights
 
-|Feature                                                                  | Implemented|
-|-------------------------------------------------------------------------|------------|
-| [VesselFile (similar to Dockerfile)](docs/ImageCreation.md)             | Yes        |
-| [Run configuration files (ini)](docs/RunningContainer.md#runtime-file)  | Yes        |
-| [Volume Management](docs/RunningContainer.md#volumes-and-datasets)      | Yes        |
-| Image Push/Pull Repositories (s3)                                       | Yes        |
-| [Jail Management](docs/RunningContainer.md#jail-management)             | Yes        |
-| [Container Supervisor](docs/supervisor.md)                              | Yes        |
-| [Resource Control](docs/ResourceControl.md)                             | Yes        |
-| [CPU Sets](docs/RunningContainer.md#cpu-sets)                           | Yes        |
-| Internal (Bridged) Networking                                           | Not yet    |
-| DNS Service Discovery                                                   | Not yet    |
-| Multi-node container orchestration                                      | Not yet    |
-| VNET Routing via PF                                                     | Not yet    |
+|Feature                                                                            | Implemented|
+|-----------------------------------------------------------------------------------|------------|
+| [VesselFile (similar to Dockerfile)](docs/ImageCreation.md)                       | Yes        |
+| [Run configuration files (ini)](docs/RunningContainer.md#runtime-file)            | Yes        |
+| [Volume Management](docs/RunningContainer.md#volumes-and-datasets)                | Yes        |
+| [Image Push/Pull Repositories (s3)](docs/ImageCreation.md#impage-publish-and-pull)| Yes        |
+| [Jail Management](docs/RunningContainer.md#jail-management)                       | Yes        |
+| [Container Supervisor](docs/supervisor.md)                                        | Yes        |
+| [Resource Control](docs/ResourceControl.md)                                       | Yes        |
+| [CPU Sets](docs/RunningContainer.md#cpu-sets)                                     | Yes        |
+| Internal (Bridged) Networking                                                     | Not yet    |
+| DNS Service Discovery                                                             | Not yet    |
+| Multi-node container orchestration                                                | Not yet    |
+| VNET Routing via PF                                                               | Not yet    |
 
 
 # Quickstart
