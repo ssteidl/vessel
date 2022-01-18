@@ -27,6 +27,7 @@ Vessel accomplishes the above goals by integrating tightly with FreeBSD system l
 | VNET Routing via PF                                                               | Not yet    |
 
 * [Tips and Tricks](docs/ExamplesTipsAndTricks.md)
+* [Build, Install and Develop](docs/BuildAndInstall.md)
 
 # Quickstart
 
