@@ -32,3 +32,29 @@ like: `FROM FREEBSD:13.0-RELEASE/RE-DEPS:1.2/RE:1.3`
 4. Layers are separated with forward slash.
 5. Layers to the right of the chain are not necessarily linked to layers on the left of the chain.  *NOTE* We'll do whatever is easiest here.  If it's easier to link them then we will.
 
+### Required Changes for MVP
+
+#### Build command
+
+The build command interface doesn't change.  We will need to review how resolv.conf is updated during the build.
+##### FROM file Command
+
+* Don't assume that the image is a single image that can be pulled from FREEBSD.org
+* The first image in the image chain could be first pulled from the repo but if it doesn't exist, it can be pulled from freebsd.org
+* Write all parent images to the metadata db file.  There's already an array section for this.
+
+#### Publish command
+
+* Check if any of the chain of images exists before uploading
+* If any of the images doesn't exist, upload the image
+
+#### Pull command
+
+* Pull all images in the chain that are not already imported and exist in the repo
+* If any required images do not exist in the repo report an error.
+* images must be imported in order
+
+#### Run command
+
+* The run command can be executed with the last piece of the image chain and tag.  The user should not be required to type the entire chain.
+
