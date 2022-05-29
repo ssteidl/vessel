@@ -58,3 +58,8 @@ The build command interface doesn't change.  We will need to review how resolv.c
 
 * The run command can be executed with the last piece of the image chain and tag.  The user should not be required to type the entire chain.
 
+#### Image command
+
+* The parent images displayed should be a comma separated list.
+* removing a dependency image should fail until all images that depend on it are removed.  At some point we might consider adding a -R flag.
+
