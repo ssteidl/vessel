@@ -145,7 +145,7 @@ namespace eval vessel::metadata_db {
                     $command \
                     $parent_image]
 
-                set image_data [lappend image_data $dataset_output_list]
+                set image_data [lappend image_data ${dataset_output_list}]
             }
 
             set matrix_cmd {output_matrix}

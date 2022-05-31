@@ -74,6 +74,9 @@ proc FROM {image} {
             "Multiple FROM commands is not supported"
     }
 
+    #AppLayer TODO: Break the parent image into an image chain.  Iterate through
+    # them and import what is needed.  Validate each image is available before
+    # pulling any of them
     set parent_image $image
 
     set pool [vessel::env::get_pool]
@@ -83,6 +86,7 @@ proc FROM {image} {
     #Image is in the form <image name>:<version>
     #So image name is the dataset and version is the snapshot name
 
+    #AppLayer TODO: Use the function in metadata_Db for this
     set image_tuple [split $image ":"]
     if {[llength $image_tuple] ne 2} {
 

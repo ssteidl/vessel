@@ -48,7 +48,7 @@ namespace eval deploy::test {
         #ini_file is random so just set it to a known value for comparison
         dict set d ini_file {}
         return $d
-    } -match exact -result {datasets {reappdata:/var/re/data upload-images:/var/db/uploaded-images} volumes {/test/joe:/mnt /usr/home/joe/projectdir:/re} resources {} remove 1 interactive 1 network inherit ini_file {} image testimage:1.0 jail {sysvshm new host.hostname re.zeta.investments} limits {}} \
+        } -match exact -result {datasets {reappdata:/var/re/data upload-images:/var/db/uploaded-images} volumes {/test/joe:/mnt /usr/home/joe/projectdir:/re} resources {} remove 1 interactive 1 network inherit ini_file {} image testimage:1.0 jail {sysvshm new host.hostname re.zeta.investments} limits {} cpuset {}} \
     -cleanup {
             close $ini_chan
             file delete $inifilename
