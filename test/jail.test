@@ -11,9 +11,31 @@ namespace eval jail::test {
     test generate-jail-conf-1 {Test that the jail conf file is generated correctly} -body {
 	set jail_options [dict create sysvshm new host.hostname re.zeta.investments]
 	set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
-			   {/zroot/myjail} {} {inherit} $jail_options sh /etc/rc]
+			   {/zroot/myjail} {} {inherit} {} {} $jail_options sh /etc/rc]
 
 	return $jail_conf
-    } -match glob -result {*"sysvshm=new";
-"host.hostname=re.zeta.investments"*}
-}
+    } -match glob -result \
+{
+                myjail {
+                    path="/zroot/myjail";
+                    sysvshm=new;
+                    allow.mount;
+                    allow.mount.devfs;
+                    mount.devfs;
+                    allow.mount.zfs;
+                    enforce_statfs=1;
+                    ip4=inherit;
+                    
+                     
+
+                     
+                     
+                    sysvshm+=new;
+host.hostname+=re.zeta.investments;
+
+
+                     #Set persist=1 so we can properly run shutdown commands after all processes exit
+                     persist=1;
+                    exec.start+="sh /etc/rc";
+                    
+                }}}
