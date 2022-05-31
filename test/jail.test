@@ -10,8 +10,14 @@ namespace eval jail::test {
     
     test generate-jail-conf-1 {Test that the jail conf file is generated correctly} -body {
 	set jail_options [dict create sysvshm new host.hostname re.zeta.investments]
-	set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
-			   {/zroot/myjail} {} {inherit} {} {} $jail_options sh /etc/rc]
+	set jail_name {myjail}
+	set mountpoint {/zroot/myjail}
+	set volume_datasets {}
+	set network {inherit}
+	set limits {}
+	set cpuset {}
+	set jail_conf [vessel::jail::_::build_jail_conf ${jail_name} \
+			    $mountpoint {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
 
 	return $jail_conf
     } -match glob -result \
