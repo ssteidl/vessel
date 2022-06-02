@@ -7,7 +7,7 @@ package require vessel::deploy
 namespace eval deploy::test {
 
     namespace import ::tcltest::*
-
+    
     test validate-ini-file-1 {Test validation of valid deploy file} -setup {
         set ini_chan [file tempfile inifilename]
         set ini_data {

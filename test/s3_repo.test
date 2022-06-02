@@ -5,6 +5,10 @@ package require tcltest
 
 namespace import tcltest::*
 
+if {![info exists env(VESSEL_TEST_AWS)]} {
+    set env(VESSEL_TEST_AWS) false   
+}
+
 testConstraint aws $env(VESSEL_TEST_AWS)
 
 test appc-publish-s3-1 {Verify s3cmd put succeeds when publishing} -constraints aws -setup {

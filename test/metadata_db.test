@@ -8,24 +8,20 @@ package require json::write
 package require tcltest
 
 
-#TODO: This is a random side note here but the FreeBSD/<Version>
-# dataset should actually be FreeBSD:<Version>.  That would make it
-# align with the rest of the datasets.
-
 namespace eval metadata_db::test {
 	namespace import ::tcltest::*
-
+	
 	#Use a specific dataset for testing
 	set env(VESSEL_DATASET) vessel-test
-	#set env(VESSEL_METADATA_DB_DIR) {/tmp/vessel-test/metadata_db}
+	set env(VESSEL_METADATA_DB_DIR) {/tmp/vessel-test/metadata_db}
 	proc clean_dataset {} {
-
+	    
 		set vessel_dataset [vessel::env::get_dataset]
-
+		
 		set dataset_children [vessel::zfs::dataset_children $vessel_dataset]
-
+		
 		set child_datasets_list [lrange $dataset_children 1 end]
-
+		
 		set vessel_children [list]
 		#Destroy all child datasets except for the base FBSD dataset
 		foreach dataset_props $child_datasets_list {
@@ -35,92 +31,85 @@ namespace eval metadata_db::test {
 				#Skip FreeBSD dataset
 				continue
 			}
-
+			
 			lappend vessel_children $dataset_name
 		}
-
+		
 		set sorted_vessel_children [lsort -dictionary -unique -decreasing $vessel_children]
-
+		
 		foreach ds $sorted_vessel_children {
-
+		    
 			#It's an vessel dataset but not the FreeBSD dataset.
 			vessel::zfs::destroy_recursive $ds
 		}
 	}
-
+	
 	proc build_image {image tag} {
-		set test_image_vessel_file {FROM FreeBSD:12.1-RELEASE
-			CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
-			set test_image_chan [file tempfile vessel_file /tmp/TestVesselFile]
-			puts $test_image_chan $test_image_vessel_file
-			close $test_image_chan
-
-			exec vessel build --file $vessel_file --name $image --tag $tag >&@ stderr
-		}
-
-		proc init_runtime_environment {} {
-		# Initialize runtime environment based on environment variables.  This should
-		# probably be a standalone module.
-
-		file mkdir [vessel::env::image_download_dir]
-		file mkdir [vessel::env::metadata_db_dir]
+		set test_image_vessel_file {FROM FreeBSD:12.3-RELEASE
+		CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
+		set test_image_chan [file tempfile vessel_file /tmp/TestVesselFile]
+		puts $test_image_chan $test_image_vessel_file
+		close $test_image_chan
+		set cmd_args "build --file $vessel_file --name $image --tag $tag"
+		puts stderr $cmd_args
+		exec vessel {*}$cmd_args >&@ stderr
 	}
-
-
-	#configure -skip {image-list-output-1}
-
-	init_runtime_environment
-	test image-list-1 {Verify output from the image iteration proc} {
-
-	}
-
+	
+	
 	#Create a background container
 	test image-list-output-1 {List all available images and their metadata} -setup {
 		clean_dataset
 		build_image list-images-test 1
 	} -body {
-
-		exec vessel image --list >&@ stderr
-
+	    
+		exec vessel image --list
+		
 		#ID    PARENT    CMD
-	} -result {ID    PARENT    CMD} -cleanup {
-
+	} -result \
+{DATASET                                CMD                                          PARENT              
+zroot/vessel-test/FreeBSD:12.3-RELEASE /etc/rc                                                          
+zroot/vessel-test/list-images-test:1   /usr/local/bin/bash -c {echo "fbsd is cool"} FreeBSD:12.3-RELEASE} -cleanup {
+	    
 	}
-
+	
 	test metadata_db-json-1 {Verify json format} -setup {
 		json::write indented false
 	} -body {
 		vessel::metadata_db::_::create_metadata_json \
-			[dict create \
-			"name" "test-image" \
-			"tag" "1.0" \
-			"command" "bash" \
-			"cwd" "/home/joe" \
-			"parent_images" [list FreeBSD:11.1]]
-
+		[dict create \
+		"name" "test-image" \
+		"tag" "1.0" \
+		"command" "bash" \
+		"cwd" "/home/joe" \
+		"parent_images" [list FreeBSD:11.1]]
+		
 	} -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":["FreeBSD:11.1"]}} -cleanup {
 		json::write indented true
 	}
-
+	
 	test metadata_db-json-2 {Verify valid json is written to the metadata file} -body {
 		set metadata_file [vessel::metadata_db::write_metadata_file \
-			test_image test {/} {/etc/rc} [list]]
-
-
+		test_image test {/} {/etc/rc} [list]]
+		
+		
 		set d [json::json2dict [fileutil::cat $metadata_file]]
 		expr [dict size $d] > 0
 	} -result [expr 1]
-
+	
 	test metadata_db-json-2 {Verify json is read correctly} -setup {
 		clean_dataset
 		build_image list-images-test 1
 	} -body {
-
+	    
 		#NOTE: Working on getting command output right.
 		vessel::metadata_db::_::list_images stdout
-	} -output {} -cleanup {
-
+	} -output \
+{DATASET                                CMD                                          PARENT              
+zroot/vessel-test/FreeBSD:12.3-RELEASE /etc/rc                                                          
+zroot/vessel-test/list-images-test:1   /usr/local/bin/bash -c {echo "fbsd is cool"} FreeBSD:12.3-RELEASE
+} -cleanup {
+	    
 	}
-
+	
 	cleanupTests
 }
