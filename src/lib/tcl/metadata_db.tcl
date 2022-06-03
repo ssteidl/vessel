@@ -39,6 +39,12 @@ namespace eval vessel::imageutil {
 
         return $image_parts_d
     }
+    
+    proc parse_image_chain {image_chain} {
+     
+        set images [split ${image_chain} /]
+        return [lmap image $images {parse_image_name $image}]
+    }
 }
 
 #NOTE: The metadata db was going to be an sqlite database that

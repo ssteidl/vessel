@@ -16,4 +16,27 @@ namespace eval imageutil::test {
     test parse-image-name-default-tag-1 {Test that the default tag is used when no tag is provided as part of the image name} -body {
         vessel::imageutil::parse_image_name {appimage}   
     } -result {name appimage tag latest}
+    
+    test parse-image-name-slash-error-1 {Image names cannot contain / character} -body {
+        vessel::imageutil::parse_image_name {appimage/is/awesome}    
+    } -errorCode {IMAGENAME ILLEGAL SLASH} -result {Image names cannot contain '/'}
+
+    test parse-image-chain-1 {Parse an image chain with one element} -body {
+        vessel::imageutil::parse_image_chain "FreeBSD:12.3-RELEASE"
+    } -result [list [dict create name FreeBSD tag 12.3-RELEASE]]
+    
+    test parse-image-chain-2 {Parse an image chain with 2 elements} -body {
+         vessel::imageutil::parse_image_chain "FreeBSD:12.3-RELEASE/myapp:1.2"
+    } -result [list \
+                [dict create name FreeBSD tag 12.3-RELEASE] \
+                [dict create name myapp tag 1.2]]
+                
+    test parse-image-chain-3 {Parse an image chain with 3 elements} -body {
+        vessel::imageutil::parse_image_chain "FreeBSD:12.3-RELEASE/myapp-deps:2.1/myapp:5"   
+    } -result [list \
+                [dict create name FreeBSD tag 12.3-RELEASE] \
+                [dict create name myapp-deps tag 2.1] \
+                [dict create name myapp tag 5]]
+   
+    cleanupTests
 }
