@@ -50,7 +50,8 @@ namespace eval file_repo::test {
         create_test_image_dataset $test_tag
         
         set tmp_repo_path [file normalize [makeDirectory {publish_file_repo_1} $test_dir]]
-        puts stderr $tmp_repo_path
+        
+        set old_repo_url env(VESSEL_REPO_URL)
         set env(VESSEL_REPO_URL) "file://${tmp_repo_path}"
 
     } -body {
@@ -58,7 +59,7 @@ namespace eval file_repo::test {
         vessel::repo::repo_cmd publish [dict create image minimal tag $test_tag]
 
     } -returnCodes ok -cleanup {
-        set env(VESSEL_REPO_URL) {}
+        set env(VESSEL_REPO_URL) ${old_repo_url}
         vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
     }
 
@@ -66,11 +67,12 @@ namespace eval file_repo::test {
         variable test_dir
         set test_tag {pulltest}
 
+        set old_repo_url env(VESSEL_REPO_URL)
+        set old_workdir env(VESSEL_WORKDIR)
         set env(VESSEL_REPO_URL) "file://${tmp_repo_path}"
         set env(VESSEL_WORKDIR) [makeDirectory {workdir_pull_file_repo_1} $test_dir]
-
-        makeDirectory [vessel::env::metadata_db_dir]
         makeDirectory [vessel::env::image_download_dir]
+        
         set tmp_repo_path [file normalize [makeDirectory {pull_file_repo_1} $test_dir]]
         create_test_image_dataset $test_tag
 
@@ -83,7 +85,8 @@ namespace eval file_repo::test {
         vessel::repo::repo_cmd pull [dict create image minimal tag $test_tag]        
         set result {}
     } -returnCodes ok -cleanup {
-        set env(VESSEL_REPO_URL) {}
+        set env(VESSEL_REPO_URL) ${old_repo_url}
+        set env(VESSEL_WORKDIR) ${old_workdir}
         vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
     }
 

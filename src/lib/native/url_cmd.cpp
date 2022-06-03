@@ -4,7 +4,7 @@
 #include "tcl.h"
 #include "curl/urlapi.h"
 #include <string>
-#include <iostream> //TODO
+
 namespace
 {
 
@@ -233,7 +233,6 @@ int Vessel_ParseURL(void *clientData, Tcl_Interp *interp,
     }
 
     char *url_string = Tcl_GetStringFromObj(objv[1], nullptr);
-    std::cerr << "Url string: " << url_string << std::endl;
     std::unique_ptr<url> u;
     url_result result;
     u = url::parse(url_string, result);
