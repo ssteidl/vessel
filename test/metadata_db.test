@@ -51,7 +51,6 @@ namespace eval metadata_db::test {
 		puts $test_image_chan $test_image_vessel_file
 		close $test_image_chan
 		set cmd_args "build --file $vessel_file --name $image --tag $tag"
-		puts stderr $cmd_args
 		exec vessel {*}$cmd_args >&@ stderr
 	}
 	

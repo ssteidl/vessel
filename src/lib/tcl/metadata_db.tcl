@@ -6,6 +6,7 @@ package require defer
 package require fileutil
 package require json
 package require json::write
+package require logger
 package require struct::matrix
 
 namespace eval vessel::imageutil {
@@ -48,6 +49,9 @@ namespace eval vessel::metadata_db {
     #via the filesystem or zfs command, we aren't going to duplicate that
     #data in a database or json file.
 
+    logger::initNamespace [namespace current] debug
+    variable log [logger::servicecmd [string trimleft [namespace current] :]]
+    
     namespace eval _ {
 
         proc dict_get_value {dict key default_value} {
@@ -112,6 +116,8 @@ namespace eval vessel::metadata_db {
 
             #Output script consumable fields for each image to output_chan.
 
+            variable ::vessel::metadata_db::log
+            
             set headers [list ID PARENT COMMAND]
             set vessel_dataset [vessel::env::get_dataset]
 
@@ -137,8 +143,12 @@ namespace eval vessel::metadata_db {
                     continue
                 }
 
-                set dataset_metadata [read_metadata_json $dataset_name]
-
+                try {
+                    set dataset_metadata [read_metadata_json $dataset_name]
+                } trap {} msg {
+                    ${log}::warn "Could not read db file for dataset: $dataset_name"
+                    continue
+                }
                 set command [dict get $dataset_metadata command]
                 set parent_image [lindex [dict get $dataset_metadata parent_images] 0]
                 set dataset_output_list [list $dataset_name \
