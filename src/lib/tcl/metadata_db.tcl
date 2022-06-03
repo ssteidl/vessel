@@ -23,11 +23,15 @@ namespace eval vessel::imageutil {
         # default_tag str Optional parameter to specify the default tag if
         # none is given. 
 
-        set tag $default_tag
+        if {[string first / $image_name] != -1} {
+            return -code error -errorcode {IMAGENAME ILLEGAL SLASH} "Image names cannot contain '/'"   
+        }
+        
         set image_parts_d [dict create]
 
         set image_components [split $image_name :]
         dict set image_parts_d "name" [lindex $image_components 0]
+        dict set image_parts_d "tag" $default_tag
       
         if {[llength $image_components] > 1} {
             dict set image_parts_d "tag" [lindex $image_components 1]
@@ -138,6 +142,10 @@ namespace eval vessel::metadata_db {
                 #images with 3 parts when we split on /.  An example
                 #container image is:
                 #zroot/jails/minimal:hackathon/0bdefddd-a753-48a8-bd85-750d5031464d
+                #
+                #TODO: This is yet another reason why we should just iterate the
+                #images in the metadata_db dir and verify they have a corresponding
+                #dataset.
                 set component_count [llength [split $dataset_name /]]
                 if {$component_count == 4} {
                     continue
