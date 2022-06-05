@@ -22,38 +22,41 @@ set status_channel stderr
 
 set command_queue [list]
 
-namespace eval vessel::file_commands::_ {
 
-    proc fetch_image {image_dataset name version status_channel} {
-        #Download an image.  Ideally we just pull from a repo like
-        #any other image.  For now we have a special function because
-        #it's not an actual vessel image.  Just a tarball
+namespace eval vessel::file_commands::_::FROM {
+    
+    #NOTE: These methods likely belong in an image class
+    proc snapshot_name? {image_d} {
+        set image_name [dict get $image_d name]
+        set image_version [dict get $image_d tag]
+        set snapshot_name "${image_name}:${image_version}@${image_version}"
+        return 
+    }
+    
+    proc snapshot_path? {dataset image_d} {
+        set snapshot_name [snapshot_name? ${image_d}]
+        return  "${dataset}/${snapshot_name}"
+    }
+    
+    proc image_snapshot_exists? {dataset image_d} {
+        return [vessel::zfs::snapshot_exists $snapshot_path]
+    }
+    
+    proc create_snapshot_for_image {dataset image_d} {
 
-        if {$name ne "FreeBSD" } {
-
-            return -code error -errorcode {BUILD IMAGE FETCH} \
-                "Only FreeBSD images are currently allowed"
+        if {![image_snapshot_exists? $dataset]} {
+    
+            set image_dataset "${dataset}/${image_name}:${image_version}"
+            vessel::zfs::create_dataset $image_dataset
+    
+            #TODO: This fetch_image should really be just another image.  For now it's a
+            #special case.
+            vessel::file_commands::_::fetch_image $image_dataset $image_name $image_version $status_channel
+            vessel::metadata_db::write_metadata_file $image_name $image_version {/} {/etc/rc} [list]
+            vessel::zfs::create_snapshot $image_dataset $image_version
         }
-
-        set mountpoint [vessel::zfs::get_mountpoint $image_dataset]
-
-        #We require the image to be the same as the
-        #host architecture
-        set arch [vessel::bsd::host_architecture]
-
-        set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-
-        set old_pwd [pwd]
-        set download_dir [vessel::env::image_download_dir]
-        try {
-            #We used to pipe these two command together but that would cause issues
-            #with slower internet.
-            cd $download_dir
-            exec -ignorestderr curl -L -O $url
-            exec tar -C $mountpoint -xvf base.txz >&@ stderr
-        } finally {
-            cd $old_pwd
-        }
+        
+        return $snapshot_path
     }
 }
 
@@ -77,41 +80,17 @@ proc FROM {image} {
     #AppLayer TODO: Break the parent image into an image chain.  Iterate through
     # them and import what is needed.  Validate each image is available before
     # pulling any of them
+    
+    set image_chain_l_d [vessel::imageutil::parse_image_chain $image]
+    
     set parent_image $image
 
     set pool [vessel::env::get_pool]
 
     set vessel_parent_dataset [vessel::env::get_dataset]
 
-    #Image is in the form <image name>:<version>
-    #So image name is the dataset and version is the snapshot name
-
-    #AppLayer TODO: Use the function in metadata_Db for this
-    set image_tuple [split $image ":"]
-    if {[llength $image_tuple] ne 2} {
-
-        return -code error -errorcode {BUILD IMAGE FORMAT} \
-            "Image must be in the format <name:version>"
-    }
-
-    set image_name [lindex $image_tuple 0]
-    set image_version [lindex $image_tuple 1]
-    set snapshot_name "${image_name}:${image_version}@${image_version}"
-    set snapshot_path "${vessel_parent_dataset}/${snapshot_name}"
-
-    set snapshot_exists [vessel::zfs::snapshot_exists $snapshot_path]
-
-    if {!$snapshot_exists} {
-
-        set image_dataset "${vessel_parent_dataset}/${image_name}:${image_version}"
-        vessel::zfs::create_dataset $image_dataset
-
-        #TODO: This fetch_image should really be just another image.  For now it's a
-        #special case.
-        vessel::file_commands::_::fetch_image $image_dataset $image_name $image_version $status_channel
-        vessel::metadata_db::write_metadata_file $image_name $image_version {/} {/etc/rc} \
-            [list]
-        vessel::zfs::create_snapshot $image_dataset $image_version
+    foreach image_d $image_chain_l_d {
+        vessel::file_commands::_::FROM::create_snapshot_for_image $pool ${vessel_parent_dataset} $image_d $status_channel
     }
 
     # Clone base jail and name new dataset with guid

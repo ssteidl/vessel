@@ -30,13 +30,15 @@ Details:
 3. From command will support multiple layers.  Example configuration layer that is above the app layer may look 
 like: `FROM FREEBSD:13.0-RELEASE/RE-DEPS:1.2/RE:1.3`
 4. Layers are separated with forward slash.
-5. Layers to the right of the chain are not necessarily linked to layers on the left of the chain.  *NOTE* We'll do whatever is easiest here.  If it's easier to link them then we will.
+5. Layers to the right of the chain are necessarily linked to layers on the left of the chain.  Therefore, layers are named with
+the entire chain, not just the last value. We MAY do this in a directory heirarchy
 
 ### Required Changes for MVP
 
 #### Build command
 
 The build command interface doesn't change.  We will need to review how resolv.conf is updated during the build.
+
 ##### FROM file Command
 
 * Don't assume that the image is a single image that can be pulled from FREEBSD.org

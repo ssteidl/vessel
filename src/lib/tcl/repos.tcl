@@ -170,7 +170,7 @@ namespace eval vessel::repo {
         method _get_s3_image_url {image tag} {
             #TODO: this is everywhere
             set image_name "${image}:${tag}.zip"
-            puts "image_name: $image_name -> $image,$tag"
+            ${log}::debug "image_name: $image_name -> $image,$tag"
             set image_url [join [list [my get_url] $image_name] /]
         }
 
@@ -226,7 +226,93 @@ namespace eval vessel::repo {
         }
 
     }
+ 
+    namespace eval _ {
+        
+        proc execute_fetch {url destination} {
+            
+            if {![file exists $destination]} { 
+                # Save the file at URL to destination using curl.
+            
+                exec -ignorestderr curl -L -o $destination $url
+            }
+            
+            return $destination
+        }
+    
+        proc execute_unpack {archive_dir archive extract_dir} {
+            # Unpack a tarball with name 'archive' that is located in 'archive_dir'
+            # to 'extract_dir'
+            
+            set old_pwd [pwd]
+            try {
+                cd $dir
+                exec tar -C ${archive_dir} -xvf $archive >&@ $status_channel
+            } finally {
+                cd ${old_pwd}   
+            }
+        }
+        
+        #TODO: Unpacking belongs in the import module
+        
+        proc get_unpack_base_image_params {image_path mountpoint} {
+         
+            set image_dir [file dirname $image_path]
+            set image_name [file tail $image_path]
+            
+            switch -glob $image_name {
+                
+                FreeBSD*.txz {}
+                
+                default {
+                    return -code error -errorcode {IMAGE BASE ILLEGAL} \
+                    "FreeBSD base image expected to be named like FreeBSD.<version>.txz"       
+                }
+            }
+            
+            if {![file exists $image_dir]} {
+                return -code error -errorcode {IMAGE PATH NODIR} \
+                "The directory that should contain the FreeBSD base image does not exist"   
+            }
+            
+            return [list $image_dir $image_name $mountpoint]
+        }
+        
+        proc get_base_image_fetch_params {arch name version download_dir} {
+        
+            set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
+            set base_image_destination [file join ${download_dir} "FreeBSD:${version}.txz"]
+            return [list $url $base_image_destination]
+        }
+    }
+    
+    proc fetch_base_image {name version} {
+        
+        # Download a base image to the current download directory renaming it so
+        # that it can be cached to avoid future downloads.
 
+        if {$name ne "FreeBSD" } {
+            return -code error -errorcode {BUILD IMAGE FETCH} \
+                "Only FreeBSD images are currently allowed"
+        }
+        
+        #We require the image to be the same as the host architecture
+        set arch [vessel::bsd::host_architecture]
+        set download_dir [vessel::env::image_download_dir]
+        set fetch_params [_::get_base_image_fetch_params $arch $name $version $download_dir]
+        set base_image_path [_::execute_fetch {*}$fetch_params]
+        
+        return ${base_image_path}
+    }
+    
+    proc extract_base_image {image_path image_dataset} {
+        #Extract the base image into the mountpoint of image_dataset
+        
+        set mountpoint [vessel::zfs::get_mountpoint $image_dataset]
+        set unpack_params [_::get_unpack_base_image_params ${base_image_path} ${image_dataset} ${mountpoint}]
+        execute_unpack {*}$unpack_params
+    }
+    
     #Execute a repo command, either push or pull.
     # Args:
     # 
@@ -267,6 +353,9 @@ namespace eval vessel::repo {
             }
             pull {
                 #Pulls the command.  Basically a GET and an import.
+                
+                #Check if the image is in the download directory before pulling it
+                if {[file exists [file join $downloaddir}
                 $repo pull_image $image $tag $downloaddir
                 vessel::import::import $image $tag $downloaddir stderr
             }

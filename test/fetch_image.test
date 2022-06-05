@@ -1,0 +1,21 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+package require vessel::repo
+
+package require tcltest
+
+namespace eval vessel::fetch_image::test {
+    namespace import ::tcltest::*
+    
+    test fetch-image-params-sunnyday-1 {Test that the download url param is correct} -body {
+        set params [vessel::repo::_::get_base_image_fetch_params amd64 FreeBSD "12.3-RELEASE" .]
+        lindex $params 0
+    } -result {https://ftp.freebsd.org/pub/FreeBSD/releases/amd64/12.3-RELEASE/base.txz}
+    
+    test fetch-image-params-sunnyday-2 {Test that the destination file name param is correct} -body {
+        set params [vessel::repo::_::get_base_image_fetch_params amd64 FreeBSD "12.3-RELEASE" .]
+        lindex $params 1
+    } -result {./FreeBSD:12.3-RELEASE.txz}
+    
+    cleanupTests
+}
