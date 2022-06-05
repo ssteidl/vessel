@@ -227,14 +227,44 @@ namespace eval vessel::repo {
 
     }
  
-    namespace eval _ {
+    namespace eval _::base_image {
         
-        proc execute_fetch {url destination} {
+        proc parse_manifest {manifest_chan} {
+            
+            #Reads the MANIFEST from a channel and returns the sha256 of the
+            #base.txz file.
+            
+            #example line: 
+            #base.txz	e85b256930a2fbc04b80334106afecba0f11e52e32ffa197a88d7319cf059840	26492	base	"Base system (MANDATORY)"	on
+            
+            set line {}
+            set sha256 {}
+            while {[gets ${manifest_chan} line] > 0} {
+                set image_file [lindex $line 0]
+                if {${image_file} eq "base.txz"} {
+                    set sha256 [lindex $line 1]
+                    set hash_size [string length $sha256]
+                    if {${hash_size} != 64} {
+                        return -code error -errorcode {IMAGE BASE MANIFEST EHASH} \
+                        "A hash with incorrect length (${hash_size}) found in the MANIFEST for base.txz.  A sha256 hash size (64 chars) was expected."
+                    }
+                    return $sha256
+                }
+            }
+            
+            return -code error -errorcode {IMAGE BASE MANIFEST ECORRUPT} \
+            "A hash was not found in the manifest file for base.txz"
+        }
+        
+        proc execute_fetch {base_url destination_dir} {
+            
+            set download_files {MANIFEST base.txz}
+            set url "${base_url}/{MANIFEST,base.txz}"
             
             if {![file exists $destination]} { 
                 # Save the file at URL to destination using curl.
             
-                exec -ignorestderr curl -L -o $destination $url
+                exec -ignorestderr curl -L -O --create-dirs --output-dir ${destination_dir} $url
             }
             
             return $destination
@@ -278,10 +308,10 @@ namespace eval vessel::repo {
             return [list $image_dir $image_name $mountpoint]
         }
         
-        proc get_base_image_fetch_params {arch name version download_dir} {
+        proc get_fetch_params {arch name version download_dir} {
         
-            set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version/base.txz"
-            set base_image_destination [file join ${download_dir} "FreeBSD:${version}.txz"]
+            set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version"
+            set base_image_destination [file join ${download_dir} "FreeBSD:${version}"]
             return [list $url $base_image_destination]
         }
     }
