@@ -9,4 +9,7 @@ set env(VESSEL_DOWNLOAD_DIR) [pwd]
 
 set name "FreeBSD"
 set version [vessel::bsd::host_version_without_patch]
-vessel::repo::fetch_base_image ${name} ${version}
+set downloaded_image [vessel::repo::fetch_base_image ${name} ${version}]
+
+puts stderr "Image downloaded and checksum verified"
+puts ${downloaded_image}

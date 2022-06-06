@@ -70,5 +70,7 @@ tests.txz	537def20a1b033a46eb939b9779ce05e9ab843da5787ac8ca0b0aa16c7e5c916	6225	
         vessel::repo::_::base_image::parse_manifest ${manifest_chan}
     } -match glob -result "*" -returnCodes {1} -errorCode {IMAGE BASE MANIFEST EHASH}
     
+    
+    
     cleanupTests
 }

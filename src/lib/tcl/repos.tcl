@@ -227,14 +227,54 @@ namespace eval vessel::repo {
 
     }
  
+    # Utility functions used for downloading and verifying the FreeBSD base image.
     namespace eval _::base_image {
+        
+        #TODO: Unpacking belongs in the import module
+        
+        proc execute_unpack {archive_dir archive extract_dir} {
+            # Unpack a tarball with name 'archive' that is located in 'archive_dir'
+            # to 'extract_dir'
+            
+            set old_pwd [pwd]
+            try {
+                cd $dir
+                exec tar -C ${archive_dir} -xvf $archive >&@ $status_channel
+            } finally {
+                cd ${old_pwd}   
+            }
+        }
+        
+        proc get_unpack_base_image_params {image_path mountpoint} {
+         
+            set image_dir [file dirname $image_path]
+            set image_name [file tail $image_path]
+            
+            switch -glob $image_name {
+                
+                FreeBSD*.txz {}
+                
+                default {
+                    return -code error -errorcode {IMAGE BASE ILLEGAL} \
+                    "FreeBSD base image expected to be named like FreeBSD*.txz"       
+                }
+            }
+            
+            if {![file exists $image_dir]} {
+                return -code error -errorcode {IMAGE PATH NODIR} \
+                "The directory that should contain the FreeBSD base image does not exist"   
+            }
+            
+            return [list $image_dir $image_name $mountpoint]
+        }
+        
         
         proc parse_manifest {manifest_chan} {
             
-            #Reads the MANIFEST from a channel and returns the sha256 of the
-            #base.txz file.
+            # Reads the MANIFEST from a channel and returns the sha256 of the
+            # base.txz file.
             
-            #example line: 
+            # example line: 
             #base.txz	e85b256930a2fbc04b80334106afecba0f11e52e32ffa197a88d7319cf059840	26492	base	"Base system (MANDATORY)"	on
             
             set line {}
@@ -256,60 +296,88 @@ namespace eval vessel::repo {
             "A hash was not found in the manifest file for base.txz"
         }
         
-        proc execute_fetch {base_url destination_dir} {
+        proc validate_sha256 {image_path expected_sha256sum} {
+        
+            # Validate that the base image's sha256 matches the expected sha256 provided by the MANIFEST
+            #
+            # returns true if the sha256 matches false otherwise
             
-            set download_files {MANIFEST base.txz}
+            # Example sha256sum output: SHA256 (../FreeBSD:12.3-RELEASE.txz) = e85b256930a2fbc04b80334106afecba0f11e52e32ffa197a88d7319cf059840
+            
+            variable ::vessel::repo::log
+            
+            set sha256sum_output [exec sha256sum $image_path]
+            set sha256sum [lindex ${sha256sum_output} 0]
+            
+            ${log}::debug "base image sha256: ${sha256sum}, expected: ${expected_sha256sum}"
+            
+            if {$sha256sum ne ${expected_sha256sum}} {
+                return false
+            }
+            
+            return true
+        }
+        
+        proc check_for_existing_files {manifest_file_path base_image_path} {
+            
+            # Checks if all of the base image files have been downloaded already.  
+            # Returns true if the base.txz image has been downloaded and verified
+            # against the hash in the MANIFEST file.
+            
+            set image_valid false
+            
+            if {[file exists ${base_image_path}] && \
+                [file exists ${manifest_file_path}]} {
+                
+                set manifest_chan [open ${manifest_file_path} "r"]
+                
+                try {
+                    set expected_sha256 [parse_manifest $manifest_chan]
+                } finally {
+                    close ${manifest_chan}
+                }
+                
+                set image_valid [validate_sha256 ${base_image_path} ${expected_sha256}]
+            }
+            
+            return $image_valid
+        }
+        
+        proc execute_fetch {base_url destination_dir} {
+            variable ::vessel::repo::log
+            #check for existing files should just be inlined in this function
+            
+            set base_image_path [file join ${destination_dir} base.txz]
+            set manifest_file_path [file join ${destination_dir} MANIFEST]
+            
+            set image_exists [check_for_existing_files ${manifest_file_path} ${base_image_path}]
+            
+            if {! ${image_exists}} {
+                ${log}::debug "Image does not exist.  Downloading..."
+            } else {
+                ${log}::debug "Image exists.  Skipping download"
+                return ${base_image_path}
+            } 
+            
+            #Some files need to be downloaded
             set url "${base_url}/{MANIFEST,base.txz}"
             
-            if {![file exists $destination]} { 
-                # Save the file at URL to destination using curl.
+            # Save the file at URL to destination using curl.
+            exec -ignorestderr curl -L -O --create-dirs --output-dir ${destination_dir} $url
             
-                exec -ignorestderr curl -L -O --create-dirs --output-dir ${destination_dir} $url
+            #After downloading, check that the images are valid
+            set image_exists [check_for_existing_files ${manifest_file_path} ${base_image_path}]
+            if {! ${image_exists}} {
+                return -code error -errorcode {IMAGE BASE ECORRUPT} \
+                "Image was downloaded but is corrupt"
             }
             
-            return $destination
-        }
-    
-        proc execute_unpack {archive_dir archive extract_dir} {
-            # Unpack a tarball with name 'archive' that is located in 'archive_dir'
-            # to 'extract_dir'
-            
-            set old_pwd [pwd]
-            try {
-                cd $dir
-                exec tar -C ${archive_dir} -xvf $archive >&@ $status_channel
-            } finally {
-                cd ${old_pwd}   
-            }
-        }
-        
-        #TODO: Unpacking belongs in the import module
-        
-        proc get_unpack_base_image_params {image_path mountpoint} {
-         
-            set image_dir [file dirname $image_path]
-            set image_name [file tail $image_path]
-            
-            switch -glob $image_name {
-                
-                FreeBSD*.txz {}
-                
-                default {
-                    return -code error -errorcode {IMAGE BASE ILLEGAL} \
-                    "FreeBSD base image expected to be named like FreeBSD.<version>.txz"       
-                }
-            }
-            
-            if {![file exists $image_dir]} {
-                return -code error -errorcode {IMAGE PATH NODIR} \
-                "The directory that should contain the FreeBSD base image does not exist"   
-            }
-            
-            return [list $image_dir $image_name $mountpoint]
+            return ${base_image_path}
         }
         
         proc get_fetch_params {arch name version download_dir} {
-        
+            # Returns the list of parameters needed to fetch the base tarball.
+            
             set url "https://ftp.freebsd.org/pub/FreeBSD/releases/$arch/$version"
             set base_image_destination [file join ${download_dir} "FreeBSD:${version}"]
             return [list $url $base_image_destination]
@@ -318,8 +386,9 @@ namespace eval vessel::repo {
     
     proc fetch_base_image {name version} {
         
-        # Download a base image to the current download directory renaming it so
-        # that it can be cached to avoid future downloads.
+        # Download a base image to the download directory only if the base
+        # image does not already exist or it does not match the sha256 in the
+        # MANIFEST file.
 
         if {$name ne "FreeBSD" } {
             return -code error -errorcode {BUILD IMAGE FETCH} \
@@ -329,14 +398,15 @@ namespace eval vessel::repo {
         #We require the image to be the same as the host architecture
         set arch [vessel::bsd::host_architecture]
         set download_dir [vessel::env::image_download_dir]
-        set fetch_params [_::get_base_image_fetch_params $arch $name $version $download_dir]
-        set base_image_path [_::execute_fetch {*}$fetch_params]
+        set fetch_params [_::base_image::get_fetch_params $arch $name $version $download_dir]
+        set base_image_file [_::base_image::execute_fetch {*}$fetch_params]
         
-        return ${base_image_path}
+        return ${base_image_file}
     }
     
+    # TODO: Belongs in import module
     proc extract_base_image {image_path image_dataset} {
-        #Extract the base image into the mountpoint of image_dataset
+        # Extract the base image into the mountpoint of image_dataset
         
         set mountpoint [vessel::zfs::get_mountpoint $image_dataset]
         set unpack_params [_::get_unpack_base_image_params ${base_image_path} ${image_dataset} ${mountpoint}]
