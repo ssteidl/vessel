@@ -104,6 +104,46 @@ namespace eval vessel::import {
             #instead of copying the file to safeguard against mismatching versions
             vessel::import::import_image_metadata_dict $metadata_dict
         }
+        
+        namespace eval base_image {
+        
+            proc execute_unpack {archive_dir archive extract_dir} {
+                # Unpack a tarball with name 'archive' that is located in 'archive_dir'
+                # to 'extract_dir'
+                
+                set old_pwd [pwd]
+                try {
+                    cd $dir
+                    exec tar -C ${archive_dir} -xvf $archive >&@ $status_channel
+                } finally {
+                    cd ${old_pwd}   
+                }
+            }
+            
+            proc get_unpack_base_image_params {image_path mountpoint} {
+             
+                set image_dir [file dirname $image_path]
+                set image_name [file tail $image_path]
+                
+                switch -glob $image_name {
+                    
+                    FreeBSD*.txz {}
+                    
+                    default {
+                        return -code error -errorcode {IMAGE BASE ILLEGAL} \
+                        "FreeBSD base image expected to be named like FreeBSD*.txz"       
+                    }
+                }
+                
+                if {![file exists $image_dir]} {
+                    return -code error -errorcode {IMAGE PATH NODIR} \
+                    "The directory that should contain the FreeBSD base image does not exist"   
+                }
+                
+                return [list $image_dir $image_name $mountpoint]
+            }
+   
+        }
     }
 
     proc import_image_metadata {name tag cwd cmd parent_images} {
@@ -133,13 +173,17 @@ namespace eval vessel::import {
     proc import {image tag image_dir status_channel} {
         variable log
 
-        ${log}::debug "import{}: ${image},${tag}"
+        ${log}::debug "import: ${image},${tag}"
 
         set extracted_path [file join $image_dir "${image}:${tag}"]
 
         #Extract files into extracted_path overriding files that already exist.
         exec unzip -o -d $extracted_path [file join $image_dir "${image}:${tag}.zip"] >&@ $status_channel
         _::create_layer $image $tag $extracted_path $status_channel
+    }
+    
+    proc import_base_image {base_image_path pool status_channel} {
+        # archive_dir archive extract_dir
     }
 }
 

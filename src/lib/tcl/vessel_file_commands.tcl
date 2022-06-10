@@ -5,10 +5,12 @@ package require vessel::bsd
 package require vessel::env
 package require vessel::jail
 package require vessel::metadata_db
+package require vessel::repo
 package require vessel::zfs
 package require fileutil
 package require uuid
 
+# TODO: Seems like these should be in a _ namespace
 set current_dataset {}
 set cmdline_options {}
 set mountpoint {}
@@ -21,7 +23,6 @@ set cmd {}
 set status_channel stderr
 
 set command_queue [list]
-
 
 namespace eval vessel::file_commands::_::FROM {
     
@@ -40,6 +41,15 @@ namespace eval vessel::file_commands::_::FROM {
     
     proc image_snapshot_exists? {dataset image_d} {
         return [vessel::zfs::snapshot_exists $snapshot_path]
+    }
+    
+    proc fetch_base_image {image_chain_l_d} {
+        
+        set parent_image_d [lindex $image_chain_l_d 0]
+        set base_image_name [dict get ${parent_image_d} name]
+        set base_image_tag [dict get ${parent_image_d} tag]
+        set base_image_path [vessel::repo::fetch_base_image ${base_image_name} ${base_image_tag}]
+        return ${base_image_path}
     }
     
     proc create_snapshot_for_image {dataset image_d} {
@@ -77,21 +87,36 @@ proc FROM {image} {
             "Multiple FROM commands is not supported"
     }
 
-    #AppLayer TODO: Break the parent image into an image chain.  Iterate through
-    # them and import what is needed.  Validate each image is available before
-    # pulling any of them
+    if {$image eq {}} {
+        return -code error -errorcode {BUILD FROM ENOIMAGE} \
+        "FROM requires exactly 1 non-empty parameter"
+    }
     
-    set image_chain_l_d [vessel::imageutil::parse_image_chain $image]
     
-    set parent_image $image
-
+    #AppLayer: Order of operations:
+    # fetch all images from repo
+    # clone dataset for each image (one at a time)
+    # create snapshot for each image (one at a time)
+    # extract each image into cloned dataset(one at a time)
+    # snapshot of cloned dataset
+    # rinse and repeat for other images in the chain
+    
+    
     set pool [vessel::env::get_pool]
-
     set vessel_parent_dataset [vessel::env::get_dataset]
 
-    foreach image_d $image_chain_l_d {
-        vessel::file_commands::_::FROM::create_snapshot_for_image $pool ${vessel_parent_dataset} $image_d $status_channel
+    set image_chain_l_d [vessel::imageutil::parse_image_chain $image]
+    set base_image_path [vessel::file_commands::_::FROM::fetch_base_image ${image_chain_l_d}]
+    #TODO: create repo from repo factory here
+    
+    #Start the loop at 1 because we have already fetched the base image
+    for {set i 1} {$i < [llength ${image_chain_l_d}]}  image_d $image_chain_l_d {
+               
     }
+    
+    
+    vessel::import::import_base_image ${base_image_path}
+     
 
     # Clone base jail and name new dataset with guid
     set name [dict get $cmdline_options {name}]

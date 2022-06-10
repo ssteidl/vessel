@@ -228,46 +228,7 @@ namespace eval vessel::repo {
     }
  
     # Utility functions used for downloading and verifying the FreeBSD base image.
-    namespace eval _::base_image {
-        
-        #TODO: Unpacking belongs in the import module
-        
-        proc execute_unpack {archive_dir archive extract_dir} {
-            # Unpack a tarball with name 'archive' that is located in 'archive_dir'
-            # to 'extract_dir'
-            
-            set old_pwd [pwd]
-            try {
-                cd $dir
-                exec tar -C ${archive_dir} -xvf $archive >&@ $status_channel
-            } finally {
-                cd ${old_pwd}   
-            }
-        }
-        
-        proc get_unpack_base_image_params {image_path mountpoint} {
-         
-            set image_dir [file dirname $image_path]
-            set image_name [file tail $image_path]
-            
-            switch -glob $image_name {
-                
-                FreeBSD*.txz {}
-                
-                default {
-                    return -code error -errorcode {IMAGE BASE ILLEGAL} \
-                    "FreeBSD base image expected to be named like FreeBSD*.txz"       
-                }
-            }
-            
-            if {![file exists $image_dir]} {
-                return -code error -errorcode {IMAGE PATH NODIR} \
-                "The directory that should contain the FreeBSD base image does not exist"   
-            }
-            
-            return [list $image_dir $image_name $mountpoint]
-        }
-        
+    namespace eval _::base_image {        
         
         proc parse_manifest {manifest_chan} {
             
