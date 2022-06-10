@@ -1,0 +1,8 @@
+package require tcltest
+
+namespace eval vessel::import::base_image::test {
+ 
+    namespace import tcltest::*
+    
+    
+}
