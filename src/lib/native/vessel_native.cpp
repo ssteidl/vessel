@@ -786,7 +786,16 @@ namespace
         }
         arg_count -= command_index;
         argument_objs += command_index;
-        std::string command(Tcl_GetString(argument_objs[0]));
+
+        std::string command;
+        if(arg_count > 0)
+        {
+            command = std::string(Tcl_GetString(argument_objs[0]));
+        }
+        else
+        {
+            command = std::string("");
+        }
 
         tcl_error = Tcl_DictObjPut(interp, command_options.get(), Tcl_NewStringObj("args", -1),
                                    Tcl_NewStringObj("", 0));
@@ -836,7 +845,7 @@ namespace
             tcl_error = parse_export_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
-        else if(command == "help")
+        else if(command == "help" || command.empty())
         {
             /*'help' command doesn't take any options*/
         }
@@ -848,8 +857,9 @@ namespace
 
         tcl_error = Tcl_DictObjPut(interp, command_options.get(),
                                    Tcl_NewStringObj("command", -1),
-                                   argument_objs[0]);
+                                   Tcl_NewStringObj(command.c_str(), -1));
         if(tcl_error) return tcl_error;
+
         Tcl_SetObjResult(interp, command_options.release());
         return TCL_OK;
     }

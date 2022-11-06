@@ -181,8 +181,13 @@ switch -regexp -matchvar parsed_cmd $command {
         usage
         exit 0
     }
+    {} {
+        puts stderr "Command is required"
+        usage
+        exit 1
+    }
     default {
-        ${log}::debug "Unknown command: $command"
+        puts stderr "Unknown command: $command"
         usage
         exit 1
     }
