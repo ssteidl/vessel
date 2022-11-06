@@ -1,11 +1,9 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to unleash the plethora of underutilized FreeBSD features to application, DevOps and Test engineers.  The secondary goal of vessel is to feel similar to those who are comfortable working in a Linux Docker environment.
+The goal of vessel is to unleash underutilized features of FreeBSD to application, DevOps and Test engineers.  Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces and providing a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
 
-Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces.  This differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
-
-* Actively tracing jail processes to monitor when a jail exits.  This allows vessel to stay in the foreground while running a jail with multiple services, which has various management benefits.
+* Actively tracing jail processes to monitor when a jail exits.  This allows vessel to stay in the foreground while running a jail with multiple services, which has various management benefits.  Running `sh /etc/rc` is fully supported.
 * Monitors and parses `/var/run/devd.seqpacket.pipe` so that custom actions can be taken based on resource control events.
 * Supervisor can monitor and route log output as well as stop, start and reload jails based on configuration file changes.
 
