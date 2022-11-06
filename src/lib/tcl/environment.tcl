@@ -80,7 +80,7 @@ namespace eval vessel::env {
     }
 
     proc vessel_run_dir {} {
-        return [get_from_env VESSEL_RUN_DIR [file join var run vessel]]
+        return [get_from_env VESSEL_RUN_DIR {/var/run/vessel/jails}]
     }
 
     proc jail_confs_dir {} {
