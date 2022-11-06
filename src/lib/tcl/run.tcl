@@ -298,7 +298,7 @@ namespace eval vessel::run {
             set tag {local}
         }
         set image_dataset [vessel::env::get_dataset_from_image_name $image_name $tag]
-        ${log}::debug "RUN COMMAND image dataset: $image_dataset"
+        ${log}::debug "RUN COMMAND image dataset: $image_dataset, [dict exists ${mountpoints_dict} ${image_dataset}]"
 
         if {![dict exists $mountpoints_dict $image_dataset]} {
             ${log}::info "Pulling $image from repo"
