@@ -87,5 +87,9 @@ namespace eval vessel::env {
 
         return [get_from_env VESSEL_VAR_RUN_DIR {/var/run/vessel/jails}]
     }
+    
+    proc bridge_name {} {
+        return [get_from_env VESSEL_BRIDGE_NAME vessel]   
+    }
 }
 package provide vessel::env 1.0.0
