@@ -137,6 +137,7 @@ proc usage {} {
  run          Run a container that has been built or can be pulled from a repository
  publish      Export and push a container to a container repository
  pull         Download and install a container from a container repository
+ network      Manage nat networks
  image        Output image metadata
  help         Print this help message
 }
@@ -170,6 +171,9 @@ switch -regexp -matchvar parsed_cmd $command {
     publish|pull {
         ${log}::debug "push pull args: $args"
         vessel::repo::repo_cmd $parsed_cmd $args
+    }
+    network {
+        ${log}::debug "network args: $args"   
     }
     image {
         vessel::metadata_db::image_command $args

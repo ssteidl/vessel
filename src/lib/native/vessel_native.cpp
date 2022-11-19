@@ -163,44 +163,45 @@ namespace
         return tcl_error;
     }
 
-    int parse_create_network_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    int parse_network_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         assert(argc > 0);
 
         static const struct option long_opts[] = {
+            {"addr", required_argument, nullptr, 'a'},
+            {"create", no_argument, nullptr, 'c'},
+            {"list", no_argument, nullptr, 'l'},
             {"name", required_argument, nullptr, 'n'},
-            {"dns", required_argument, nullptr, 'd'},
-            {"ip", required_argument, nullptr, 'i'},
             {nullptr, 0, nullptr, 0}
         };
-
-        /*dns options are of the form "name:ip"*/
 
         std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
 
         int ch = -1;
 
         vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
-        vessel::tclobj_ptr dns_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         int tcl_error = TCL_OK;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "n:d:i:", long_opts, nullptr)) != -1)
+        bool create = false;
+        bool list = false;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "a:cln:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
-            case 'n':
+            case 'a':
                 tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                           Tcl_NewStringObj("name", -1),
+                                           Tcl_NewStringObj("addr", -1),
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
-            case 'd':
-                tcl_error = Tcl_ListObjAppendElement(interp, dns_list.get(),
-                                                     Tcl_NewStringObj(optarg, -1));
-                if(tcl_error) return tcl_error;
+            case 'c':
+                create = true;
                 break;
-            case 'i':
+            case 'l':
+                list = true;
+                break;
+            case 'n':
                 tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                           Tcl_NewStringObj("ip", -1),
+                                           Tcl_NewStringObj("name", -1),
                                            Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
@@ -211,8 +212,14 @@ namespace
         }
 
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
-                                   Tcl_NewStringObj("dns", -1),
-                                   dns_list.release());
+                                   Tcl_NewStringObj("create", -1),
+                                   Tcl_NewBooleanObj(create));
+        if(tcl_error) return tcl_error;
+
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                   Tcl_NewStringObj("list", -1),
+                                   Tcl_NewBooleanObj(list));
+        if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
         return tcl_error;
@@ -829,9 +836,9 @@ namespace
                                                    argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
-        else if(command == "create-network")
+        else if(command == "network")
         {
-            tcl_error = parse_create_network_options(interp, arg_count,
+            tcl_error = parse_network_options(interp, arg_count,
                                                      argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }

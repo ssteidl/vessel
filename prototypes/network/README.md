@@ -3,15 +3,15 @@ The following networking features should be supported
 
 ## Topologies
 * Jail inheriting the host network
-* Internal networks with bridge, vlan, epair interfaces
+* Internal networks with bridge, vlan, epair interfaces (and internal DHCP)
 * Nat and rdr networks for exposing internal networks to the
-  outside world
+  outside world (This can be done later because users can create a nginx or lighttpd or haproxy for exposing ports)
 * No networking
 
 ## Management
 * VLAN per internal network
-* Auto generated internal ipv4 address
-* Internal network DNS lookup for A records.  Hopefully txt in the future.
+* Auto generated internal ipv4 address or DHCP
+* Internal network DNS lookup for A records. So a container can lookup another container.  Hopefully txt in the future.
   Does it make sense to use DHCP here?
 
 # cli design
