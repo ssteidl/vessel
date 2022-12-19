@@ -1,11 +1,7 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to unleash underutilized features of FreeBSD to application, DevOps and Test engineers.  Vessel accomplishes the above goals by integrating tightly with FreeBSD system level interfaces and providing a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that vessel actively monitors and manages running jails.  Examples include:
-
-* Actively tracing jail processes to monitor when a jail exits.  This allows vessel to stay in the foreground while running a jail with multiple services, which has various management benefits.  Running `sh /etc/rc` is fully supported.
-* Monitors and parses `/var/run/devd.seqpacket.pipe` so that custom actions can be taken based on resource control events.
-* Supervisor can monitor and route log output as well as stop, start and reload jails based on configuration file changes.
+The goal of vessel is to expose the many powerful features of FreeBSD to application, ops and test engineers.  Vessel accomplishes this goal by integrating tightly with FreeBSD system level interfaces and providing a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that it runs alongside the container listening for system events that are useful for management and observability.
 
 # Feature Highlights
 
@@ -19,7 +15,7 @@ The goal of vessel is to unleash underutilized features of FreeBSD to applicatio
 | [Container Supervisor](docs/supervisor.md)                                        | Yes        |
 | [Resource Control](docs/ResourceControl.md)                                       | Yes        |
 | [CPU Sets](docs/RunningContainer.md#cpu-sets)                                     | Yes        |
-| Internal (Bridged) Networking                                                     | Not yet    |
+| Internal (Bridged) Networking                                                     | In Progress|
 | DNS Service Discovery                                                             | Not yet    |
 | Multi-node container orchestration                                                | Not yet    |
 | VNET Routing via PF                                                               | Not yet    |
@@ -35,7 +31,7 @@ Initialize your user environment to work with vessel.  The init command will cre
 
 Run a shell in an ephemeral container using the previously created minimal image:
 
-`sudo -E vessel run --interactive --rm minimal:12.3-RELEASE sh`
+`sudo -E vessel run --interactive --rm minimal:12.3-RELEASE -- sh`
 
 ## Vessel Files
 
