@@ -1,0 +1,24 @@
+FROM FreeBSD:12.3-RELEASE
+
+#Update pkg repo and install packages
+RUN env ASSUME_ALWAYS_YES=yes pkg update
+RUN env ASSUME_ALWAYS_YES=yes pkg install lighttpd fossil
+
+#Add the dinner user.  The ~dinner/repo directory contains the repo and
+#is a mountpoint for the zfs dataset that will hold the fossil sqlite db.
+RUN pw useradd -n dinner -m
+
+COPY ./lighttpd/lighttpd.conf /usr/local/etc/lighttpd/lighttpd.conf
+COPY ./lighttpd/modules.conf /usr/local/etc/lighttpd/modules.conf
+COPY ./lighttpd/scgi.conf /usr/local/etc/lighttpd/conf.d/scgi.conf
+
+#Fossil startup script is slightly modified from the default installed
+#by pkg.
+COPY ./rc.d/fossil /usr/local/etc/rc.d/fossil
+
+#Setup rc.conf to run lighttpd and fossil
+RUN sysrc lighttpd_enable=YES
+RUN sysrc fossil_enable=YES
+RUN sysrc fossil_directory=/usr/home/dinner/repo/dinner.fossil
+RUN sysrc fossil_proto=scgi
+RUN sysrc fossil_user=dinner
