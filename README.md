@@ -12,7 +12,7 @@ The goal of vessel is to expose the many powerful features of FreeBSD to applica
 | [Volume Management](docs/RunningContainer.md#volumes-and-datasets)                | Yes        |
 | [Image Push/Pull Repositories (s3)](docs/ImageCreation.md#impage-publish-and-pull)| Yes        |
 | [Jail Management](docs/RunningContainer.md#jail-management)                       | Yes        |
-| [Container Supervisor](docs/supervisor.md)                                        | Yes        |
+| [Container Supervisor](docs/Supervisor.md)                                        | Yes        |
 | [Resource Control](docs/ResourceControl.md)                                       | Yes        |
 | [CPU Sets](docs/RunningContainer.md#cpu-sets)                                     | Yes        |
 | Internal (Bridged) Networking                                                     | In Progress|
