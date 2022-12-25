@@ -11,14 +11,6 @@ namespace eval vessel::network {
      
         variable bridge_name [vessel::env::bridge_name]
         
-        namespace eval _ {
-            
-            
-
-            proc create_bridge {bridge_name inet_iface} {
-                
-            }
-        }
         
         # Create and name the bridge, optionally giving an inet_interface
         # so that attached jails on the default vlan can communicate
@@ -41,21 +33,24 @@ namespace eval vessel::network {
             }
             
             #idempotent
-            if {[catch {exec ifconfig $name up} msg]} {${log}::debug $msg}
+            if {[catch {exec ifconfig $bridge_name up} msg]} {${log}::debug $msg}
                     
             if {${inet_iface} ne {}} {
                 
                 #idempotent
                 if {[catch {exec ifconfig ${bridge_name} addm ${inet_iface}} msg]} {${log}::debug $msg}            
             }
+            
+            return [exists?]
         }
         
         proc exists? {} {
-            
+            variable ::vessel::network::log
             variable bridge_name
             
             set exists true
             if {[catch {exec ifconfig $bridge_name} msg]} {
+                ${log}::debug "exists? $msg"
                 set exists false
             }
             
@@ -64,8 +59,17 @@ namespace eval vessel::network {
     }
     
     proc network_command {arg_dict} {
+        variable ::vessel::network::log
         
+        ${log}::debug "network command args: $arg_dict"
         # The network command is the command that queries meta-data regarding
         # existing networks.
+        
+        if {[dict get $arg_dict create]} {
+            #TODO: [dict get $arg_dict inet_interface]
+            bridge::create_bridge {} 
+        }
     }
 }
+
+package provide vessel::network 1.0.0

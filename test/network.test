@@ -1,0 +1,33 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+package require vessel::env
+package require logger
+package require vessel::network
+package require tcltest
+
+namespace eval network::test {
+	namespace import ::tcltest::*
+
+	test {create-bridge} {Test that we can create a bridge without an inet interface} -setup {
+	    
+	    #Delete the vessel bridge if it exists
+	    catch {exec ifconfig vessel destroy}
+	} -body {
+	 
+	    vessel::network::bridge::create_bridge {}
+	} -cleanup {
+	  catch {exec ifconfig vessel destroy}  
+	} -result true
+	
+	test {create-bridge-internet} {Test that we can create a bridge and attach a nic} -setup {
+	 
+	    catch {exec ifconfig vessel destroy}
+	} -body {
+	     vessel::network::bridge::create_bridge {em0}
+	     
+	     set bridge_outut [exec ifconfig vessel]
+	    
+	} -cleanup {
+	    catch {ifconfig vessel destroy}
+	} -match glob -result "*member: em0*"
+}
