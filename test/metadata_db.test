@@ -44,7 +44,7 @@ namespace eval metadata_db::test {
 	}
 
 	proc build_image {image tag} {
-		set test_image_vessel_file {FROM FreeBSD:12.1-RELEASE
+		set test_image_vessel_file {FROM FreeBSD:12.3-RELEASE
 			CMD /usr/local/bin/bash -c {echo "fbsd is cool"}}
 			set test_image_chan [file tempfile vessel_file /tmp/TestVesselFile]
 			puts $test_image_chan $test_image_vessel_file
@@ -71,14 +71,16 @@ namespace eval metadata_db::test {
 
 	#Create a background container
 	test image-list-output-1 {List all available images and their metadata} -setup {
-		clean_dataset
+		catch {clean_dataset}
 		build_image list-images-test 1
 	} -body {
 
-		exec vessel image --list >&@ stderr
+		exec vessel image --list
 
 		#ID    PARENT    CMD
-	} -result {ID    PARENT    CMD} -cleanup {
+	} -result {DATASET                                CMD                                          PARENT              
+zroot/vessel-test/FreeBSD:12.3-RELEASE /etc/rc                                                          
+zroot/vessel-test/list-images-test:1   /usr/local/bin/bash -c {echo "fbsd is cool"} FreeBSD:12.3-RELEASE} -cleanup {
 
 	}
 
@@ -93,7 +95,7 @@ namespace eval metadata_db::test {
 			"cwd" "/home/joe" \
 			"parent_images" [list FreeBSD:11.1]]
 
-	} -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":[FreeBSD:11.1]}} -cleanup {
+	} -result {{"name":"test-image","tag":"1.0","command":["bash"],"cwd":"/home/joe","parent_images":["FreeBSD:11.1"]}} -cleanup {
 		json::write indented true
 	}
 
@@ -113,7 +115,10 @@ namespace eval metadata_db::test {
 
 		#NOTE: Working on getting command output right.
 		vessel::metadata_db::_::list_images stdout
-	} -output {} -cleanup {
+	} -output {DATASET                                CMD                                          PARENT              
+zroot/vessel-test/FreeBSD:12.3-RELEASE /etc/rc                                                          
+zroot/vessel-test/list-images-test:1   /usr/local/bin/bash -c {echo "fbsd is cool"} FreeBSD:12.3-RELEASE
+} -cleanup {
 
 	}
 
