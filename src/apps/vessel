@@ -5,6 +5,7 @@ package require vessel::build
 package require vessel::env
 package require vessel::export
 package require vessel::native
+package require vessel::network
 package require vessel::import
 package require vessel::metadata_db
 package require vessel::repo
@@ -173,7 +174,8 @@ switch -regexp -matchvar parsed_cmd $command {
         vessel::repo::repo_cmd $parsed_cmd $args
     }
     network {
-        ${log}::debug "network args: $args"   
+        ${log}::debug "network args: $args"
+        vessel::network::network_command $args
     }
     image {
         vessel::metadata_db::image_command $args
