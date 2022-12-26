@@ -194,16 +194,22 @@ namespace eval vessel::metadata_db {
             }
         }
         
+        proc create_network_list {name vlan} {
+         
+            array set network [list name $name vlan $vlan]
+            return [array get network]
+        }
+        
         proc get_network {network_name} {
             
             variable dbcmd
             
-            set network [$dbcmd eval {
+            set result [$dbcmd eval {
                 select * from networks
                 where name=$network_name
             }]
             
-            return $network
+            return [create_network_list [lindex $result 0] [lindex $result 1]]
         }
         
         proc network_exists? {network_name} {
@@ -217,6 +223,8 @@ namespace eval vessel::metadata_db {
             
             variable dbcmd
             set result [$dbcmd eval {insert into networks (name, vlan) VALUES($network_name, $vlan);}]
+            
+            return [create_network_list $network_name $vlan]
         }
         
         #Select the lowest vlan number not in use
@@ -229,7 +237,7 @@ namespace eval vessel::metadata_db {
             # but there is only 4094 iterations and it isn't run often.
             for {set vlan 2} {$vlan <= 4094} {incr vlan} {
                 if {[lsearch $vlan_list $vlan] == -1} {
-                    return $vlan   
+                    return $vlan
                 }
             }
             
@@ -292,10 +300,15 @@ namespace eval vessel::metadata_db {
 
     proc add_network {network_name} {
         
-        # Check if the network name exists
-        #Get all networks.  
-        #find the lowest unused vlan number
-        #use that vlan and insert the new db in the table.
+        # Check if the network already exists in the database
+        if {[_::network_db::network_exists? $network_name]} {
+         
+            return [_::network_db::get_network $network_name]
+        } else {
+            
+            set vlan [_::network_db::select_vlan]
+            return [_::network_db::insert_network $network_name $vlan]
+        }
     }
     
     proc sqlite_db_init {in_memory} {

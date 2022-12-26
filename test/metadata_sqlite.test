@@ -89,4 +89,26 @@ namespace eval metadata_db::network::test {
 	    vessel::metadata_db::_::network_db::close
 	}
 	
+	test {add-network-public-interface-1} {Test that a network is added and returned correctly if it does not exist} -setup {
+	    
+	    vessel::metadata_db::sqlite_db_init true
+	} -body {
+	 
+	    vessel::metadata_db::add_network "shanenet"
+	} -result {vlan 2 name shanenet} -cleanup {
+	    
+	    vessel::metadata_db::_::network_db::close
+	}
+	
+	test {add-network-public-interface-2} {Test that a network is added and returned correctly if it exist} -setup {
+	    
+	    vessel::metadata_db::sqlite_db_init true
+	    vessel::metadata_db::add_network "shanenet"
+	} -body {
+	 
+	    vessel::metadata_db::add_network "shanenet"
+	} -result {vlan 2 name shanenet} -cleanup {
+	    
+	    vessel::metadata_db::_::network_db::close
+	}
 }
