@@ -1,0 +1,92 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+package require vessel::metadata_db
+package require tcltest
+
+namespace eval metadata_db::network::test {
+	namespace import ::tcltest::*
+	
+	test {create-sqlite-db} {Create the db in memory to test the schema} -body {
+	    
+	    set in_mem true
+	    vessel::metadata_db::sqlite_db_init $in_mem
+	} -cleanup {
+	    vessel::metadata_db::_::network_db::close
+	} -returnCodes ok
+	
+	test {network-exists} {Test that a network exists in the database} -setup {
+	    
+	    set in_mem true
+	    vessel::metadata_db::sqlite_db_init $in_mem
+	    vessel::metadata_db::_::network_db::insert_network "shanenet" [expr 3]  
+	} -body {
+	    vessel::metadata_db::_::network_db::network_exists? "shanenet"
+	} -cleanup {
+	     
+	    vessel::metadata_db::_::network_db::close   
+	} -result 1
+	
+	test {vlan-num-selection-test-1} {Test that we receive the lowest vlan number} -setup {
+	 
+	    vessel::metadata_db::sqlite_db_init true
+	    
+	    set network_basename "shanenet"
+	    set vlan [expr 2]
+	    
+	    vessel::metadata_db::_::network_db::insert_network "${network_basename}$vlan" $vlan
+	    
+	    incr vlan 
+	    
+	    #vlan: 3
+	    vessel::metadata_db::_::network_db::insert_network "${network_basename}$vlan" $vlan
+	    
+	    incr vlan
+	    incr vlan
+	    
+	    #vlan: 5
+	    vessel::metadata_db::_::network_db::insert_network "${network_basename}$vlan" $vlan
+	} -body {
+	    
+	    #Should pick vlan 4 because there is a gap
+	    vessel::metadata_db::_::network_db::select_vlan
+	    
+	} -result 4 -cleanup {
+	    
+	    vessel::metadata_db::_::network_db::close
+	}
+	
+	test {vlan-num-selection-test-2} {Test that 2 is the first vlan selected} -setup {
+	 
+	    vessel::metadata_db::sqlite_db_init true
+	    
+	} -body {
+	    
+	    vessel::metadata_db::_::network_db::select_vlan
+	    
+	} -result 2 -cleanup {
+	    
+	    vessel::metadata_db::_::network_db::close
+	}
+	
+	test {vlan-num-selection-test-3} {Test we get the correct error code when there are no vlan} -setup {
+	 
+	    vessel::metadata_db::sqlite_db_init true
+	    
+	    set network_basename "shanenet"
+	    
+	    for {set vlan 2} {$vlan <=4094} {incr vlan} {
+	        vessel::metadata_db::_::network_db::insert_network "${network_basename}$vlan" $vlan
+	    }
+	     
+	    
+	} -body {
+	    
+	    #Should pick vlan 4 because there is a gap
+	    vessel::metadata_db::_::network_db::select_vlan
+	    
+	} -returnCodes 1 -errorCode {NETWORK NOVLAN} -match glob -result "*" -cleanup {
+	    
+	    vessel::metadata_db::_::network_db::close
+	}
+	
+}
