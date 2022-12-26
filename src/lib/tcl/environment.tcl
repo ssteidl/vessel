@@ -78,6 +78,12 @@ namespace eval vessel::env {
         set workdir [get_workdir]
         return [get_from_env VESSEL_METADATA_DB_DIR [file join $workdir {db}]]
     }
+    
+    proc metadata_sqlite {} {
+        
+        set metadata_dir [metadata_db_dir]
+        return [file join $metadata_dir vessel.sqlite]
+    }
 
     proc vessel_run_dir {} {
         return [get_from_env VESSEL_RUN_DIR {/var/run/vessel/jails}]

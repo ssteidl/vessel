@@ -6,6 +6,7 @@ package require defer
 package require fileutil
 package require json
 package require json::write
+package require sqlite3
 package require struct::matrix
 
 namespace eval vessel::imageutil {
@@ -165,6 +166,83 @@ namespace eval vessel::metadata_db {
         }
     }
 
+    namespace eval _::network_db {
+     
+        variable dbpath [vessel::env::metadata_sqlite]
+        variable dbcmd {netdb}
+        
+        proc init_network_db {in_memory} {
+            
+            variable dbpath
+            variable dbcmd
+            
+            set path $dbpath
+            if {${in_memory}} {   
+                set path {:memory:}
+            }
+            
+            sqlite3 $dbcmd $path -create true
+            
+            #Needs to be idempotent.
+            #TODO: I need an insertion date and a last used date.
+            $dbcmd eval {
+ 
+                create table if not exists networks (
+                    name text primary key not null,
+                    vlan integer not null check(vlan <= 4094), check(vlan >=2)
+                );
+            }
+        }
+        
+        proc get_network {network_name} {
+            
+            variable dbcmd
+            
+            set network [$dbcmd eval {
+                select * from networks
+                where name=$network_name
+            }]
+            
+            return $network
+        }
+        
+        proc network_exists? {network_name} {
+         
+            variable dbcmd
+            
+            $dbcmd exists {select 1 from networks where name=$network_name}
+        }
+        
+        proc insert_network {network_name vlan} {
+            
+            variable dbcmd
+            set result [$dbcmd eval {insert into networks (name, vlan) VALUES($network_name, $vlan);}]
+        }
+        
+        #Select the lowest vlan number not in use
+        proc select_vlan {} {
+            variable dbcmd
+            
+            set vlan_list [$dbcmd eval {select vlan from networks order by vlan asc;}]
+            
+            #Valid vlans are between 2 and 4094.  Note this search is pretty inefficient
+            # but there is only 4094 iterations and it isn't run often.
+            for {set vlan 2} {$vlan <= 4094} {incr vlan} {
+                if {[lsearch $vlan_list $vlan] == -1} {
+                    return $vlan   
+                }
+            }
+            
+            return -code error -errorcode {NETWORK NOVLAN} "All vlan tags are in use"
+        }
+        
+        proc close {} {
+            variable dbcmd
+            
+            $dbcmd close
+        }
+    }
+    
     proc metadata_file_path {image_name tag} {
         set metadata_dir [vessel::env::metadata_db_dir]
         set metadata_file [file join $metadata_dir "${image_name}:${tag}.json"]
@@ -212,6 +290,18 @@ namespace eval vessel::metadata_db {
         return [file exists $metadata_file]
     }
 
+    proc add_network {network_name} {
+        
+        # Check if the network name exists
+        #Get all networks.  
+        #find the lowest unused vlan number
+        #use that vlan and insert the new db in the table.
+    }
+    
+    proc sqlite_db_init {in_memory} {
+        _::network_db::init_network_db ${in_memory}
+    }
+    
     proc image_command {args_dict} {
 
         set do_list [_::dict_get_value $args_dict "list" false]
