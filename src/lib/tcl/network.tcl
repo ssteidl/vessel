@@ -1,5 +1,7 @@
 
+package require vessel::bsd
 package require vessel::env
+package require vessel::metadata_db
 
 namespace eval vessel::network {
  
@@ -58,6 +60,40 @@ namespace eval vessel::network {
         }
     }
     
+    namespace eval router {
+     
+        variable router_image_name "vessel-router"
+        
+        #The current tag to use for router so we know if we need to update
+        variable router_tag "1.0.0"
+        
+        # Check if the router image exists
+        proc router_image_exists? {} {
+            variable router_image_name
+            variable router_tag
+            
+            # Get the current images.  Image name should be FreeBSD:<current version>/vessel-router:<current router tag>
+            set version [vessel::bsd::host_version_without_patch]
+            
+            
+            return [vessel::metadata_db::image_exists $router_image_name $router_tag]            
+        }
+        
+        proc get_image_template {} {
+            set template {
+FROM FreeBSD:[vessel::bsd::host_version_without_patch]
+
+RUN env ASSUME_ALWAYS_YES=yes pkg update
+RUN env pkg install dnsmasq}
+            
+            return [subst $template]
+        }
+        
+        proc build_image {} {
+            
+        }
+    }
+    
     proc network_command {arg_dict} {
         variable ::vessel::network::log
         
@@ -66,8 +102,22 @@ namespace eval vessel::network {
         # existing networks.
         
         if {[dict get $arg_dict create]} {
+            
             #TODO: [dict get $arg_dict inet_interface]
-            bridge::create_bridge {} 
+            bridge::create_bridge {}
+            
+            #Check if the router image needs to be built
+            if {![router::router_image_exists?]} {
+             
+                #Build the image
+            }
+            
+            #Build the router vm if necessary
+            
+            #See if the router vm is running.
+            
+            #If the vm is not running, start it
+            
         }
     }
 }

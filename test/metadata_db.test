@@ -122,5 +122,12 @@ zroot/vessel-test/list-images-test:1   /usr/local/bin/bash -c {echo "fbsd is coo
 
 	}
 
+	test {metadata_db-get-image-names-1} {Get a list of existing images} -setup {
+	    
+	} -body {
+	    
+	    vessel::metadata_db::_::get_image_names
+	} -result {zroot/vessel-test/FreeBSD:12.3-RELEASE zroot/vessel-test/list-images-test:1}
+	
 	cleanupTests
 }

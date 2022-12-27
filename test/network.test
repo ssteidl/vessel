@@ -30,4 +30,18 @@ namespace eval network::test {
 	} -cleanup {
 	    catch {ifconfig vessel destroy}
 	} -match glob -result "*member: em0*"
+	
+	test {router-exists-1} {Check if a router exists} -body {
+	    vessel::network::router::router_image_exists?
+	} -result 1
+	
+	test {router-template-1} {Verify the router template is properly rendered} -body {
+	    vessel::network::router::get_image_template
+	} -result {
+FROM FreeBSD:12.3-RELEASE
+
+RUN env ASSUME_ALWAYS_YES=yes pkg update
+RUN env pkg install dnsmasq}
+	
+	cleanupTests
 }
