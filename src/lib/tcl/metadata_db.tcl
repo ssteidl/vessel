@@ -109,18 +109,26 @@ namespace eval vessel::metadata_db {
             return $metadata_dict
         }
 
-        proc list_images {output_chan} {
-
-            #Output script consumable fields for each image to output_chan.
-
-            set headers [list ID PARENT COMMAND]
+        proc get_image_datasets {} {
+            
             set vessel_dataset [vessel::env::get_dataset]
 
             set dataset_list [vessel::zfs::dataset_children $vessel_dataset]
 
             #We don't care about the parent dataset
             set children_list [lrange $dataset_list 1 end]
+            
+            return $children_list
+        }
+        
+        proc list_images {output_chan} {
 
+            #Output script consumable fields for each image to output_chan.
+
+            set headers [list ID PARENT COMMAND]
+         
+            set children_list [get_image_datasets]
+            
             set matrix_name {image_output_matrix}
             struct::matrix $matrix_name
             $matrix_name add columns 3
@@ -160,7 +168,6 @@ namespace eval vessel::metadata_db {
             foreach row $image_data {
                 $matrix_cmd add row $row
             }
-
 
             puts $output_chan [$matrix_cmd format 2chan]
         }
@@ -292,6 +299,16 @@ namespace eval vessel::metadata_db {
         return $metadata_file
     }
 
+    proc get_image_names {} {
+        
+        set image_names [list]
+        foreach dataset [get_image_datasets] {
+            lappend image_names [dict get $dataset name]
+        }
+        
+        return ${image_names}
+    }
+    
     proc image_exists {image tag} {
 
         set metadata_file [metadata_file_path $image $tag]
