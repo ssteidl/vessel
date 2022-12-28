@@ -1,0 +1,15 @@
+*~
+*\#
+.project
+.settings
+.buildpath
+build
+port/work
+vessel.cflags
+vessel.config
+vessel.creator
+vessel.creator.user
+vessel.cxxflags
+vessel.files
+vessel.includes
+src/lib/tcl/libvesseltcl.so
