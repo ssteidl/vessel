@@ -316,6 +316,11 @@ namespace eval vessel::metadata_db {
     }
 
     proc add_network {network_name} {
+
+        if {${network_name} eq {}} {
+         
+            return -code error -errorcode {NETWORK NAME EMPTY} "Network name cannot be empty"
+        }
         
         # Check if the network already exists in the database
         if {[_::network_db::network_exists? $network_name]} {
