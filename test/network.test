@@ -8,7 +8,12 @@ package require tcltest
 namespace eval network::test {
 	namespace import ::tcltest::*
 
-	test {create-bridge} {Test that we can create a bridge without an inet interface} -setup {
+	#TODO: This needs to go in all.tcl when it's created.    
+	testConstraint root [expr {$env(USER) eq "root"}]
+    
+	test {create-bridge} {Test that we can create a bridge without an inet interface} -constraints {
+          root  
+	} -setup {
 	    
 	    #Delete the vessel bridge if it exists
 	    catch {exec ifconfig vessel destroy}
@@ -19,7 +24,9 @@ namespace eval network::test {
 	  catch {exec ifconfig vessel destroy}  
 	} -result true
 	
-	test {create-bridge-internet} {Test that we can create a bridge and attach a nic} -setup {
+	test {create-bridge-internet} {Test that we can create a bridge and attach a nic} -constraints {
+            root  
+	} -setup {
 	 
 	    catch {exec ifconfig vessel destroy}
 	} -body {
@@ -35,13 +42,32 @@ namespace eval network::test {
 	    vessel::network::router::router_image_exists?
 	} -result 1
 	
-	test {router-template-1} {Verify the router template is properly rendered} -body {
-	    vessel::network::router::get_image_template
-	} -result {
-FROM FreeBSD:12.3-RELEASE
-
-RUN env ASSUME_ALWAYS_YES=yes pkg update
-RUN env pkg install dnsmasq}
-	
+        test {epair-create-test} {Test that we can create an epair} -constraints {
+          root  
+        } -setup {
+            set name "vrouter2"
+            
+            vessel::network::epair::destroy $name
+        } -body {
+            vessel::network::epair::create $name
+            vessel::network::epair::exists? $name
+        } -cleanup {
+            vessel::network::epair::destroy $name
+        } -result true
+    
+        test {build-router-image-1} {Test that we can build a router image} -constraints {
+           root
+        } -setup {
+        
+            set ifacename "testiface"
+            set env(VESSEL_POOL) "zroot/vessel-test"
+            vessel::network::epair::create $ifacename
+        } -body {
+            vessel::network::router::build_image $ifacename
+        } -cleanup {
+            #Destroy the image
+            set env(VESSEL_POOL) {}
+        }
+    
 	cleanupTests
 }
