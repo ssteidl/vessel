@@ -128,6 +128,9 @@ namespace eval vessel::network {
         #The current tag to use for router so we know if we need to update
         variable router_tag "1.0.0"
         
+        #The ruleset used by the vessel router
+        variable router_ruleset 60100
+        
         # Check if the router image exists
         proc router_image_exists? {} {
             variable router_image_name
@@ -252,6 +255,48 @@ dhcp-script=/usr/bin/logger -t vesseldns
             
             exec vessel build --file=${vesselfile_path} --tag=${router_tag} --name=${router_image_name} >&@ stderr
         }
+        
+        proc is_running? {name} {
+            
+        }
+        
+        proc generate_run_ini {name vlanid} {
+            
+            variable router_image_name
+            variable router_tag
+            variable router_ruleset
+            
+            set template {
+\[vessel-supervisor\]
+image=${router_image_name}
+tag=${router_tag}
+
+\[jail\]
+devfs_ruleset=${router_ruleset}
+host.hostname=${name}${vlanid}-gw}
+            
+            return [subst $template]
+        }
+        
+        # Start the router.  This will block indefinitely until the jail exits.
+        proc start {name vlanid} {
+            variable router_image_name
+            variable router_tag
+            
+            # Generate the temporary inifile
+            set ini_tmp_chan [file tempfile ini_path "/tmp/router${name}${vlanid}ini"]
+            set ini_contents [generate_run_ini $name $vlanid]
+            
+            defer::with [list ini_tmp_chan ini_path] {
+                close ${ini_tmp_chan}
+                file delete ${ini_path}
+            }
+            
+            puts ${ini_tmp_chan} ${ini_contents}
+            flush ${ini_tmp_chan}
+            
+            exec vessel run --ini=${ini_path} "${router_image_name}:${router_tag}" -- sh /etc/rc >&@ stderr
+        }
     }
     
     proc network_command {arg_dict} {
@@ -286,6 +331,7 @@ dhcp-script=/usr/bin/logger -t vesseldns
             }
             
             #devfs rule is created by the startup script with a hardcoded value
+            vessel::network::router::start
             
             #If the vm is not running, start it.  Ensure pf.conf rules have been executed.
             #Tables can be updated dynamically as jails on the network start and stop.

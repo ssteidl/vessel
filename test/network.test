@@ -70,5 +70,35 @@ namespace eval network::test {
             set env(VESSEL_POOL) {}
         } -result 1
     
+        test {router-run-ini-template-1} {Test that the ini file is generated correctly} -body {
+            
+            vessel::network::router::generate_run_ini "shanenet" 2
+        } -result {
+[vessel-supervisor]
+image=vessel-router
+tag=1.0.0
+
+[jail]
+devfs_ruleset=60100
+host.hostname=shanenet2-gw}
+    
+        #This test will need to be an integration test because the router::start command blocks
+        test {router-start-1} {Test that the router jail can be started} -constraints {
+            root
+        } -setup {
+            set ifacename "testiface"
+            set env(VESSEL_POOL) "zroot/vessel-test"
+            vessel::network::epair::create $ifacename
+            vessel::network::router::build_image $ifacename
+        } -body {
+            #TODO: This hangs.  We need to just run jail instead of runnign vessel
+            vessel::network::router::start "shanenet" 2
+        } -cleanup {
+            #Destroy the image
+            vessel::network::epair::destroy $ifacename
+            exec vessel image --rm "${vessel::network::router::router_image_name}:${vessel::network::router::router_tag}"
+            set env(VESSEL_POOL) {}
+        } -result joe
+    
 	cleanupTests
 }

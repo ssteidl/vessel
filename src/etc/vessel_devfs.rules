@@ -1,0 +1,11 @@
+[devfsrules_vessel_router=60100]
+add include $devfsrules_hide_all
+add include $devfsrules_unhide_basic
+add include $devfsrules_unhide_login
+add path 'pf*' unhide
+
+[devfsrules_vessel_jail=60101]
+add include $devfsrules_hide_all
+add include $devfsrules_unhide_basic
+add include $devfsrules_unhide_login
+add path 'bpf*' unhide
