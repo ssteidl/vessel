@@ -13,3 +13,5 @@ vessel.cxxflags
 vessel.files
 vessel.includes
 src/lib/tcl/libvesseltcl.so
+test/error.log
+test/testrun/

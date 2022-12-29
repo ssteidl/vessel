@@ -282,11 +282,10 @@ dhcp-script=/usr/bin/logger -t vesseldns
                 # We need to know the name of the epair device that will be assigned
                 # to the router on the vlan so we can tell dnsmasq what to listen for
                 
-                #TODO: I need to know the iface that the router will use.
-                router_build_image 
+                router_build_image ${internal_epair} 
             }
             
-            #See if the router vm is running.
+            #Start the router vm, won't do anything if it is running already
             
             #create devd rule
             

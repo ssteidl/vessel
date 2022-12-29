@@ -1,0 +1,7 @@
+# -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
+
+#This version needs to be templated I think.
+FROM FreeBSD:12.3-RELEASE
+
+RUN env ASSUME_ALWAYS_YES=yes pkg update
+RUN env ASSUME_ALWAYS_YES=yes pkg install dnsmasq
