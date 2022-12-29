@@ -3,14 +3,12 @@
 package require vessel::env
 package require logger
 package require vessel::network
+package require vessel::test::testconstraints
 package require tcltest
 
 namespace eval network::test {
 	namespace import ::tcltest::*
 
-	#TODO: This needs to go in all.tcl when it's created.    
-	testConstraint root [expr {$env(USER) eq "root"}]
-    
 	test {create-bridge} {Test that we can create a bridge without an inet interface} -constraints {
           root  
 	} -setup {
@@ -40,7 +38,7 @@ namespace eval network::test {
 	
 	test {router-exists-1} {Check if a router exists} -body {
 	    vessel::network::router::router_image_exists?
-	} -result 1
+	} -result 0
 	
         test {epair-create-test} {Test that we can create an epair} -constraints {
           root  
@@ -64,10 +62,13 @@ namespace eval network::test {
             vessel::network::epair::create $ifacename
         } -body {
             vessel::network::router::build_image $ifacename
+            vessel::network::router::router_image_exists?
         } -cleanup {
             #Destroy the image
+            vessel::network::epair::destroy $ifacename
+            exec vessel image --rm "${vessel::network::router::router_image_name}:${vessel::network::router::router_tag}"
             set env(VESSEL_POOL) {}
-        }
+        } -result 1
     
 	cleanupTests
 }
