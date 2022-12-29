@@ -281,13 +281,11 @@ dhcp-script=/usr/bin/logger -t vesseldns
                 
                 # We need to know the name of the epair device that will be assigned
                 # to the router on the vlan so we can tell dnsmasq what to listen for
-                
+            
                 router_build_image ${internal_epair} 
             }
             
-            #Start the router vm, won't do anything if it is running already
-            
-            #create devd rule
+            #devfs rule is created by the startup script with a hardcoded value
             
             #If the vm is not running, start it.  Ensure pf.conf rules have been executed.
             #Tables can be updated dynamically as jails on the network start and stop.
