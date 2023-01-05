@@ -1,7 +1,7 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to expose the many powerful features of FreeBSD to application, ops and test engineers.  Vessel accomplishes this goal by integrating tightly with FreeBSD system level interfaces and providing a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that it runs alongside the container listening for system events that are useful for management and observability.
+The goal of vessel is to expose the many powerful features of the FreeBSD operating system to application, operations and test engineers.  Vessel accomplishes this goal by integrating tightly with FreeBSD's system level interfaces to provide a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that it runs alongside the container listening for system events that can be used for container management and observability.
 
 # Feature Highlights
 
@@ -16,12 +16,24 @@ The goal of vessel is to expose the many powerful features of FreeBSD to applica
 | [Resource Control](docs/ResourceControl.md)                                       | Yes        |
 | [CPU Sets](docs/RunningContainer.md#cpu-sets)                                     | Yes        |
 | Internal (Bridged) Networking                                                     | In Progress|
-| DNS Service Discovery                                                             | Not yet    |
+| DNS Service Discovery                                                             | In Progress|
 | Multi-node container orchestration                                                | Not yet    |
-| VNET Routing via PF                                                               | Not yet    |
+| VNET Routing via PF                                                               | In Progress|
 
 * [Tips and Tricks](docs/ExamplesTipsAndTricks.md)
 * [Build, Install and Develop](docs/BuildAndInstall.md)
+
+# Installation
+
+Vessel follows a similar branching strategy as FreeBSD.  The `master` branch is equivalent to FreeBSD's CURRENT branch.  We also maintain stable branches.  The branch you build from depends on if you want the most cutting edge (master) or the most stable (stable-<version>).  
+
+## Building current from source (also works for stable):
+
+1. Download the source from github (or clone the repository)
+2. Building all dependencies (including cmake) can take a long time. To expediate the process it can be useful to install the build and runtime dependencies with pkg.  An up-to-date list of dependencies can be found in the `ports/Makefile` file. `pkg update && pkg install curl tcl86 cmake tcllib py39-s3cmd tclsyslog`
+3. From the source directory make the build directory: `mkdir build`
+4. Change directory into the build dir and run cmake: `cd build` and `cmake ..`
+5. Make and install vessel `make && sudo make install`
 
 # Quickstart
 
