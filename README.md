@@ -27,13 +27,17 @@ The goal of vessel is to expose the many powerful features of the FreeBSD operat
 
 Vessel follows a similar branching strategy as FreeBSD.  The `master` branch is equivalent to FreeBSD's CURRENT branch.  We also maintain stable branches.  The branch you build from depends on if you want the most cutting edge (master) or the most stable (stable-<version>).  
 
-## Building current from source (also works for stable):
+## Building master from source (also works for stable):
 
 1. Download the source from github (or clone the repository)
 2. Building all dependencies (including cmake) can take a long time. To expediate the process it can be useful to install the build and runtime dependencies with pkg.  An up-to-date list of dependencies can be found in the `ports/Makefile` file. `pkg update && pkg install curl tcl86 cmake tcllib py39-s3cmd tclsyslog`
 3. From the source directory make the build directory: `mkdir build`
 4. Change directory into the build dir and run cmake: `cd build` and `cmake ..`
 5. Make and install vessel `make && sudo make install`
+
+## Building stable port
+
+The port is maintained on the stable-<version> branch.  Building the port and all dependencies takes about 2 hours on a t3.micro so I would recommend installing the dependencies via packages.  Port install requires a copy of `/usr/ports` to be populated.  You can use `portsnap` for this.  Once the `/usr/ports` is populated, you can build from the `<vessel>/port` directory with the standard `sudo make install` or `sudo make pkg`.
 
 # Quickstart
 
