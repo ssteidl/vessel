@@ -1,7 +1,15 @@
 # Vessel
 Application containers for FreeBSD.
 
-The goal of vessel is to expose the many powerful features of FreeBSD to application, ops and test engineers.  Vessel accomplishes this goal by integrating tightly with FreeBSD system level interfaces and providing a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that it runs alongside the container listening for system events that are useful for management and observability.
+The goal of vessel is to expose the powerful features of the FreeBSD operating system to application, operations and test engineers.  Vessel accomplishes this goal by integrating tightly with FreeBSD's system level interfaces to provide a "docker-like" interface that feels familiar to most developers.  Vessel differs from other jail management systems in that it runs alongside the container listening for system events that can be used for container management and observability.
+
+*Example Integrations*
+
+* Jail process tracing with kqueue.  This allows us to run "fat jails" and non-interactive jails in the foreground.
+* Signal handling with kqueue.  Trigger jail events (like shutdown) with signals.
+* Resource control events from `devd.seqpacket`.  Execute custom commands based on resource events.
+* Container supervisor.  Start, stop and restart jails by changing runtime files in deployment directory.
+* And more...
 
 # Feature Highlights
 
@@ -16,16 +24,32 @@ The goal of vessel is to expose the many powerful features of FreeBSD to applica
 | [Resource Control](docs/ResourceControl.md)                                       | Yes        |
 | [CPU Sets](docs/RunningContainer.md#cpu-sets)                                     | Yes        |
 | Internal (Bridged) Networking                                                     | In Progress|
-| DNS Service Discovery                                                             | Not yet    |
+| DNS Service Discovery                                                             | In Progress|
 | Multi-node container orchestration                                                | Not yet    |
-| VNET Routing via PF                                                               | Not yet    |
+| VNET Routing via PF                                                               | In Progress|
 
 * [Tips and Tricks](docs/ExamplesTipsAndTricks.md)
 * [Build, Install and Develop](docs/BuildAndInstall.md)
 
+# Installation
+
+Vessel follows a similar branching strategy as FreeBSD.  The `master` branch is equivalent to FreeBSD's CURRENT branch.  We also maintain a stable branch.  The branch you build from depends on if you want cutting edge (master) features or the most stable (stable-<version>) features.  
+
+## Building master from source (also works for stable):
+
+1. Download the source from github (or clone the repository).
+2. Building all dependencies (including cmake) can take a long time. To expediate the process it can be useful to install the build and runtime dependencies with `pkg`.  An up-to-date list of dependencies can be found in the `ports/Makefile` file. `pkg update && pkg install curl tcl86 cmake tcllib py39-s3cmd tclsyslog`
+3. From the source directory make the build directory: `mkdir build`
+4. Change directory into the build dir and run cmake: `cd build` and `cmake ..`
+5. Make and install vessel `make && sudo make install`
+
+## Building stable port
+
+The port is maintained on the stable-<version> branch.  Building the port and all dependencies takes about 2 hours on a t3.micro so I would recommend installing the dependencies via packages.  Port install requires a copy of `/usr/ports` to be populated.  You can use `portsnap` for this.  Once the `/usr/ports` is populated, you can build from the `<vessel>/port` directory with the standard `sudo make install` or `sudo make pkg`.
+
 # Quickstart
 
-Initialize your user environment to work with vessel.  The init command will create a minimal image by downloading the base tarball of the currently running container and installing it into a dedicated dataset.
+Initialize your user environment to work with vessel.  The init command will create a minimal image by downloading the base tarball of the currently running container and installing it into a dedicated dataset.  By default, vessel uses `zroot` as the pool for containers.  To change the pool, you can set the `VESSEL_POOL` environment variable.
 
 `sudo -E vessel init`
 
@@ -35,7 +59,7 @@ Run a shell in an ephemeral container using the previously created minimal image
 
 ## Vessel Files
 
-While quickly running a minimal container can be useful, it's generally more useful to create a customized container.  For this we can use a VesselFile which is similar to a DockerFile.  Let's look at a VesselFile that creates a container to run a custom django application.  Note that the modeline is set to tcl to allow for syntax highlighting
+While quickly running a minimal container can be useful, it's generally more useful to create a customized container.  For this, we can use a VesselFile which is similar to a DockerFile.  Let's look at a VesselFile that creates a container to run a custom django application.  Note that the modeline is set to tcl to allow for syntax highlighting
 
 ```
 # -*- mode: tcl; indent-tabs-mode: nil; tab-width: 4; -*-
@@ -75,7 +99,7 @@ To build the above image run:
 
 Once the image is built, it can be run with:
 
-`sudo -E vessel run --rm djangoapp:1.0 sh /etc/rc`
+`sudo -E vessel run --rm djangoapp:1.0 -- sh /etc/rc`
 
 This will start the init process in a new container running in the foreground.  
 
@@ -83,5 +107,5 @@ This will start the init process in a new container running in the foreground.
 
 The current version of vessel uses ipv4 inherited networking (IOW, the host network stack).  In the future a bridged and vlan networking system with VNET will be implemented.  For now, only inherited networking is used.  
 
-> ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a full fletched vnet network would/could have it's uses, inherited network has met all of our use cases so far.
+> ℹ️ We have found that using inherited networking is not the major limitation that it seems.  While a vnet based network would/could have it's uses, inherited network has met the majority of our use cases.
 
