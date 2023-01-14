@@ -25,7 +25,7 @@ publish:
 # file to our production server.  vessel-supervisor will see the file, pull and run the container.
 .PHONY: deploy
 deploy:
-	scp ./deploydir/dinnerrepo.ini prod:/usr/local/etc/vessel/deploy
+	scp ./deploydir/dinnerrepo.ini prod:/vessel/supervisor/deploy
 
 .PHONY: clean
 clean:

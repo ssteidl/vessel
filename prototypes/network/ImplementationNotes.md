@@ -109,3 +109,32 @@ Note Regarding DHCP on application jails
  * section contains a type and address
  * alternatively we could support separate network files that are processed first.  They need to be idempotent
  
+ Notes on different types of networks
+ ====================================
+ 
+ ## Epair bridged
+ 
+ This is the easiest type of network and what jib sets up.  You simply create an epair, assign it
+ to a vnet jail and assign the other end to a bridge.  Then you can use the subnets DHCP server 
+ (if available) to get the network configuration.  Otherwise, you would need to configure the network manually.
+
+ 
+ ## Cloned interfaces (cloned loopback)
+
+These is how legacy jails worked.  You clone an interface like loopback and alias the ip addresses.
+Each jail grabbed one of the aliased ip addresses.  This requires more manually configuration
+of IP addresses and nat (via pf) on the host system.
+
+## Router jail and vlan
+
+A router jail is created that runs a dhcp and dns server.  The dns server is updated with the 
+hostname of each jail as it is added to the vlan.  Each "cluster" of jails on a host is on a 
+separate vlan on the bridge.  Each jail has an epair.  The router jail has an internal vlan 
+interface (generally an epair) and an eternal interface.  On home systems and virtualized systems
+like virtualbox, connecting an epair in the router vm to the bridge works fine.  However, on 
+AWS or other systems, the DHCP server isn't going to respond to a MAC address that it doesn't know,
+so an internal interface would be needed (ENI).  The router jail uses pf to forward packets.  
+I'm still haven't figured out if the router jail with ENI needs to be a legacy configuration where
+it just uses an ip address of the ENI.  I need to play around with this more.
+ 
+ 
