@@ -2,10 +2,8 @@
 
 package require vessel::native
 package require vessel::env
-
 package require logger
 package require textutil::expander
-
 
 namespace eval vessel::jail {
 
@@ -25,24 +23,23 @@ namespace eval vessel::jail {
 
             return $network_params_dict
         }
-        
+
         #Build the jail command which can be exec'd
         proc build_jail_conf {name mountpoint volume_datasets network limits \
-        					  cpuset jail_options args} {
+                        cpuset jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
-            
+
             #Add single quotes around any multi-word parts of the command
             set quoted_cmd [join [lmap word $args {expr {[llength $word] > 1 ?  "\'[join $word]\'" : $word }}]]
-            
+
             textutil::expander jail_file_expander
             try {
             jail_file_expander evalcmd [list uplevel "#[info level]"]
-            
+
             set jail_conf [jail_file_expander expand {
                 [set name] {
                     path="[set mountpoint]";
-                    sysvshm=new;
                     allow.mount;
                     allow.mount.devfs;
                     mount.devfs;
@@ -74,7 +71,7 @@ namespace eval vessel::jail {
                      [if {$cpuset ne {}} {
                      	set cpuset_str [subst {exec.created+="cpuset -c -l $cpuset -j $name";}]
                      }]
-                     
+
                     [set jail_options_string {}
                      dict for {option value} $jail_options {
                          set option_string [subst {${option}+=${value};\n}]
@@ -85,13 +82,14 @@ namespace eval vessel::jail {
                      #Set persist=1 so we can properly run shutdown commands after all processes exit
                      persist=1;
                     exec.start+="[set quoted_cmd]";
-                    
+
                 }}]
             } finally {
                 rename jail_file_expander {}
             }
             return $jail_conf
         }
+
     }
 
     proc kill {jid {signal TERM} {output_chan stderr}} {
@@ -115,27 +113,27 @@ namespace eval vessel::jail {
 
         return
     }
-    
+
     proc run_jail {name mountpoint volume_datasets chan_dict network limits \
-    	           cpuset jail_options_dict callback args} {
+                    cpuset jail_options_dict callback args} {
         variable log
 
         #Create the conf file
         set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets \
-                      $network $limits $cpuset $jail_options_dict {*}$args]
+            $network $limits $cpuset $jail_options_dict {*}$args]
         set jail_conf_file [file join [vessel::env::jail_confs_dir] "${name}.conf"]
         set jail_conf_file_chan [open  $jail_conf_file w]
 
         puts $jail_conf_file_chan $jail_conf
         close $jail_conf_file_chan
-        
+
         set debug_args {}
         if {[${log}::currentloglevel] eq "debug"} {
             set debug_args "-v"
         }
 
         set jail_command [list jail {*}$debug_args -f $jail_conf_file -c $name]
-        
+
         ${log}::debug "JAIL CONF: $jail_conf"
 
         #If callback is empty, that implies blocking mode.  non-empty callback implies
@@ -152,9 +150,10 @@ namespace eval vessel::jail {
             #Blocking so run it inline
             vessel::exec $chan_dict {} {*}$jail_command
         }
-        
+
         return $jail_conf_file
     }
+
 }
 
 package provide vessel::jail 1.0.0
