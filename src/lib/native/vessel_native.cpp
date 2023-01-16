@@ -98,7 +98,6 @@ namespace
         return msg.str();
     }
 
-
     int parse_build_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
     {
         assert(argc > 0);
@@ -222,6 +221,90 @@ namespace
         if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, options_dict,Tcl_NewStringObj("args", -1), args_dict.release());
+        return tcl_error;
+    }
+
+    std::string create_network_options_help()
+    {
+        std::ostringstream msg;
+        msg << "vessel create-network <--type=<jib|ip>> <--name=<network-name>> <--interface=<interface name>>" << std::endl
+            << "--type         The type of network that is being created" << std::endl
+            << "--name         The name of the network that is useful as a reference" << std::endl
+            << "--interface    The interface to use for external network access" << std::endl
+            << "--ruleset      The devfs ruleset to use.  If dhclient is required then bpf must be exposed" << std::endl;
+
+        return msg.str();
+    }
+
+    int parse_create_network_options(Tcl_Interp* interp, int argc, Tcl_Obj** args, Tcl_Obj* options_dict)
+    {
+        assert(argc > 0);
+
+        static const struct option long_opts[] = {
+            {"type", required_argument, nullptr, 't'},
+            {"interface", required_argument, nullptr, 'i'},
+            {"name", required_argument, nullptr, 'n'},
+            {"ruleset", required_argument, nullptr, 'r'},
+            {"help", no_argument, nullptr, 'h'},
+            {nullptr, 0, nullptr, 0}
+        };
+
+        std::vector<const char*> argv = argv_vector_from_command_args(argc, args);
+
+        int ch = -1;
+
+        vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
+        int tcl_error = TCL_OK;
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "t:i:n:r:h", long_opts, nullptr)) != -1)
+        {
+            switch(ch)
+            {
+            case 't':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("addr", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'i':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("interface", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'n':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("name", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'r':
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("ruleset", -1),
+                                           Tcl_NewStringObj(optarg, -1));
+                if(tcl_error) return tcl_error;
+                break;
+            case 'h':
+            {
+                std::string help_msg = create_network_options_help();
+                tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                           Tcl_NewStringObj("help", -1),
+                                           Tcl_NewStringObj(help_msg.c_str(), -1    ));
+                if(tcl_error) return tcl_error;
+
+                /*Short circuit for help flag*/
+                tcl_error = Tcl_DictObjPut(interp, options_dict,
+                                           Tcl_NewStringObj("args", -1),
+                                           args_dict.release());
+                if(tcl_error) return tcl_error;
+                return TCL_OK;
+            }
+            default:
+                Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing options.  optind: %d", optind));
+                return TCL_ERROR;
+            }
+        }
+
+        tcl_error = Tcl_DictObjPut(interp, options_dict, Tcl_NewStringObj("args", -1), args_dict.release());
         return tcl_error;
     }
 
@@ -817,6 +900,11 @@ namespace
         {
             //parse args if any remaining.  shift to first non-command argument
             tcl_error = parse_build_options(interp, arg_count, argument_objs, command_options.get());
+            if(tcl_error) return tcl_error;
+        }
+        else if(command == "create-network")
+        {
+            tcl_error = parse_create_network_options(interp, arg_count, argument_objs, command_options.get());
             if(tcl_error) return tcl_error;
         }
         else if(command == "run")
