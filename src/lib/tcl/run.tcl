@@ -3,7 +3,7 @@
 package require dicttool
 package require fileutil
 package require logger
-    package require uuid
+package require uuid
 
 package require vessel::bsd
 package require vessel::env

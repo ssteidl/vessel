@@ -119,11 +119,16 @@ Note Regarding DHCP on application jails
  (if available) to get the network configuration.  Otherwise, you would need to configure the network manually.
 
  
- ## Cloned interfaces (cloned loopback)
+ ## IP Assigned Jails
 
-These is how legacy jails worked.  You clone an interface like loopback and alias the ip addresses.
-Each jail grabbed one of the aliased ip addresses.  This requires more manually configuration
-of IP addresses and nat (via pf) on the host system.
+This is how jails were done before vnet.  I don't think vnet jails are a complete replacement for this.
+VNET jails allow for easy communicating with external infrastructure and routing management.  However,
+if you do not own the external infrastructure, they do not integrate well.  They don't integrate well
+because they require either generated mac addresses that the external infrastructure doesn't know about,
+or multiple NICs.  It does not support the situation where multiple IP addresses are available for the
+same network interface.     
+
+### Why
 
 ## Router jail and vlan
 

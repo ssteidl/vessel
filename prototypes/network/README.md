@@ -16,6 +16,9 @@ The following networking features should be supported
 
 # cli design
 
+* Create or join a jib network
+** vessel create-network --type=jib --interface
+
 * Run with inherited network stack.  This is the default and doesn't
   require any flags.  Still must support internal DNS lookup.
 `vessel run devel:0 -- bash`

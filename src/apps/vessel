@@ -133,14 +133,15 @@ proc usage {} {
 
  COMMANDS
     
- init         Initialize the system to work with vessel.  Including the installation of a base image
- build        Build a container image from a vessel file  
- run          Run a container that has been built or can be pulled from a repository
- publish      Export and push a container to a container repository
- pull         Download and install a container from a container repository
- network      Manage nat networks
- image        Output image metadata
- help         Print this help message
+ init             Initialize the system to work with vessel.  Including the installation of a base image
+ build            Build a container image from a vessel file  
+ run              Run a container that has been built or can be pulled from a repository
+ publish          Export and push a container to a container repository
+ pull             Download and install a container from a container repository
+ create-network   Create a new network
+ network          Manage nat networks
+ image            Output image metadata
+ help             Print this help message
 }
 }
 
@@ -187,6 +188,10 @@ switch -regexp -matchvar parsed_cmd $command {
         usage
         exit 0
     }
+    create-network {
+        
+    }
+    
     {} {
         puts stderr "Command is required"
         usage
