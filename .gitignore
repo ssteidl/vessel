@@ -13,5 +13,6 @@ vessel.cxxflags
 vessel.files
 vessel.includes
 src/lib/tcl/libvesseltcl.so
+src/lib/tcl/libvesselsqlite.so
 test/error.log
 test/testrun/

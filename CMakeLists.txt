@@ -20,6 +20,8 @@ add_library(vesseltcl SHARED
 
 target_link_libraries(vesseltcl ${CURL_LIBRARIES})
 
+add_library(vesselsqlite SHARED src/contrib/tclsqlite3.c)
+
 add_executable(url_test util/native/url_test.cpp)
 target_link_libraries(url_test ${CURL_LIBRARIES})
 
