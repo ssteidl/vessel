@@ -97,5 +97,10 @@ namespace eval vessel::env {
     proc bridge_name {} {
         return [get_from_env VESSEL_BRIDGE_NAME vessel]   
     }
+    
+    proc vessel_db_dir {} {
+     
+        return [get_from_env VESSEL_DB_DIR {/var/db/vessel/}]
+    }
 }
 package provide vessel::env 1.0.0
