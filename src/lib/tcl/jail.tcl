@@ -26,6 +26,80 @@ namespace eval vessel::jail {
             return $network_params_dict
         }
         
+        namespace eval macros {
+
+            proc network {network_params_dict} {
+                set network_string {}
+                dict for {parameter value} ${network_params_dict} {
+                    append network_string "${parameter}=${value};"
+                }
+
+                return ${network_string}
+            }
+
+            proc volumes {name volume_datasets} {
+                set volume_string {}
+                foreach volume $volume_datasets {
+                    set jail_string [subst {exec.created+="zfs jail $name $volume";\n}]
+                    append volume_string $jail_string
+                    set mount_string [subst {exec.start+="zfs mount $volume";\n}]
+                    append volume_string $mount_string
+                }
+
+                return ${volume_string}
+            }
+
+            proc resource_control {name limits} {
+                set rctl_string {}
+                puts stderr "limits: $limits"
+                foreach limit_dict $limits {
+                    set user_rctl_string [dict get $limit_dict "rctl"]
+                    append rctl_string [subst {exec.created+="rctl -a jail:$name:$user_rctl_string";\n}]
+                }
+
+                # if {$rctl_string ne {}} {
+                #     append rctl_string [subst {exec.release="rctl -r jail:$name";}]
+                # }
+
+                return ${rctl_string}
+            }
+
+            proc cpus {name cpuset} {
+
+                set cpuset_str {}
+                if {$cpuset ne {}} {
+                    set cpuset_str [subst {exec.created+="cpuset -c -l $cpuset -j $name";}]
+                }
+
+                return ${cpuset_str}
+            }
+
+            #If host.hostname is not available in the jail options, default
+            # to the jail name.
+            proc hostname {name jail_options} {
+                set has_hostname [dict exists $jail_options "host.hostname"]
+                if {!$has_hostname} {
+                    return "host.hostname=${name};"
+                }
+
+                return ""
+            }
+
+            proc options {jail_options} {
+                set jail_options_string {}
+                dict for {option value} $jail_options {
+                    set option_string [subst {${option}+=${value};\n    }]
+                    append jail_options_string $option_string
+                }
+
+                return ${jail_options_string}
+            }
+
+            proc hidden {args} {
+                return ""
+            }
+        }
+
         #Build the jail command which can be exec'd
         proc build_jail_conf {name mountpoint volume_datasets network limits \
         					  cpuset jail_options args} {
@@ -40,53 +114,25 @@ namespace eval vessel::jail {
             jail_file_expander evalcmd [list uplevel "#[info level]"]
             
             set jail_conf [jail_file_expander expand {
-                [set name] {
-                    path="[set mountpoint]";
-                    sysvshm=new;
-                    allow.mount;
-                    allow.mount.devfs;
-                    mount.devfs;
-                    allow.mount.zfs;
-                    enforce_statfs=1;
-                    [set network_string {}
-                     dict for {parameter value} ${network_params_dict} {
-                         append network_string "${parameter}=${value};"
-                     }
-                     set network_string]
-                    [set volume_string {}
-                     foreach volume $volume_datasets {
-                         set jail_string [subst {exec.created+="zfs jail $name $volume";\n}]
-                         append volume_string $jail_string
-                         set mount_string [subst {exec.start+="zfs mount $volume";\n}]
-                         append volume_string $mount_string
-                     }
-                     set volume_string]
-                     [set rctl_string {}
-                     foreach limit_dict $limits {
-                         set user_rctl_string [dict get $limit_dict "rctl"]
-                         append rctl_string [subst {exec.created+="rctl -a jail:$name:$user_rctl_string";\n}]
-                     }
-                     set rctl_string
-                     if {$rctl_string ne {}} {
-                         append rctl_string [subst {exec.release="rctl -r jail:$name";}]
-                     }]
-
-                     [if {$cpuset ne {}} {
-                     	set cpuset_str [subst {exec.created+="cpuset -c -l $cpuset -j $name";}]
-                     }]
-                     
-                    [set jail_options_string {}
-                     dict for {option value} $jail_options {
-                         set option_string [subst {${option}+=${value};\n}]
-                         append jail_options_string $option_string
-                     }
-                     set jail_options_string]
-
-                     #Set persist=1 so we can properly run shutdown commands after all processes exit
-                     persist=1;
-                    exec.start+="[set quoted_cmd]";
-                    
-                }}]
+[set name] {
+    path="[set mountpoint]";
+    sysvshm=new;
+    allow.mount;
+    allow.mount.devfs;
+    mount.devfs;
+    allow.mount.zfs;
+    enforce_statfs=1;
+    [macros::network $network_params_dict]
+    [macros::volumes $name $volume_datasets]
+    [macros::cpus $name $cpuset]
+    [macros::resource_control $name $limits]
+    [macros::hostname $name $jail_options]
+    [macros::options $jail_options]
+    #Set persist=1 so we can properly run shutdown commands after all processes exit
+    persist=1;
+    exec.start+="[set quoted_cmd]";
+    
+}}]
             } finally {
                 rename jail_file_expander {}
             }
