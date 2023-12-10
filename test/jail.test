@@ -16,5 +16,17 @@ namespace eval jail::test {
             {/zroot/myjail} {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
 
         return $jail_conf
-        } -match glob -result {*sysvshm=new;*host.hostname=myjail;*sysvshm+=new;*}
-        }
+    } -match glob -result {*sysvshm=new;*host.hostname=myjail;*sysvshm+=new;*}
+    
+
+    test generate-jail-conf-2-no-host {Test that the jail conf file is generated correctly with hostname in options} -body {
+        set jail_options [dict create sysvshm new host.hostname "differenthostname"]
+        set cpuset {}
+        set limits {}
+        set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
+            {/zroot/myjail} {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+
+        return $jail_conf
+    } -match glob -result {*sysvshm=new;*host.hostname+=differenthostname;*}
+    
+}

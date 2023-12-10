@@ -57,9 +57,9 @@ namespace eval vessel::jail {
                     append rctl_string [subst {exec.created+="rctl -a jail:$name:$user_rctl_string";\n}]
                 }
 
-                # if {$rctl_string ne {}} {
-                #     append rctl_string [subst {exec.release="rctl -r jail:$name";}]
-                # }
+                if {$rctl_string ne {}} {
+                    append rctl_string [subst {    exec.release="rctl -r jail:$name";}]
+                }
 
                 return ${rctl_string}
             }
