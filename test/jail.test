@@ -29,4 +29,5 @@ namespace eval jail::test {
         return $jail_conf
     } -match glob -result {*sysvshm=new;*host.hostname+=differenthostname;*}
     
+    cleanupTests
 }

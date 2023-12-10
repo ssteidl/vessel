@@ -5,8 +5,6 @@ package require tcltest
 
 namespace import tcltest::*
 
-testConstraint aws $env(VESSEL_TEST_AWS)
-
 test appc-publish-s3-1 {Verify s3cmd put succeeds when publishing} -constraints aws -setup {
     set ::env(VESSEL_REPO_URL) s3://appc-test-1
 } -body {
@@ -17,3 +15,4 @@ test appc-publish-s3-1 {Verify s3cmd put succeeds when publishing} -constraints 
     set ::env(VESSEL_REPO_URL) {}
 } -returnCodes ok
 
+cleanupTests
