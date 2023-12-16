@@ -25,7 +25,17 @@ namespace eval vessel::jail {
 
             return $network_params_dict
         }
-        
+
+        proc jail_verbose_switch {} {
+            variable ::vessel::jail::log
+            set verbose_param ""
+            if {[${log}::currentloglevel] eq "debug"} {
+                set verbose_param {-v}
+            }
+
+            return ${verbose_param}
+        }
+
         namespace eval macros {
 
             proc network {network_params_dict} {
@@ -37,28 +47,70 @@ namespace eval vessel::jail {
                 return ${network_string}
             }
 
-            proc volumes {name volume_datasets} {
-                set volume_string {}
-                foreach volume $volume_datasets {
-                    set jail_string [subst {exec.created+="zfs jail $name $volume";\n}]
-                    append volume_string $jail_string
-                    set mount_string [subst {exec.start+="zfs mount $volume";\n}]
-                    append volume_string $mount_string
+            #nullfs_mounts is a list of dictionaries {abs_path: <>, abs_jailed_mountpoint}
+            proc nullfs_mounts {nullfs_mounts} {
+                set nullfs_string {}
+                foreach nullfs_mount_d $nullfs_mounts {
+
+                    set abs_path [dict get ${nullfs_mount_d} "abs_path"]
+                    set abs_jailed_mountpoint [dict get ${nullfs_mount_d} "abs_jailed_mountpoint"]
+                    
+                    set mkdir_string [subst {exec.created+="mkdir -p ${abs_jailed_mountpoint}";\n}]
+                    append nullfs_string ${mkdir_string}
+                    
+                    set mount_string [subst {exec.created+="mount -t nullfs ${abs_path} ${abs_jailed_mountpoint}";\n}]
+                    append nullfs_string ${mount_string}
+                    
+                    set umount_string [subst {exec.release+="umount ${abs_jailed_mountpoint}";\n}]
+                    append nullfs_string ${umount_string}
                 }
 
-                return ${volume_string}
+                return ${nullfs_string}
+            }
+
+            proc datasets {name datasets} {
+                set dataset_string {}
+                foreach dataset_d $datasets {
+                    
+                    set create [dict get ${dataset_d} create]
+                    set jail_mntpath [dict get ${dataset_d} jail_mntpoint]
+                    set dataset [dict get ${dataset_d} dataset]
+                    if {$create} {
+                        set create_string [subst {exec.prestart+="zfs create -p $dataset";\n\t}]
+                        append dataset_string $create_string
+                    }
+
+                    set set_mountpoint_attr_string [subst {exec.prestart+="zfs set mountpoint=$jail_mntpath $dataset";\n\t}]
+                    append dataset_string ${set_mountpoint_attr_string}
+
+                    set jail_string [subst {exec.created+="zfs jail $name $dataset";\n\t}]
+                    append dataset_string $jail_string
+
+                    set jail_attr_string [subst {exec.created+="zfs set jailed=on $dataset";\n\t}]
+                    append dataset_string $jail_attr_string
+
+                    set mount_string [subst {exec.start+="zfs mount $dataset";\n\t}]
+                    append dataset_string $mount_string
+
+                    set umount_string [subst {exec.stop+="zfs umount $dataset";\n\t}]
+                    append dataset_string ${umount_string}
+
+                    set unjail_attr_string [subst {exec.release+="zfs set jailed=off $dataset";\n\t}]
+                    append dataset_string ${unjail_attr_string}
+                }
+
+                return ${dataset_string}
             }
 
             proc resource_control {name limits} {
                 set rctl_string {}
-                puts stderr "limits: $limits"
                 foreach limit_dict $limits {
                     set user_rctl_string [dict get $limit_dict "rctl"]
                     append rctl_string [subst {exec.created+="rctl -a jail:$name:$user_rctl_string";\n}]
                 }
 
                 if {$rctl_string ne {}} {
-                    append rctl_string [subst {    exec.release="rctl -r jail:$name";}]
+                    append rctl_string [subst {exec.release="rctl -r jail:$name";\n}]
                 }
 
                 return ${rctl_string}
@@ -101,8 +153,13 @@ namespace eval vessel::jail {
         }
 
         #Build the jail command which can be exec'd
-        proc build_jail_conf {name mountpoint volume_datasets network limits \
-        					  cpuset jail_options args} {
+        proc build_jail_conf {name \
+                              mountpoint \
+                              nullfs_mounts \
+                              volume_datasets \
+                              network limits \
+        					  cpuset \
+                              jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
             
@@ -123,7 +180,8 @@ namespace eval vessel::jail {
     allow.mount.zfs;
     enforce_statfs=1;
     [macros::network $network_params_dict]
-    [macros::volumes $name $volume_datasets]
+    [macros::datasets $name $volume_datasets]
+    [macros::nullfs_mounts ${nullfs_mounts}]
     [macros::cpus $name $cpuset]
     [macros::resource_control $name $limits]
     [macros::hostname $name $jail_options]
@@ -148,13 +206,17 @@ namespace eval vessel::jail {
     }
 
     proc shutdown {jid jail_file {output_chan stderr}} {
-        return [exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan]
+        set v [_::jail_verbose_switch]
+
+        return [exec -ignorestderr jail {*}${v} -f $jail_file -r $jid >&@ $output_chan]
     }
 
     proc remove {jid jail_file {output_chan stderr}} {
+        
+        set v [_::jail_verbose_switch]
 
         try {
-            exec -ignorestderr jail -f $jail_file -r $jid >&@ $output_chan
+            exec -ignorestderr jail {*}${v} -f $jail_file -r $jid >&@ $output_chan
         } trap {CHILDSTATUS} {} {
             return -code error -errorcode {JAIL RUN REMOVE} "Error removing jail"
         }
@@ -162,23 +224,27 @@ namespace eval vessel::jail {
         return
     }
     
-    proc run_jail {name mountpoint volume_datasets chan_dict network limits \
-    	           cpuset jail_options_dict callback args} {
+    proc run_jail {name \
+                   mountpoint \
+                   nullfs_mounts \
+                   volume_datasets \
+                   chan_dict network limits \
+    	           cpuset \
+                   jail_options_dict \
+                   callback \
+                   args} {
         variable log
 
         #Create the conf file
-        set jail_conf [_::build_jail_conf $name $mountpoint $volume_datasets \
-                      $network $limits $cpuset $jail_options_dict {*}$args]
+        set jail_conf [_::build_jail_conf $name $mountpoint ${nullfs_mounts} ${volume_datasets} \
+                      $network $limits $cpuset ${jail_options_dict} {*}$args]
         set jail_conf_file [file join [vessel::env::jail_confs_dir] "${name}.conf"]
         set jail_conf_file_chan [open  $jail_conf_file w]
 
         puts $jail_conf_file_chan $jail_conf
         close $jail_conf_file_chan
         
-        set debug_args {}
-        if {[${log}::currentloglevel] eq "debug"} {
-            set debug_args "-v"
-        }
+        set debug_args [_::jail_verbose_switch]
 
         set jail_command [list jail {*}$debug_args -f $jail_conf_file -c $name]
         

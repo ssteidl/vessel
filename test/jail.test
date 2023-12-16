@@ -13,7 +13,7 @@ namespace eval jail::test {
         set cpuset {}
         set limits {}
         set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
-            {/zroot/myjail} {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+            {/zroot/myjail} [list {abs_path /a/b/c abs_jailed_mountpoint /zroot/jails/myjail/opt}] {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
 
         return $jail_conf
     } -match glob -result {*sysvshm=new;*host.hostname=myjail;*sysvshm+=new;*}
@@ -24,7 +24,7 @@ namespace eval jail::test {
         set cpuset {}
         set limits {}
         set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
-            {/zroot/myjail} {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+            {/zroot/myjail} [list {abs_path /a/b/c abs_jailed_mountpoint /zroot/jails/myjail/opt}] {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
 
         return $jail_conf
     } -match glob -result {*sysvshm=new;*host.hostname+=differenthostname;*}
