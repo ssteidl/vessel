@@ -29,18 +29,20 @@ namespace eval vessel::run {
 
             set dataset [lindex $arg_list 0]
             set jail_mntpoint [lindex $arg_list 1]
+            set create false
             ${log}::debug "dataset: $dataset"
             ${log}::debug "jail_mntpoint: $jail_mntpoint"
             if {![vessel::zfs::dataset_exists $dataset]} {
-                vessel::zfs::create_dataset $dataset
+                # vessel::zfs::create_dataset $dataset
+                set create true
             }
 
-            if {[catch {vessel::zfs::set_mountpoint_attr $dataset $jail_mntpoint} error_msg]} {
-                ${log}::error "Failed to set mountpoint attribute on $dataset.  Ignoring: $error_msg"
-            }
-            vessel::zfs::set_jailed_attr $dataset
+            # if {[catch {vessel::zfs::set_mountpoint_attr $dataset $jail_mntpoint} error_msg]} {
+            #     ${log}::error "Failed to set mountpoint attribute on $dataset.  Ignoring: $error_msg"
+            # }
+            # vessel::zfs::set_jailed_attr $dataset
 
-            return $dataset
+            return [dict create dataset $dataset jail_mntpoint ${jail_mntpoint} create ${create}]
         }
         
         proc handle_volume_argument {mountpoint volume_arg} {
@@ -56,13 +58,12 @@ namespace eval vessel::run {
             
             if {[file exists $sourcedir] && [file isdirectory $sourcedir]} {
 
-                vessel::bsd::null_mount $sourcedir $jailed_dest_path
+                return [dict create abs_path $sourcedir abs_jailed_mountpoint $jailed_dest_path]
+
             } else {
 
                 return -code error -errorcode {MOUNT DEST EEXIST} "Source path for volume argument does not exist"
             }
-
-            return $jailed_dest_path
         }
 
         proc create_run_dict {args_dict} {
@@ -324,15 +325,16 @@ namespace eval vessel::run {
         set mountpoint [vessel::zfs::get_mountpoint $container_dataset]
 
         #nullfs volume mounts
-        set jailed_mount_paths [list]
+        set nullfs_paths [list]
         foreach volume [dict get $args_dict volumes] {
-            lappend jailed_mount_paths [_::handle_volume_argument $mountpoint $volume]
+            lappend nullfs_paths [_::handle_volume_argument $mountpoint $volume]
+            ${log}::debug "nullfs: ${nullfs_paths}"
         }
 
         set volume_datasets [list]
         foreach volume_dataset_arg [dict get $args_dict datasets] {
-            set dataset [_::handle_dataset_argument $volume_dataset_arg]
-            lappend volume_datasets $dataset
+            set dataset_d [_::handle_dataset_argument $volume_dataset_arg]
+            lappend volume_datasets ${dataset_d}
         }
 
         #NOTE: We need a better way to handle resolv conf.  Ideally a dns server
@@ -345,7 +347,7 @@ namespace eval vessel::run {
         set cpuset [dict get $args_dict "cpuset"]
         set tmp_jail_conf {}
         set error [catch {
-            set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint $volume_datasets $chan_dict \
+            set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint ${nullfs_paths} $volume_datasets $chan_dict \
                 $network $limits $cpuset $jail_options_dict $coro_name {*}$command]
             
             ${log}::debug "jail_start_params: $jail_start_params"
@@ -370,32 +372,13 @@ namespace eval vessel::run {
         set exit_params [yieldto return -level 0 {}]
         ${log}::debug "exit params: $exit_params"
 
-        #TODO: Now that we can use the jail file we need to:
-        # 1. Move jail cleanup to the jail file commands
-
-        ${log}::info "Container exited. Cleaning up..."
-
-        # TODO: Do a check to see if cleanup is needed.  If so run this command and
-        #ideally do all of the cleanup in the jail.conf.
         ${log}::debug "Removing jail: $jail_name, $tmp_jail_conf"
-        if {[catch {vessel::jail::shutdown $jail_name $tmp_jail_conf} error_msg]} {
-            puts stderr "Unable to remove jail: $error_msg"
+        if {[catch {vessel::jail::remove $jail_name $tmp_jail_conf} error_msg]} {
+            ${log}::error "Unable to remove jail: $error_msg"
         }
 
-        file delete $tmp_jail_conf
-
-        ${log}::debug "Unmounting nullfs volumes"
-        foreach volume_mount $jailed_mount_paths {
-            set error [catch {vessel::bsd::umount $volume_mount} error_msg]
-            if {$error} {
-                puts stderr "Error unmounting $volume_mount: $error_msg"
-            }
-        }
-
-        ${log}::debug "Unjailing jailed datasets"
-        foreach volume_dataset $volume_datasets {
-            catch {exec zfs set jailed=off $volume_dataset >&@ stderr}
-            catch {exec zfs umount $volume_dataset >&@ stderr}
+        if {[catch {file delete $tmp_jail_conf} error_msg]} {
+            ${log}::warn "Unable to delete ${tmp_jail_conf}: ${error_msg}"
         }
         
         if {[dict get $args_dict "remove"]} {

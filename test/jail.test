@@ -7,13 +7,27 @@ package require vessel::jail
 namespace eval jail::test {
 
     namespace import ::tcltest::*
-    
-    test generate-jail-conf-1 {Test that the jail conf file is generated correctly} -body {
-	set jail_options [dict create sysvshm new host.hostname re.zeta.investments]
-	set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
-			   {/zroot/myjail} {} {inherit} $jail_options sh /etc/rc]
 
-	return $jail_conf
-    } -match glob -result {*"sysvshm=new";
-"host.hostname=re.zeta.investments"*}
+    test generate-jail-conf-1 {Test that the jail conf file is generated correctly} -body {
+        set jail_options [dict create sysvshm new]
+        set cpuset {}
+        set limits {}
+        set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
+            {/zroot/myjail} [list {abs_path /a/b/c abs_jailed_mountpoint /zroot/jails/myjail/opt}] {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+
+        return $jail_conf
+    } -match glob -result {*sysvshm=new;*host.hostname=myjail;*sysvshm+=new;*}
+    
+
+    test generate-jail-conf-2-no-host {Test that the jail conf file is generated correctly with hostname in options} -body {
+        set jail_options [dict create sysvshm new host.hostname "differenthostname"]
+        set cpuset {}
+        set limits {}
+        set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
+            {/zroot/myjail} [list {abs_path /a/b/c abs_jailed_mountpoint /zroot/jails/myjail/opt}] {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+
+        return $jail_conf
+    } -match glob -result {*sysvshm=new;*host.hostname+=differenthostname;*}
+    
+    cleanupTests
 }

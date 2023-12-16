@@ -38,12 +38,12 @@ namespace eval vessel::bsd {
 
         if {$source_dir eq {}} {
 
-            return -code error -errorcode {BSD MOUNT PARAM} "source_dir parameter is empty for bind mount"
+            return -code error -errorcode {BSD MOUNT PARAM} "source_dir parameter is empty for nullfs mount"
         }
 
         if {$dest_dir eq {}} {
 
-            return -code error -errorcode {BSD MOUNT PARAM} "dest_dir parameter is empty for bind mount"
+            return -code error -errorcode {BSD MOUNT PARAM} "dest_dir parameter is empty for nullfs mount"
         }
         file mkdir $dest_dir
 

@@ -41,7 +41,7 @@ namespace eval file_repo::test {
     file mkdir [file join [pwd] $repo_dir_path]
 
     #Repository tests
-    test publish-file-repo-1 {Test file repo publish} -setup {
+    test publish-file-repo-1 {Test file repo publish} -constraints {root} -setup {
 
         variable test_dir
         set test_tag {publishtest}
@@ -62,7 +62,7 @@ namespace eval file_repo::test {
         vessel::metadata_db::image_command [dict create rm minimal:${test_tag}]
     }
 
-    test pull-file-repo-1 {Test file repo pull} -setup {
+    test pull-file-repo-1 {Test file repo pull} -constraints {root} -setup {
         variable test_dir
         set test_tag {pulltest}
 
