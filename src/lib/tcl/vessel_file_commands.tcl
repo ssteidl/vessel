@@ -223,12 +223,13 @@ proc RUN {args} {
         #Empty callback signifies blocking mode
         set callback {}
 
-        set volumes [list]
+        set nullfs_mounts [list]
+        set datasets [list]
         set limits [dict create]
         set jail_options [dict create]
         set jail_name "${name}-buildcmd"
         set cpuset {}
-        set tmp_jail_conf [vessel::jail::run_jail $jail_name $mountpoint $volumes $channel_dict $network $limits $cpuset $jail_options $callback {*}$args]
+        set tmp_jail_conf [vessel::jail::run_jail $jail_name  $mountpoint ${nullfs_mounts} $datasets $channel_dict $network $limits $cpuset $jail_options $callback {*}$args]
         exec jail -f $tmp_jail_conf -r $jail_name
     } trap {CHILDSTATUS} {results options} {
 
