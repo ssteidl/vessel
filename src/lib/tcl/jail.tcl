@@ -95,8 +95,8 @@ namespace eval vessel::jail {
                     set umount_string [subst {exec.stop+="zfs umount $dataset";\n\t}]
                     append dataset_string ${umount_string}
 
-                    set unjail_attr_string [subst {exec.release+="zfs set jailed=off $dataset";\n\t}]
-                    append dataset_string ${unjail_attr_string}
+                    set jailoff_attr_string [subst {exec.release+="zfs set jailed=off $dataset";\n\t}]
+                    append dataset_string ${jailoff_attr_string}
                 }
 
                 return ${dataset_string}

@@ -188,10 +188,30 @@ proc COPY {source dest} {
     file copy -force $source $absolute_path
 }
 
+
+
 proc EXPOSE {port} {
 
     #This will need to integrate with pf.
     puts stderr "EXPOSE $port"
+}
+
+proc ENABLE_SSH {args} {
+    global mountpoint
+    global status_channel
+	
+    puts stderr "args: $args"
+    
+    if {[llength $args] != 2} {
+        return -code error -errorcode {BUILD SSH ARGS} \
+            "ENABLE_SSH requires two arguments <user> <path/to/key>"
+    }
+    
+    set user [lindex $args 0]
+    set authorized_key [lindex $$args 1]
+    
+    set absolute_jailed_user_home [fileutil::jail $$mountpoint [file join home $user]]
+    #TODO: Finish implementation
 }
 
 proc RUN {args} {
