@@ -1,7 +1,8 @@
-FROM FreeBSD:13.2-RELEASE
+FROM FreeBSD:13.3-RELEASE
 
 RUN pw useradd -n ec2-user -m -g wheel
-RUN env ASSUME_ALWAYS_YES=yes pkg update && pkg install python sudo
+RUN env ASSUME_ALWAYS_YES=yes pkg update
+RUN env ASSUME_ALWAYS_YES=yes pkg install python sudo
 
 RUN echo "Port 2222" >> /etc/ssh/sshd_config
 
@@ -9,3 +10,5 @@ RUN mkdir /home/ec2-user/.ssh
 COPY $env(HOME)/.ssh/id_ecdsa_jail.pub /home/ec2-user/.ssh/authorized_keys
 
 RUN sysrc sshd_enable=YES
+
+RUN echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /usr/local/etc/sudoers
