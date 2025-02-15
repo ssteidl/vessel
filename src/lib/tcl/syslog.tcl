@@ -17,11 +17,11 @@ namespace eval vessel::syslog {
             #
             # prototypes/logging.tcl[91636]: -_logger::service vessel::shane {hello my friend}
 
-            variable _ident
+            variable ::vessel::syslog::_ident
 
             set ident {}
-            if {$_ident neq {}} {
-                set ident $_ident    
+            if {${_ident} ne {}} {
+                set ident ${_ident}    
             } else {
                 set ident [lindex $text 1]
             }
