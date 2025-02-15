@@ -1,5 +1,5 @@
 PORTNAME=	vessel
-_V?=            1.2.1
+_V?=            1.1.1
 DISTVERSION=	${_V}
 CATEGORIES=	sysutils
 
