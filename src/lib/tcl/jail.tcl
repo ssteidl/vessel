@@ -12,6 +12,8 @@ namespace eval vessel::jail {
     logger::initNamespace [namespace current] debug
     variable log [logger::servicecmd [string trimleft [namespace current] :]]
 
+    variable jail_removed [expr false]
+
     namespace eval _ {
 
         proc build_network_parameters {network_param} {
@@ -205,18 +207,18 @@ namespace eval vessel::jail {
         return [exec -ignorestderr jexec $jid kill "-${signal}" -1 >&@ $output_chan]
     }
 
-    proc shutdown {jid jail_file {output_chan stderr}} {
-        set v [_::jail_verbose_switch]
-
-        return [exec -ignorestderr jail {*}${v} -f $jail_file -r $jid >&@ $output_chan]
-    }
-
     proc remove {jid jail_file {output_chan stderr}} {
         
+        variable jail_removed
+
         set v [_::jail_verbose_switch]
 
         try {
-            exec -ignorestderr jail {*}${v} -f $jail_file -r $jid >&@ $output_chan
+            if {!${jail_removed}} {
+                exec -ignorestderr jail {*}${v} -f $jail_file -r $jid >&@ $output_chan
+                set jail_removed [expr true]
+            }
+            
         } trap {CHILDSTATUS} {} {
             return -code error -errorcode {JAIL RUN REMOVE} "Error removing jail"
         }
@@ -224,6 +226,11 @@ namespace eval vessel::jail {
         return
     }
     
+    proc shutdown {jid jail_file {output_chan stderr}} {
+        
+        return [remove $jid $jail_file $output_chan]
+    }
+
     proc run_jail {name \
                    mountpoint \
                    nullfs_mounts \
