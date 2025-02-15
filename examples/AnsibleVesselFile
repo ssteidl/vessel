@@ -1,4 +1,4 @@
-FROM FreeBSD:13.3-RELEASE
+FROM FreeBSD:14.2-RELEASE
 
 RUN pw useradd -n ec2-user -m -g wheel
 RUN env ASSUME_ALWAYS_YES=yes pkg update

@@ -222,12 +222,13 @@ namespace
     {
         std::ostringstream msg;
         msg << "vessel run {--name=container_name} {--interactive} {--rm} {--volume=/path/to/hostdir:/path/to/mountdir} \n{--dataset=zfs/dataset:container_mountpoint} image{:tag} {command...}" << std::endl << std::endl
-            << "--name        Name of the new container" << std::endl
-            << "--interactive Start an interactive shell via pty" << std::endl
-            << "--rm          Remove the image after it exits" << std::endl
-            << "--dataset     Use the specified zfs dataset at the mountpoint.  Creates the dataset if needed." << std::endl
-            << "--volume      Path to directory to nullfs mount into the container" << std::endl
-            << "--ini=<path>  Path to the ini file which specifies how the jail should be run" << std::endl;
+            << "--name               Name of the new container" << std::endl
+            << "--interactive        Start an interactive shell via pty" << std::endl
+            << "--rm                 Remove the image after it exits" << std::endl
+            << "--dataset            Use the specified zfs dataset at the mountpoint.  Creates the dataset if needed." << std::endl
+            << "--volume             Path to directory to nullfs mount into the container" << std::endl
+            << "--ssh_port=<port>    /etc/ssh/ssh_config will be modified to use this port"
+            << "--ini=<path>         Path to the ini file which specifies how the jail should be run" << std::endl;
 
         return msg.str();
     }
@@ -249,6 +250,7 @@ namespace
             {"network", required_argument, nullptr, 'u'},
             {"ini", required_argument, nullptr, 'f'},
             {"resource", required_argument, nullptr, 'c'},
+            {"ssh_port", required_argument, nullptr, 's'},
             {nullptr, 0, nullptr, 0}
         };
 
@@ -260,12 +262,15 @@ namespace
         vessel::tclobj_ptr args_dict(Tcl_NewDictObj(), vessel::unref_tclobj);
         int tcl_error = TCL_OK;
         bool interactive = false;
+        int ssh_port = 0;
+        
         std::string network("inherit");
         vessel::tclobj_ptr dataset_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         vessel::tclobj_ptr volume_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
         vessel::tclobj_ptr resource_list(Tcl_NewListObj(0, nullptr), vessel::unref_tclobj);
+
         std::string ini_file;
-        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:f:c:", long_opts, nullptr)) != -1)
+        while((ch = getopt_long(argc, (char* const *)argv.data(), "d:iv:hn:u:f:c:s:", long_opts, nullptr)) != -1)
         {
             switch(ch)
             {
@@ -315,6 +320,13 @@ namespace
                 tcl_error = Tcl_ListObjAppendElement(interp, resource_list.get(), Tcl_NewStringObj(optarg, -1));
                 if(tcl_error) return tcl_error;
                 break;
+            case 's':
+                tcl_error = Tcl_GetInt(interp, optarg, &ssh_port);
+                if(tcl_error) {
+                    Tcl_SetObjResult(interp, Tcl_ObjPrintf("Error parsing ssh port.  Must be an integer"));
+                    return TCL_ERROR;
+                }
+                break;
             case ':':
                 Tcl_SetObjResult(interp, Tcl_ObjPrintf("Missing argument for optind: %d", optind));
                 return TCL_ERROR;
@@ -342,6 +354,10 @@ namespace
                                    resource_list.release());
         if(tcl_error) return tcl_error;
 
+        tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
+                                    Tcl_NewStringObj("ssh_port", -1),
+                                    Tcl_NewIntObj(ssh_port));
+        if(tcl_error) return tcl_error;
 
         tcl_error = Tcl_DictObjPut(interp, args_dict.get(),
                                    Tcl_NewStringObj("remove", -1),

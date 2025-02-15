@@ -139,6 +139,16 @@ namespace eval vessel::jail {
                 return ""
             }
 
+            proc ssh_port {port} {
+            
+                set ssh_str {}
+                if {$port > 0} {
+                    set ssh_str [subst {exec.start+="sed -E -i '' 's/\\\#?\[\[:space:]]+Port \[\[:digit:]]+/Port ${port}/g' /etc/ssh/ssh_config";\n\t}]
+                }
+
+                return ${ssh_str}
+            }
+
             proc options {jail_options} {
                 set jail_options_string {}
                 dict for {option value} $jail_options {
@@ -161,6 +171,7 @@ namespace eval vessel::jail {
                               volume_datasets \
                               network limits \
         					  cpuset \
+                              ssh_port \
                               jail_options args} {
 
             set network_params_dict [build_network_parameters $network]
@@ -187,6 +198,7 @@ namespace eval vessel::jail {
     [macros::cpus $name $cpuset]
     [macros::resource_control $name $limits]
     [macros::hostname $name $jail_options]
+    [macros::ssh_port $ssh_port]
     [macros::options $jail_options]
     #Set persist=1 so we can properly run shutdown commands after all processes exit
     persist=1;
@@ -237,6 +249,7 @@ namespace eval vessel::jail {
                    volume_datasets \
                    chan_dict network limits \
     	           cpuset \
+                   ssh_port \
                    jail_options_dict \
                    callback \
                    args} {
@@ -244,7 +257,7 @@ namespace eval vessel::jail {
 
         #Create the conf file
         set jail_conf [_::build_jail_conf $name $mountpoint ${nullfs_mounts} ${volume_datasets} \
-                      $network $limits $cpuset ${jail_options_dict} {*}$args]
+                      $network $limits $cpuset $ssh_port ${jail_options_dict} {*}$args]
         set jail_conf_file [file join [vessel::env::jail_confs_dir] "${name}.conf"]
         set jail_conf_file_chan [open  $jail_conf_file w]
 
@@ -255,7 +268,7 @@ namespace eval vessel::jail {
 
         set jail_command [list jail {*}$debug_args -f $jail_conf_file -c $name]
         
-        ${log}::debug "JAIL CONF: $jail_conf"
+        ${log}::debug "$jail_conf"
 
         #If callback is empty, that implies blocking mode.  non-empty callback implies
         #async mode.  If async, make sure the callback has the jail conf file to cleanup

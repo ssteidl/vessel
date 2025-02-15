@@ -345,10 +345,11 @@ namespace eval vessel::run {
         set coro_name [info coroutine]
         set limits [dict get $args_dict "limits"]
         set cpuset [dict get $args_dict "cpuset"]
+        set ssh_port [dict get $args_dict "ssh_port"]
         set tmp_jail_conf {}
         set error [catch {
             set jail_start_params [yieldto vessel::jail::run_jail $jail_name $mountpoint ${nullfs_paths} $volume_datasets $chan_dict \
-                $network $limits $cpuset $jail_options_dict $coro_name {*}$command]
+                $network $limits $cpuset $ssh_port $jail_options_dict $coro_name {*}$command]
             
             ${log}::debug "jail_start_params: $jail_start_params"
             set tmp_jail_conf [lindex $jail_start_params 0]
