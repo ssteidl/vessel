@@ -143,7 +143,10 @@ namespace eval vessel::jail {
             
                 set ssh_str {}
                 if {$port > 0} {
-                    set ssh_str [subst {exec.start+="sed -E -i '' 's/\\\#?\[\[:space:]]+Port \[\[:digit:]]+/Port ${port}/g' /etc/ssh/ssh_config";\n\t}]
+                    append ssh_str [subst {exec.start+="sed -E -i '' 's/\\\#?\[\[:space:]]+Port \[\[:digit:]]+/Port ${port}/g' /etc/ssh/ssh_config";\n\t}]
+                    append ssh_str [subst {exec.start+="sysrc sshd_enable=YES syslogd_enable=YES";\n}]
+                    append ssh_str [subst {exec.start+="pw useradd ec2-user -u 1001 || true";\n}]
+                    append ssh_str [subst {exec.stop+="/bin/sh /etc/rc.shutdown jail";\n}]
                 }
 
                 return ${ssh_str}
