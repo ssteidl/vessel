@@ -85,7 +85,7 @@ namespace eval vessel::stderrlog {
     namespace eval _ {
         
         proc log {level text} {
-            puts stderr [lindex $text 2] 
+            puts stderr $text
         }
 
         proc log_debug {txt} {
