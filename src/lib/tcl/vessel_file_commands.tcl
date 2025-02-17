@@ -134,6 +134,8 @@ proc FROM {image} {
     set new_dataset "${vessel_parent_dataset}/${name}:${tag}"
     if {![vessel::zfs::dataset_exists $new_dataset]} {
         vessel::zfs::clone_snapshot $snapshot_path $new_dataset
+    } else {
+        return -code error -errorcode {DATASET EEXISTS} "EEXISTS: $new_dataset"
     }
 
     if {![vessel::zfs::snapshot_exists "${new_dataset}@a"]} {

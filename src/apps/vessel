@@ -156,9 +156,11 @@ switch -regexp -matchvar parsed_cmd $command {
         
     }
     build {
-        #Building creates the image as a tagged dataset.
-        #TODO: currently it doesn't tag the dataset
-        vessel::build::build_command $args stderr
+        try {
+            vessel::build::build_command $args stderr
+        } trap {DATASET EEXISTS} {} {
+            ${log}::debug "Image exists.  Not building"
+        } finally {}
     }
     run {
         #Create a new container from a tagged dataset.
