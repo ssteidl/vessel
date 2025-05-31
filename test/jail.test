@@ -29,5 +29,15 @@ namespace eval jail::test {
         return $jail_conf
     } -match glob -result {*sysvshm=new;*host.hostname+=differenthostname;*}
     
+    test generate-jail-shutdown-cmd {Test that the jail conf file is generated correctly a shutdown command} -body {
+        set jail_options [dict create sysvshm new exec.stop {"sh /etc/rc.shutdown jail"}]
+        set cpuset {}
+        set limits {}
+        set jail_conf [vessel::jail::_::build_jail_conf {myjail} \
+            {/zroot/myjail} [list {abs_path /a/b/c abs_jailed_mountpoint /zroot/jails/myjail/opt}] {} {inherit} $limits $cpuset $jail_options sh /etc/rc]
+
+        return $jail_conf
+    } -match glob -result {*sysvshm=new;*exec.stop+="sh /etc/rc.shutdown jail"*}
+
     cleanupTests
 }
