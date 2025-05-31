@@ -159,9 +159,11 @@ namespace eval vessel::jail {
                               mountpoint \
                               nullfs_mounts \
                               volume_datasets \
-                              network limits \
+                              network \
+                              limits \
         					  cpuset \
-                              jail_options args} {
+                              jail_options \
+                              args} {
 
             set network_params_dict [build_network_parameters $network]
             
@@ -170,9 +172,9 @@ namespace eval vessel::jail {
             
             textutil::expander jail_file_expander
             try {
-            jail_file_expander evalcmd [list uplevel "#[info level]"]
+                jail_file_expander evalcmd [list uplevel "#[info level]"]
             
-            set jail_conf [jail_file_expander expand {
+                set jail_conf [jail_file_expander expand {
 [set name] {
     path="[set mountpoint]";
     sysvshm=new;

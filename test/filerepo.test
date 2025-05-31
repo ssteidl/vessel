@@ -66,12 +66,14 @@ namespace eval file_repo::test {
         variable test_dir
         set test_tag {pulltest}
 
+        set tmp_repo_path [file normalize [makeDirectory {pull_file_repo_1} $test_dir]]
+        puts stderr $tmp_repo_path
+
         set env(VESSEL_REPO_URL) "file://${tmp_repo_path}"
         set env(VESSEL_WORKDIR) [makeDirectory {workdir_pull_file_repo_1} $test_dir]
 
         makeDirectory [vessel::env::metadata_db_dir]
         makeDirectory [vessel::env::image_download_dir]
-        set tmp_repo_path [file normalize [makeDirectory {pull_file_repo_1} $test_dir]]
         create_test_image_dataset $test_tag
 
         

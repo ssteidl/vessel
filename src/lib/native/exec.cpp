@@ -310,7 +310,7 @@ namespace
             }
 
             vessel::tclobj_ptr eval_params = vessel::create_tclobj_ptr(Tcl_NewListObj(callback_length, callback_elements));
-            /*NOTE: Will segfault when evaluating if we don't incr the ref count.*/
+            /*NOTE: Must increment ref count to eval.*/
             Tcl_IncrRefCount(eval_params.get());
 
             error = Tcl_ListObjAppendElement(_this->m_interp, eval_params.get(), Tcl_NewStringObj(sys_signame[_this->m_event.ident], -1));
